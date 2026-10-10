@@ -10,3 +10,5 @@ _launcher_backup/
 .DS_Store
 # Paid art pack (LimeZu) – not redistributable
 public/assets/tilesets/Modern_Exteriors_*
+# Card images from YGOPRODeck — re-fetch with `npm run fetch-art`
+public/cards/

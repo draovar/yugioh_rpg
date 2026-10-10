@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "fetch-data": "node tools/fetch-data.mjs",
     "build-data": "node tools/build-data.mjs",
-    "smoke": "node tools/smoke-duel.ts"
+    "smoke": "node tools/smoke-duel.ts",
+    "fetch-art": "node tools/fetch-art.mjs"
   },
   "dependencies": {
     "ocgcore-wasm": "^0.1.2",

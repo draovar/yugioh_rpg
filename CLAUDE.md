@@ -13,20 +13,31 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run typecheck` | `tsc --noEmit` over `src/` and `tools/` |
 | `npm run build` | typecheck + production build to `dist/` |
 | `npm run fetch-data` | clone/update ProjectIgnis `CardScripts` + `BabelCDB` into `vendor/` (gitignored) |
-| `npm run build-data` | `data/pool.json` → `public/data/cards.json` + `public/data/scripts.json` |
+| `npm run build-data` | `data/pool.json` → `public/data/{cards,scripts,strings}.json` |
+| `npm run fetch-art` | download card images for the pool from YGOPRODeck into `public/cards/` (gitignored) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession`; fails on RETRY/crash |
 
-Fresh clone: `npm install && npm run fetch-data && npm run build-data`.
-After changing `data/pool.json`, rerun `build-data`, then `smoke`.
+Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art`.
+After changing `data/pool.json`, rerun `build-data` and `fetch-art`, then `smoke`.
+
+Dev URL options: `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&timeout` keeps the game
+loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel). Use `&timeout` for automated browser testing.
 
 ## Layout
 
 - `src/duel/` — engine layer, **no Phaser imports**. Runs unchanged in Node (tools) and the browser.
-  - `DuelSession.ts` — wraps one duel: `advance()` runs until a prompt/end, `respond()` answers it.
+  - `DuelSession.ts` — wraps one duel: `advance()` runs until a prompt/end, `respond()` answers it,
+    `snapshot(viewer)` reads the board from the engine with hidden info masked.
+  - `DuelController.ts` — human (P0) vs AI (P1) loop; emits `onUpdate`/`onPrompt`/`onEnd`, auto-passes empty chain prompts.
+  - `text.ts` — `DuelText.describe(desc)` resolves system strings and `aux.Stringid` card strings.
   - `autoBot.ts` — always-legal dumb responder (tests, placeholder AI). `freePlaces()` decodes SELECT_PLACE masks.
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names.
   - `loadEngine.ts` — browser only: fetches `public/data/*.json`, inits core once.
-- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map) → `DuelTest` (bot-vs-bot log; to be replaced by the real duel UI).
+- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map) → `Duel` (`DuelScene`, takes `DuelSceneData`).
+  `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
+  card action menus (idle/battle), zone highlights (place), and `Modal` dialogs/card pickers for everything else.
+  Rare prompts (announce, counters, sort, RPS) are still auto-answered by `autoBot`.
+- `src/ui/` — `widgets.ts` (buttons), `duel/` (CardSprite, Modal, layout geometry, log text).
 - `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx).
 - `data/pool.json` — the card passcodes the game uses. Source of truth for the card pool.
 - `vendor/` — Project Ignis repos (gitignored, ~130 MB).
@@ -36,6 +47,9 @@ After changing `data/pool.json`, rerun `build-data`, then `smoke`.
 - Use the **sync** core (`createCore({ sync: true })`); the async build needs JSPI.
 - After `createDuel`, load `constant.lua` then `utility.lua` before adding cards (`DuelSession` does this).
 - Card script lookup order: `goat/` → `official/` → `pre-errata/` → `unofficial/`. Root-level `*.lua` (procs, utility) are always bundled.
+- ocgcore does **not** shuffle decks at start (EDOPro does it client-side); `DuelSession` shuffles with a PRNG seeded from the duel seed.
+- `duelQueryField` LP is unsigned (overkill wraps to ~4.29e9) and missing from the TS type; `snapshot()` handles both.
+- For SELECT_PLACE the preceding HINT carries the card passcode, not a string id.
 - `cards.cdb` `setcode` and `race` exceed 2^53: read with `stmt.setReadBigInts(true)`, store as strings in JSON.
 - A `RETRY` message means we sent an illegal response. Treat it as a bug, never retry silently.
 - Only the player-facing side may see hidden info: the AI must decide from messages addressed to it, not from `duelQuery` on the opponent's hand/deck.
@@ -55,9 +69,9 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 ## Roadmap
 
 1. ✅ Environment: Vite + TS + Phaser 3.88, ocgcore-wasm, data pipeline, headless smoke test, engine runs in the browser.
-2. **Duel UI scene**: render the field from the message stream (DRAW, MOVE, POS_CHANGE, SUMMONING, CHAINING, DAMAGE, LPUPDATE…),
-   and a prompt layer for each SELECT_* message (idle/battle commands, card select, chain yes/no, place, position, tribute).
-   Card art: YGOPRODeck images by passcode (loaded at runtime, not redistributed).
+2. ✅ **Duel screen v1**: playable human-vs-bot duel with all common prompts, card art, info panel, log, LP, end screen.
+   Next polish: move/attack/summon animations (board currently redraws instantly), chain display,
+   targeting arrows, Sangan/Witch-style deck search UX, sound.
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.

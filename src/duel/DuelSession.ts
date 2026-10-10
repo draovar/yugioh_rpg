@@ -6,6 +6,8 @@ import {
   OcgMessageType,
   OcgPosition,
   OcgProcessResult,
+  OcgQueryFlags,
+  type OcgCardQueryInfo,
   type OcgCoreSync,
   type OcgDuelHandle,
   type OcgMessage,
@@ -29,6 +31,38 @@ export interface DuelConfig {
   onCoreLog?: (type: number, text: string) => void;
 }
 
+/** One card as the viewing player is allowed to see it. */
+export interface CardView {
+  /** 0 when the card is hidden from the viewer (opponent's hand, opponent's face-down cards). */
+  code: number;
+  controller: 0 | 1;
+  location: OcgLocation;
+  sequence: number;
+  position: OcgPosition;
+  faceDown: boolean;
+  attack: number;
+  defense: number;
+}
+
+export interface PlayerView {
+  lp: number;
+  deckCount: number;
+  extraCount: number;
+  hand: CardView[];
+  /** Index = zone sequence (0-4 main monster zones). */
+  monsters: (CardView | null)[];
+  /** Index = zone sequence (0-4 spell/trap zones, 5 = field zone). */
+  spells: (CardView | null)[];
+  grave: CardView[];
+  banished: CardView[];
+}
+
+export interface FieldSnapshot {
+  players: [PlayerView, PlayerView];
+}
+
+const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE) as OcgQueryFlags;
+
 export interface StepResult {
   /** Every message the engine produced during this step, in order. */
   messages: OcgMessage[];
@@ -47,9 +81,10 @@ export class DuelSession {
   constructor(cfg: DuelConfig) {
     this.core = cfg.core;
     const team = { drawCountPerTurn: 1, startingDrawCount: 5, startingLP: cfg.startingLP ?? 8000 };
+    const seed = cfg.seed ?? randomSeed();
     const handle = cfg.core.createDuel({
       flags: OcgDuelMode.MODE_GOAT,
-      seed: cfg.seed ?? randomSeed(),
+      seed,
       team1: team,
       team2: team,
       cardReader: (code) => cfg.cards.get(code),
@@ -65,13 +100,16 @@ export class DuelSession {
       this.core.loadScript(handle, s, src);
     }
 
+    // ocgcore does not shuffle at duel start (EDOPro shuffles client-side), so we do it here,
+    // driven by the duel seed so a given seed always replays the same duel.
+    const rng = mulberry32(Number(seed[0] & 0xffffffffn));
     cfg.decks.forEach((deck, team) => {
       const add = (code: number, location: OcgLocation) =>
         this.core.duelNewCard(this.handle, {
           team: team as 0 | 1, duelist: 0, code, controller: team as 0 | 1,
           location, sequence: 0, position: OcgPosition.FACEDOWN_DEFENSE,
         });
-      deck.main.forEach((c) => add(c, OcgLocation.DECK));
+      shuffle([...deck.main], rng).forEach((c) => add(c, OcgLocation.DECK));
       deck.extra?.forEach((c) => add(c, OcgLocation.EXTRA));
     });
 
@@ -102,6 +140,42 @@ export class DuelSession {
     this.core.duelSetResponse(this.handle, response);
   }
 
+  /**
+   * Reads the current board straight from the engine, hiding anything `viewer` may not see.
+   * Cheap enough to call after every step.
+   */
+  snapshot(viewer: 0 | 1): FieldSnapshot {
+    const field = this.core.duelQueryField(this.handle);
+    const read = (controller: 0 | 1, location: OcgLocation) =>
+      this.core.duelQueryLocation(this.handle, { flags: QUERY_FLAGS, controller, location })
+        .map((q, sequence) => (q ? this.toView(q, controller, location, sequence, viewer) : null));
+    const players = ([0, 1] as const).map((p): PlayerView => ({
+      // `lp` is returned at runtime but missing from the package's OcgFieldPlayer type.
+      // It is also unsigned, so overkill damage wraps around: reinterpret as int32 and clamp at 0.
+      lp: Math.max(0, (field.players[p] as typeof field.players[number] & { lp: number }).lp | 0),
+      deckCount: field.players[p].deck_size,
+      extraCount: field.players[p].extra_size,
+      hand: read(p, OcgLocation.HAND).filter((c) => c !== null),
+      monsters: read(p, OcgLocation.MZONE).slice(0, 5),
+      spells: read(p, OcgLocation.SZONE).slice(0, 6),
+      grave: read(p, OcgLocation.GRAVE).filter((c) => c !== null),
+      banished: read(p, OcgLocation.REMOVED).filter((c) => c !== null),
+    }));
+    return { players: players as [PlayerView, PlayerView] };
+  }
+
+  private toView(q: Partial<OcgCardQueryInfo>, controller: 0 | 1, location: OcgLocation, sequence: number, viewer: 0 | 1): CardView {
+    const position = (q.position ?? OcgPosition.FACEDOWN_DEFENSE) as OcgPosition;
+    const faceDown = location !== OcgLocation.HAND && (position & (OcgPosition.FACEDOWN_ATTACK | OcgPosition.FACEDOWN_DEFENSE)) !== 0;
+    const hidden = controller !== viewer && (location === OcgLocation.HAND || faceDown);
+    return {
+      code: hidden ? 0 : q.code ?? 0,
+      controller, location, sequence, position, faceDown,
+      attack: hidden ? 0 : q.attack ?? 0,
+      defense: hidden ? 0 : q.defense ?? 0,
+    };
+  }
+
   get isOver(): boolean {
     return this.ended;
   }
@@ -109,6 +183,23 @@ export class DuelSession {
   destroy(): void {
     this.core.destroyDuel(this.handle);
   }
+}
+
+function mulberry32(a: number): () => number {
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffle<T>(a: T[], rng: () => number): T[] {
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
 }
 
 function randomSeed(): [bigint, bigint, bigint, bigint] {

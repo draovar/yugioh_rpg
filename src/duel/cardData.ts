@@ -16,6 +16,8 @@ export interface CardRecord {
   attribute: number;
   name: string;
   desc: string;
+  /** str1..str16 – effect descriptions, referenced as aux.Stringid(code, n). */
+  strings: string[];
 }
 
 export function toOcgCardData(r: CardRecord): OcgCardData {
