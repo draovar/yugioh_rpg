@@ -1,6 +1,7 @@
 import Phaser from "phaser";
+import { WHITE, text } from "../ui/pixel.ts";
 
-const TILE = 32;
+const TILE = 16;
 
 /** Placeholder overworld: grid movement, and an "NPC" that starts a duel when you bump into it. */
 export class Overworld extends Phaser.Scene {
@@ -14,10 +15,10 @@ export class Overworld extends Phaser.Scene {
   }
 
   create() {
-    this.add.grid(640, 360, 1280, 720, TILE, TILE, 0x1d3b1d, 1, 0x2a4f2a, 1);
-    this.player = this.add.rectangle(TILE * 5 + 16, TILE * 5 + 16, TILE - 4, TILE - 4, 0x4fa3ff);
-    this.npc = this.add.rectangle(TILE * 12 + 16, TILE * 5 + 16, TILE - 4, TILE - 4, 0xff5555);
-    this.add.text(16, 16, "Arrow keys to move. Walk into the red duelist to challenge them to a duel.", { color: "#ffffff" });
+    this.add.grid(320, 180, 640, 360, TILE, TILE, 0x1d3b1d, 1, 0x2a4f2a, 1);
+    this.player = this.add.rectangle(TILE * 10 + 8, TILE * 10 + 8, TILE - 2, TILE - 2, 0x4fa3ff);
+    this.npc = this.add.rectangle(TILE * 20 + 8, TILE * 10 + 8, TILE - 2, TILE - 2, 0xff5555);
+    text(this, 8, 8, "ARROW KEYS TO MOVE. WALK INTO THE RED DUELIST TO CHALLENGE THEM.", { color: WHITE });
     this.cursors = this.input.keyboard!.createCursorKeys();
   }
 

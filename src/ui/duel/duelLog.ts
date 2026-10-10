@@ -4,15 +4,15 @@ import type { DuelText } from "../../duel/text.ts";
 import { PHASE_NAMES } from "../../duel/text.ts";
 import { HUMAN } from "../../duel/DuelController.ts";
 
-/** "You draw" / "Opponent draws": subject + verb conjugated for the player. */
-const act = (p: number, verb: string) => (p === HUMAN ? `You ${verb}` : `Opponent ${verb.replace(/^(\S+)/, "$1s")}`);
+/** "You Normal Summon" / "Opponent Normal Summons": subject + verb (last word) conjugated for the player. */
+const act = (p: number, verb: string) => (p === HUMAN ? `You ${verb}` : `Opponent ${verb.replace(/(\S+)$/, "$1s")}`);
 const whose = (p: number) => (p === HUMAN ? "Your" : "Opponent's");
 
 export function describeMessage(m: OcgMessage, text: DuelText): string | null {
   const name = (code: number) => (code ? text.name(code) : "a card");
   switch (m.type) {
     case OcgMessageType.NEW_TURN:
-      return `── ${whose(m.player)} turn ──`;
+      return `-- ${whose(m.player)} turn --`;
     case OcgMessageType.NEW_PHASE:
       return PHASE_NAMES[m.phase] ? `${PHASE_NAMES[m.phase]}` : null;
     case OcgMessageType.DRAW:

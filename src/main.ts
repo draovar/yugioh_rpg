@@ -3,17 +3,31 @@ import { Boot } from "./scenes/Boot.ts";
 import { Overworld } from "./scenes/Overworld.ts";
 import { DuelScene } from "./scenes/DuelScene.ts";
 
-new Phaser.Game({
+/**
+ * Native resolution. The canvas is scaled up by whole numbers (2x = 1280x720, 3x = 1920x1080) so
+ * every game pixel stays square. Windows too small for 2x get a fractional, still nearest-neighbour,
+ * fit instead of a tiny 1x canvas.
+ */
+const WIDTH = 640, HEIGHT = 360;
+const integerZoom = () => {
+  const fit = Math.min(window.innerWidth / WIDTH, window.innerHeight / HEIGHT);
+  return fit >= 2 ? Math.floor(fit) : Math.max(1, fit);
+};
+
+const game = new Phaser.Game({
   type: Phaser.AUTO,
   title: "Yu-Gi-Oh RPG",
   parent: "game-container",
-  width: 1280,
-  height: 720,
+  width: WIDTH,
+  height: HEIGHT,
   backgroundColor: "#000000",
-  pixelArt: false,
+  pixelArt: true,
+  roundPixels: true,
   scene: [Boot, Overworld, DuelScene],
-  scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+  scale: { mode: Phaser.Scale.NONE, zoom: integerZoom(), autoCenter: Phaser.Scale.CENTER_BOTH },
   // Dev: `&timeout` keeps the game loop running in a hidden/background tab (rAF pauses there),
   // which automated browser testing needs.
   fps: { forceSetTimeOut: import.meta.env.DEV && new URLSearchParams(location.search).has("timeout") },
 });
+
+window.addEventListener("resize", () => game.scale.setZoom(integerZoom()));

@@ -1,49 +1,57 @@
-// Screen geometry for the duel board (1280x720).
-//   [info panel 0-270] [field 270-1010] [side panel 1010-1280]
-// The human is always at the bottom; the opponent's side is rotated 180°.
+// Duel screen geometry at the native 640x360 resolution, taken from docs/layout-sketch.png.
+//   [info panel 0-219] [divider 220-223] [phase column 230-245] [field 250-640]
+// The human is at the bottom; the opponent's side is mirrored.
 
-export const FIELD_CARD = { w: 64, h: 93 };
-export const HAND_CARD = { w: 80, h: 116 };
-export const PICK_CARD = { w: 80, h: 116 };
+/** Every card (hand, field, piles) is 38x56 including its 1px outline. */
+export const CARD = { w: 38, h: 56 };
 
-export const INFO_PANEL = { x: 0, w: 270 };
-export const SIDE_PANEL = { x: 1012, w: 268 };
+export const INFO = { x: 0, w: 220 };
+export const DIVIDER = { x: 220, w: 4 };
+export const PHASE_COL = { x: 230, w: 16, h: 56, top: 2, pitch: 60 };
+export const FIELD = { left: 250, right: 640 };
+/** Centre of the playing field (activation zoom, banners). */
+export const FIELD_CENTER = { x: 444, y: 180 };
 
-const CENTER_X = 640;
-const PITCH = 84;
-export const ROWS = { oppHand: 22, oppBack: 132, oppFront: 237, center: 313, myFront: 390, myBack: 495, myHand: 640 };
+/** Zone column centres, left to right, from the human's point of view. */
+const COLS = [328, 386, 444, 502, 560];
+const PILE_LEFT = 275;
+const PILE_RIGHT = 614;
+export const ROWS = { oppHand: 29, oppBack: 91, oppFront: 149, myFront: 211, myBack: 269, myHand: 331 };
 
 export type Slot =
   | { kind: "mzone"; seq: number }
   | { kind: "szone"; seq: number } // seq 5 = field zone
   | { kind: "grave" | "deck" | "extra" | "banished" };
 
-/** `side` 0 = human (bottom), 1 = opponent (top). */
+/** `side` 0 = human (bottom), 1 = opponent (top, mirrored). */
 export function slotXY(side: 0 | 1, slot: Slot): { x: number; y: number } {
-  let col: number, front: boolean;
+  const mine = side === 0;
+  const front = mine ? ROWS.myFront : ROWS.oppFront;
+  const back = mine ? ROWS.myBack : ROWS.oppBack;
+  const col = (seq: number) => COLS[mine ? seq : 4 - seq];
+  const left = mine ? PILE_LEFT : PILE_RIGHT;
+  const right = mine ? PILE_RIGHT : PILE_LEFT;
   switch (slot.kind) {
-    case "mzone": col = 1 + slot.seq; front = true; break;
-    case "szone": [col, front] = slot.seq === 5 ? [0, true] : [1 + slot.seq, false]; break;
-    case "grave": col = 6; front = true; break;
-    case "deck": col = 6; front = false; break;
-    case "extra": col = 0; front = false; break;
-    case "banished": col = 7; front = true; break;
+    case "mzone": return { x: col(slot.seq), y: front };
+    case "szone": return slot.seq === 5 ? { x: left, y: front } : { x: col(slot.seq), y: back };
+    case "extra": return { x: left, y: back };
+    case "grave": case "banished": return { x: right, y: front };
+    case "deck": return { x: right, y: back };
   }
-  if (side === 1) col = 6 - col;
-  const y = side === 0 ? (front ? ROWS.myFront : ROWS.myBack) : (front ? ROWS.oppFront : ROWS.oppBack);
-  return { x: CENTER_X + (col - 3) * PITCH, y };
 }
 
-export const FIELD_CENTER_X = CENTER_X;
+/** Card `i` of `n` in a hand: 40px apart, squeezed when the hand gets large. */
+export function handXY(side: 0 | 1, i: number, n: number): { x: number; y: number } {
+  const span = 376 - CARD.w; // usable width between the pile columns
+  const pitch = n > 1 ? Math.min(40, Math.floor(span / (n - 1))) : 0;
+  return { x: Math.round(FIELD_CENTER.x + (i - (n - 1) / 2) * pitch), y: side === 0 ? ROWS.myHand : ROWS.oppHand };
+}
 
-/** Position of card `i` of `n` in a hand. The human's hand uses larger cards. */
-export function handXY(side: 0 | 1, i: number, n: number): { x: number; y: number; w: number; h: number } {
-  const size = side === 0 ? HAND_CARD : FIELD_CARD;
-  const pitch = Math.min(size.w + 8, 600 / Math.max(1, n));
-  return {
-    x: CENTER_X + (i - (n - 1) / 2) * pitch,
-    y: side === 0 ? ROWS.myHand : ROWS.oppHand,
-    w: size.w,
-    h: size.h,
-  };
+/** Every zone centre on one side, for drawing the empty board. */
+export function zoneCenters(side: 0 | 1): { x: number; y: number }[] {
+  return [0, 1, 2, 3, 4].flatMap((seq) => [slotXY(side, { kind: "mzone", seq }), slotXY(side, { kind: "szone", seq })]);
+}
+
+export function pileCenters(side: 0 | 1): { x: number; y: number }[] {
+  return [slotXY(side, { kind: "szone", seq: 5 }), slotXY(side, { kind: "extra" }), slotXY(side, { kind: "grave" }), slotXY(side, { kind: "deck" })];
 }

@@ -1,77 +1,116 @@
+// One 38x56 card: the type frame (public/assets/cards/frames), 32x32 art from the art atlas,
+// and name / attribute / level / ATK-DEF drawn on top in pixel fonts. Or the card back.
 import Phaser from "phaser";
 import type { CardRecord } from "../../duel/cardData.ts";
-import { FONT } from "../widgets.ts";
+import { FONT_CARD, FONT_UI, INK, INK_SOFT, border, fit, text } from "../pixel.ts";
+import { CARD } from "./layout.ts";
 
 export const CARD_BACK = "card-back";
-export const cardTexture = (code: number) => `card-${code}`;
+export const ART_ATLAS = "art32";
+export const ATTRIBUTE_SHEET = "attributes";
 
-const TYPE_SPELL = 0x2, TYPE_TRAP = 0x4, TYPE_EFFECT = 0x20, TYPE_FUSION = 0x40, TYPE_RITUAL = 0x80;
+const TYPE_MONSTER = 0x1, TYPE_SPELL = 0x2, TYPE_TRAP = 0x4, TYPE_EFFECT = 0x20, TYPE_FUSION = 0x40, TYPE_RITUAL = 0x80;
 
-function frameColor(type: number): number {
-  if (type & TYPE_SPELL) return 0x1d9e74;
-  if (type & TYPE_TRAP) return 0xbc5a84;
-  if (type & TYPE_FUSION) return 0x8a5bb8;
-  if (type & TYPE_RITUAL) return 0x5b7fc4;
-  if (type & TYPE_EFFECT) return 0xc76b29;
-  return 0xc9a35a;
+export const FRAMES = ["normal_monster", "effect_monster", "fusion_monster", "ritual_monster", "spell", "trap"] as const;
+export const frameKey = (name: (typeof FRAMES)[number]) => `frame-${name}`;
+
+export function frameFor(type: number): (typeof FRAMES)[number] {
+  if (type & TYPE_SPELL) return "spell";
+  if (type & TYPE_TRAP) return "trap";
+  if (type & TYPE_FUSION) return "fusion_monster";
+  if (type & TYPE_RITUAL) return "ritual_monster";
+  if (type & TYPE_EFFECT) return "effect_monster";
+  return "normal_monster";
 }
 
-export type CardHighlight = "none" | "action" | "selected" | "target";
-const HIGHLIGHT_COLOR: Record<CardHighlight, number> = { none: 0, action: 0xffe14d, selected: 0x4dff88, target: 0xff5555 };
+/** Attribute bit -> index in attributes.png (DARK EARTH FIRE LIGHT WATER WIND DIVINE). */
+export const ATTRIBUTE_INDEX: Record<number, number> = { 0x20: 0, 0x01: 1, 0x04: 2, 0x10: 3, 0x02: 4, 0x08: 5, 0x40: 6 };
+/** Small 3x3 attribute swatch colours for the card's name bar (sampled from attributes.png). */
+const ATTRIBUTE_COLOR: Record<number, number> = { 0x20: 0x7d1f9e, 0x01: 0x2f4a19, 0x04: 0x7a1a14, 0x10: 0x9c8d55, 0x02: 0x1d2f7a, 0x08: 0x4c7a2a, 0x40: 0xc9b400 };
 
-/**
- * One card face (or back). Uses the downloaded card image when available and
- * falls back to a coloured frame with the card name.
- */
+export type CardHighlight = "none" | "action" | "selected" | "target";
+const HIGHLIGHT_COLOR: Record<CardHighlight, number> = { none: 0, action: 0xffd400, selected: 0x2ecc40, target: 0xff4136 };
+
+const LEFT = -CARD.w / 2, TOP = -CARD.h / 2;
+
+export interface ShowOptions {
+  back?: boolean;
+  /** Own face-down cards: show the face, faded. */
+  dim?: boolean;
+  /** Current (modified) ATK/DEF on the field; defaults to the printed values. */
+  atk?: number;
+  def?: number;
+}
+
 export class CardSprite extends Phaser.GameObjects.Container {
-  readonly w: number;
-  readonly h: number;
-  private face: Phaser.GameObjects.GameObject[] = [];
-  private outline: Phaser.GameObjects.Graphics;
+  readonly w = CARD.w;
+  readonly h = CARD.h;
   /** Passcode currently shown face-up, 0 while showing the back. */
   code = 0;
+  private parts: Phaser.GameObjects.GameObject[] = [];
+  private outline: Phaser.GameObjects.Graphics;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number) {
+  constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
-    this.w = w;
-    this.h = h;
     this.outline = scene.add.graphics();
     this.add(this.outline);
-    this.setSize(w, h);
+    this.setSize(CARD.w, CARD.h);
     scene.add.existing(this);
   }
 
-  /** `record` null = show the card back. */
-  show(code: number, record: CardRecord | undefined, opts: { back?: boolean; dim?: boolean } = {}): this {
-    for (const o of this.face) o.destroy();
-    this.face = [];
-    this.code = opts.back ? 0 : code;
-    const { w, h } = this;
+  show(code: number, record: CardRecord | undefined, opts: ShowOptions = {}): this {
+    for (const p of this.parts) p.destroy();
+    this.parts = [];
+    const back = opts.back || !code || !record;
+    this.code = back ? 0 : code;
     const sc = this.scene;
-    if (opts.back || !code) {
-      this.face.push(sc.add.image(0, 0, CARD_BACK).setDisplaySize(w, h));
-    } else if (sc.textures.exists(cardTexture(code))) {
-      this.face.push(sc.add.image(0, 0, cardTexture(code)).setDisplaySize(w, h));
+    const add = <T extends Phaser.GameObjects.GameObject>(o: T): T => (this.parts.push(o), o);
+
+    if (back) {
+      add(sc.add.image(0, 0, CARD_BACK));
     } else {
-      const g = sc.add.graphics();
-      g.fillStyle(frameColor(record?.type ?? 0)).fillRoundedRect(-w / 2, -h / 2, w, h, 4);
-      g.fillStyle(0x000000, 0.25).fillRect(-w / 2 + 4, -h / 2 + h * 0.2, w - 8, h * 0.45);
-      const t = sc.add.text(0, -h / 2 + 4, record?.name ?? `#${code}`, {
-        fontFamily: FONT, fontSize: `${Math.max(8, Math.round(w / 8))}px`, color: "#111111",
-        wordWrap: { width: w - 6 }, align: "center",
-      }).setOrigin(0.5, 0);
-      this.face.push(g, t);
+      add(sc.add.image(0, 0, frameKey(frameFor(record.type))));
+      if (sc.textures.get(ART_ATLAS).has(String(code))) {
+        add(sc.add.image(LEFT + 3, TOP + 12, ART_ATLAS, String(code)).setOrigin(0));
+      } else {
+        add(sc.add.rectangle(LEFT + 3, TOP + 12, 32, 32, INK_SOFT).setOrigin(0));
+      }
+      this.drawText(record, opts, add);
     }
-    if (opts.dim) for (const o of this.face) (o as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(0.6);
-    this.addAt(this.face, 0);
+    if (opts.dim) for (const p of this.parts) (p as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(0.55);
+    this.addAt(this.parts, 0);
     return this;
+  }
+
+  private drawText(r: CardRecord, opts: ShowOptions, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T) {
+    const sc = this.scene;
+    const monster = (r.type & TYPE_MONSTER) !== 0;
+    // Name bar: x 2..35, y 2..6. 3x3 glyphs at y 3; the attribute swatch takes x 31..33.
+    const nameWidth = monster ? 27 : 31;
+    add(text(sc, LEFT + 3, TOP + 3, fit(sc, FONT_CARD, r.name.toUpperCase(), nameWidth), { font: FONT_CARD }));
+    const g = add(sc.add.graphics());
+    if (monster) {
+      const attr = ATTRIBUTE_COLOR[r.attribute];
+      if (attr !== undefined) g.fillStyle(attr).fillRect(LEFT + 31, TOP + 3, 3, 3);
+      // Level stars, right-aligned in the y 7..10 band: 2x2 red with a yellow glint.
+      const level = r.level & 0xff;
+      for (let i = 0; i < Math.min(level, 11); i++) {
+        const sx = LEFT + 33 - i * 3, sy = TOP + 8;
+        g.fillStyle(0xd62020).fillRect(sx, sy, 2, 2);
+        g.fillStyle(0xffd23f).fillRect(sx + 1, sy + 1, 1, 1);
+      }
+      // ATK (black) and DEF (grey) in the bottom bar, y 46..53.
+      const stat = (v: number) => (v < 0 ? "?" : String(v));
+      add(text(sc, LEFT + 3, TOP + 48, stat(opts.atk ?? r.atk), { font: FONT_UI, color: INK }));
+      add(text(sc, LEFT + 35, TOP + 48, stat(opts.def ?? r.def), { font: FONT_UI, color: INK_SOFT, originX: 1 }));
+    } else {
+      add(text(sc, 0, TOP + 48, r.type & TYPE_SPELL ? "SPELL" : "TRAP", { font: FONT_UI, color: INK, originX: 0.5 }));
+    }
   }
 
   setHighlight(kind: CardHighlight): this {
     this.outline.clear();
-    if (kind !== "none") {
-      this.outline.lineStyle(3, HIGHLIGHT_COLOR[kind]).strokeRoundedRect(-this.w / 2 - 3, -this.h / 2 - 3, this.w + 6, this.h + 6, 5);
-    }
+    if (kind !== "none") border(this.outline, LEFT - 2, TOP - 2, CARD.w + 4, CARD.h + 4, HIGHLIGHT_COLOR[kind], 2);
     return this;
   }
 }

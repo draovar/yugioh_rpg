@@ -1,6 +1,8 @@
 # Yu-Gi-Oh RPG
 
 A Pokémon-style overworld RPG (Phaser 3) in which every battle is a real Yu-Gi-Oh duel.
+Rendered natively at **640x360** pixel art (`pixelArt: true`), scaled up by whole numbers (2x/3x); the duel
+screen follows `docs/layout-sketch.png` exactly.
 Duel rules are **not** hand-written: they run on **ocgcore** (Project Ignis / EDOPro core),
 compiled to WebAssembly (`ocgcore-wasm` on npm) and started in `MODE_GOAT` (classic / GOAT-era rules).
 The reference project this approach comes from is circlenline/DUELIST_KINGDOM_ROGUELIKE (vanilla JS, same engine).
@@ -14,11 +16,13 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run build` | typecheck + production build to `dist/` |
 | `npm run fetch-data` | clone/update ProjectIgnis `CardScripts` + `BabelCDB` into `vendor/` (gitignored) |
 | `npm run build-data` | `data/pool.json` → `public/data/{cards,scripts,strings}.json` |
-| `npm run fetch-art` | download card images for the pool from YGOPRODeck into `public/cards/` (gitignored) |
+| `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` (gitignored) |
+| `npm run build-art` | downscale art: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
+| `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession`; fails on RETRY/crash |
 
-Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art`.
-After changing `data/pool.json`, rerun `build-data` and `fetch-art`, then `smoke`.
+Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
+After changing `data/pool.json`, rerun `build-data`, `fetch-art`, `build-art`, then `smoke`.
 
 Dev URL options: `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
@@ -40,13 +44,28 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
   card action menus (idle/battle), zone highlights (place), and `Modal` dialogs/card pickers for everything else.
   Rare prompts (announce, counters, sort, RPS) are still auto-answered by `autoBot`.
-- `src/ui/` — `widgets.ts` (buttons), `duel/` (CardSprite, Modal, layout geometry, log text, DuelAnimator).
+- `src/ui/` — `pixel.ts` (bitmap text, crisp 1px borders), `widgets.ts` (buttons), `duel/` (CardSprite, Modal,
+  layout geometry, log text, DuelAnimator).
   `DuelAnimator.play(messages)` tweens the displayed sprites per message (draw, move, summon, flip, activate,
   attack, LP, turn banner); `DuelController` awaits it before the next prompt/AI move, then the scene redraws
   from the snapshot, so animations only need to *look* right. Speed toggle (1×/2×/4×) is saved in localStorage.
 - `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx).
 - `data/pool.json` — the card passcodes the game uses. Source of truth for the card pool.
 - `vendor/` — Project Ignis repos (gitignored, ~130 MB).
+
+## Pixel art & assets
+
+- Everything is laid out in native 640x360 pixels; keep coordinates integer (odd sizes → round). Text is
+  `BitmapText` only (`text()` in `src/ui/pixel.ts`); TTF text blurs at this size.
+- Fonts: `tiny5` (our own 3x5, UI + ATK/DEF) and `nerds3` (3x3 Font for Nerds by Norwegian Ink, card names —
+  **check its license before release**). TTFs are converted to BMFont by sampling glyph outlines.
+- Card = 38x56 incl. 1px outline. Frames per type in `public/assets/cards/frames/` (drawn by the user); regions:
+  name bar (2,2) 34x5, stars y 7-10, art window 32x32 at (3,12), bottom bar (2,46) 34x8. Back: `back.png`.
+  `attributes.png` = 7 16x16 icons: DARK EARTH FIRE LIGHT WATER WIND DIVINE.
+- Duel layout (`src/ui/duel/layout.ts`): info panel 0-219, divider 220-223, phase column x230 (6 boxes 16x56,
+  clickable BATTLE / MAIN 2 / END P.), zones are 58px-pitch crosses, piles in the side columns. Banished cards
+  have no zone: a `B<n>` badge under the Graveyard, listed when browsing it. The info panel shows the duel log
+  unless a card is hovered.
 
 ## Engine facts worth knowing
 
@@ -77,6 +96,7 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 1. ✅ Environment: Vite + TS + Phaser 3.88, ocgcore-wasm, data pipeline, headless smoke test, engine runs in the browser.
 2. ✅ **Duel screen v1**: playable human-vs-bot duel with all common prompts, card art, info panel, log, LP, end screen.
    ✅ Animations for draws, moves, summons, flips, activations, attacks, LP and turn changes.
+   ✅ 640x360 pixel-art duel screen from the layout sketch, custom frames, downscaled art, bitmap fonts.
    Next polish: chain-link display, targeting arrows, deck search UX, sound.
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.

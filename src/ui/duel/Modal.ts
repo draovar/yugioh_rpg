@@ -1,20 +1,21 @@
-// Modal overlays used by duel prompts: button dialogs and a card picker.
-// The overlay covers the field and side panel but not the info panel, so hovering
-// a card in a modal can still show its details on the left.
+// Modal overlays used by duel prompts: button dialogs and a (paged) card picker.
+// They cover the field but not the info panel, so hovering a card in a modal still shows it.
 import Phaser from "phaser";
 import type { CardDb } from "../../duel/cardData.ts";
-import { FONT, makeButton } from "../widgets.ts";
+import { FONT_CARD, INK, WHITE, border, fit, text } from "../pixel.ts";
+import { makeButton } from "../widgets.ts";
 import { CardSprite } from "./CardSprite.ts";
-import { INFO_PANEL, PICK_CARD } from "./layout.ts";
+import { CARD, DIVIDER } from "./layout.ts";
 
 const DEPTH = 1000;
-const LEFT = INFO_PANEL.x + INFO_PANEL.w;
-const WIDTH = 1280 - LEFT;
-const MID_X = LEFT + WIDTH / 2;
+const LEFT = DIVIDER.x + DIVIDER.w;
+const WIDTH = 640 - LEFT;
+const MID_X = LEFT + Math.floor(WIDTH / 2);
+const PANEL = 0x1b2147;
 
 export interface PickerCard {
   code: number;
-  /** Small caption under the card (e.g. which effect). */
+  /** Small caption under the card (e.g. which effect); defaults to the card name. */
   caption?: string;
   /** Pre-selected and not toggleable (e.g. "must" cards of a sum selection). */
   locked?: boolean;
@@ -25,14 +26,10 @@ export interface PickerCard {
 export interface PickerOptions {
   title: string;
   cards: PickerCard[];
-  /**
-   * "multi": toggle cards, then Confirm (enabled while `isValid` holds).
-   * "single": the first click resolves immediately.
-   */
+  /** "multi": toggle cards, then Confirm (enabled while `isValid` holds). "single": first click resolves. */
   mode: "multi" | "single";
   isValid?: (selected: number[]) => boolean;
   onConfirm: (selected: number[]) => void;
-  /** Extra buttons under the cards, e.g. Cancel / Finish / Don't chain. */
   buttons?: { label: string; onClick: () => void }[];
   onHover?: (code: number) => void;
 }
@@ -56,101 +53,105 @@ export class Modal {
     this.root = null;
   }
 
-  /** A message with a row of buttons. Optional card shown above the text. */
+  /** A message with a row of buttons, optionally showing a card (at 2x) above the text. */
   dialog(message: string, buttons: { label: string; onClick: () => void }[], code?: number): void {
     const s = this.scene;
     const root = this.open();
-    const hasCard = !!code;
-    const panelH = (hasCard ? 330 : 170) + (buttons.length > 3 ? 50 * Math.ceil(buttons.length / 3 - 1) : 0);
-    root.add(this.panel(MID_X, 360, 520, panelH));
-    let y = 360 - panelH / 2 + 24;
-    if (hasCard) {
-      root.add(new CardSprite(s, MID_X, y + 70, 100, 146).show(code!, this.cards.records.get(code!)));
-      y += 160;
+    const w = 260;
+    const body = text(s, 0, 0, message, { color: WHITE, maxWidth: w - 16 });
+    const cardH = code ? CARD.h * 2 + 8 : 0;
+    const rows = Math.ceil(buttons.length / 3);
+    const h = 10 + cardH + body.height + 10 + rows * 16 + 6;
+    const top = 180 - Math.floor(h / 2);
+    root.add(this.panel(MID_X - w / 2, top, w, h));
+    let y = top + 8;
+    if (code) {
+      const card = new CardSprite(s, MID_X, y + CARD.h).show(code, this.cards.records.get(code)).setScale(2);
+      root.add(card);
+      y += cardH;
     }
-    root.add(s.add.text(MID_X, y, message, { fontFamily: FONT, fontSize: "18px", color: "#ffffff", align: "center", wordWrap: { width: 480 } }).setOrigin(0.5, 0));
-    const perRow = Math.min(3, buttons.length);
+    body.setPosition(Math.round(MID_X - body.width / 2), y);
+    root.add(body);
+    y += body.height + 10;
     buttons.forEach((b, i) => {
       const row = Math.floor(i / 3), col = i % 3;
-      const n = Math.min(perRow, buttons.length - row * 3);
-      const bx = MID_X + (col - (n - 1) / 2) * 160;
-      const by = 360 + panelH / 2 - 36 - (Math.ceil(buttons.length / 3) - 1 - row) * 50;
-      root.add(makeButton(s, bx, by, 150, 40, b.label, () => { this.close(); b.onClick(); }));
+      const n = Math.min(3, buttons.length - row * 3);
+      root.add(makeButton(s, MID_X + (col - (n - 1) / 2) * 82, y + 6 + row * 16, 78, 13, b.label, () => { this.close(); b.onClick(); }));
     });
   }
 
   picker(opts: PickerOptions): void {
-    const s = this.scene;
-    const root = this.open();
-    const perRow = 9;
-    const rows = Math.ceil(opts.cards.length / perRow);
-    const cw = rows > 3 ? PICK_CARD.w * 0.75 : PICK_CARD.w;
-    const ch = rows > 3 ? PICK_CARD.h * 0.75 : PICK_CARD.h;
-    const pitchX = cw + 14, pitchY = ch + 34;
-    const panelH = Math.min(700, 130 + rows * pitchY);
-    const top = 360 - panelH / 2;
-    root.add(this.panel(MID_X, 360, WIDTH - 30, panelH));
-    root.add(s.add.text(MID_X, top + 16, opts.title, { fontFamily: FONT, fontSize: "18px", color: "#ffffff", align: "center", wordWrap: { width: WIDTH - 80 } }).setOrigin(0.5, 0));
-
+    const perRow = 9, rowsPerPage = 3, perPage = perRow * rowsPerPage;
     const selected = new Set(opts.cards.flatMap((c, i) => (c.selected || c.locked ? [i] : [])));
-    const sprites: CardSprite[] = [];
-    let confirm: ReturnType<typeof makeButton> | null = null;
-    const refresh = () => {
-      sprites.forEach((sp, i) => sp.setHighlight(selected.has(i) ? "selected" : "action"));
-      confirm?.setEnabled(opts.isValid ? opts.isValid([...selected].sort((a, b) => a - b)) : true);
-    };
+    const pages = Math.max(1, Math.ceil(opts.cards.length / perPage));
+    const render = (page: number) => {
+      const s = this.scene;
+      const root = this.open();
+      const pitchX = CARD.w + 6, pitchY = CARD.h + 14;
+      const shown = opts.cards.slice(page * perPage, (page + 1) * perPage);
+      const rows = Math.max(1, Math.ceil(shown.length / perRow));
+      const h = 22 + rows * pitchY + 22;
+      const top = 180 - Math.floor(h / 2);
+      root.add(this.panel(LEFT + 4, top, WIDTH - 8, h));
+      root.add(text(s, MID_X, top + 6, opts.title.toUpperCase(), { color: WHITE, originX: 0.5, maxWidth: WIDTH - 24 }));
 
-    opts.cards.forEach((c, i) => {
-      const row = Math.floor(i / perRow), col = i % perRow;
-      const n = Math.min(perRow, opts.cards.length - row * perRow);
-      const x = MID_X + (col - (n - 1) / 2) * pitchX;
-      const y = top + 60 + ch / 2 + row * pitchY;
-      const sp = new CardSprite(s, x, y, cw, ch).show(c.code, this.cards.records.get(c.code));
-      sp.setInteractive({ useHandCursor: !c.locked });
-      sp.on("pointerover", () => opts.onHover?.(c.code));
-      sp.on("pointerup", () => {
-        if (c.locked) return;
-        if (opts.mode === "single") { this.close(); opts.onConfirm([i]); return; }
-        if (selected.has(i)) selected.delete(i); else selected.add(i);
-        refresh();
+      let confirm: ReturnType<typeof makeButton> | null = null;
+      const sprites = new Map<number, CardSprite>();
+      const refresh = () => {
+        for (const [i, sp] of sprites) sp.setHighlight(selected.has(i) ? "selected" : opts.cards[i].locked ? "none" : "action");
+        confirm?.setEnabled(opts.isValid ? opts.isValid([...selected].sort((a, b) => a - b)) : true);
+      };
+      shown.forEach((c, j) => {
+        const i = page * perPage + j;
+        const row = Math.floor(j / perRow), col = j % perRow;
+        const n = Math.min(perRow, shown.length - row * perRow);
+        const x = Math.round(MID_X + (col - (n - 1) / 2) * pitchX);
+        const y = top + 20 + CARD.h / 2 + row * pitchY;
+        const sp = new CardSprite(s, x, y).show(c.code, this.cards.records.get(c.code));
+        sp.setInteractive({ useHandCursor: !c.locked });
+        sp.on("pointerover", () => opts.onHover?.(c.code));
+        sp.on("pointerup", () => {
+          if (c.locked) return;
+          if (opts.mode === "single") { this.close(); opts.onConfirm([i]); return; }
+          if (selected.has(i)) selected.delete(i); else selected.add(i);
+          refresh();
+        });
+        sprites.set(i, sp);
+        const caption = fit(s, FONT_CARD, (c.caption ?? this.cards.name(c.code)).toUpperCase(), pitchX - 2);
+        root.add([sp, text(s, x, y + CARD.h / 2 + 4, caption, { font: FONT_CARD, color: WHITE, originX: 0.5 })]);
       });
-      sprites.push(sp);
-      const caption = c.caption ?? this.cards.name(c.code);
-      root.add([sp, s.add.text(x, y + ch / 2 + 4, caption, {
-        fontFamily: FONT, fontSize: "11px", color: "#dddddd", align: "center", wordWrap: { width: pitchX - 4 }, maxLines: 2,
-      }).setOrigin(0.5, 0)]);
-    });
 
-    const buttons = [...(opts.buttons ?? [])];
-    const by = top + panelH - 32;
-    const all = opts.mode === "multi" ? [{ label: "Confirm", onClick: () => {} }, ...buttons] : buttons;
-    all.forEach((b, i) => {
-      const bx = MID_X + (i - (all.length - 1) / 2) * 170;
-      if (opts.mode === "multi" && i === 0) {
-        confirm = makeButton(s, bx, by, 150, 40, "Confirm", () => {
-          this.close();
-          opts.onConfirm([...selected].sort((a, b) => a - b));
-        }, 0x2f7a3d);
-        root.add(confirm);
-      } else {
-        root.add(makeButton(s, bx, by, 150, 40, b.label, () => { this.close(); b.onClick(); }));
-      }
-    });
-    refresh();
+      const buttons: { label: string; onClick: () => void; confirm?: boolean }[] = [];
+      if (pages > 1) buttons.push({ label: "<", onClick: () => render((page + pages - 1) % pages) });
+      if (opts.mode === "multi") buttons.push({ label: "CONFIRM", confirm: true, onClick: () => { this.close(); opts.onConfirm([...selected].sort((a, b) => a - b)); } });
+      for (const b of opts.buttons ?? []) buttons.push({ label: b.label.toUpperCase(), onClick: () => { this.close(); b.onClick(); } });
+      if (pages > 1) buttons.push({ label: ">", onClick: () => render((page + 1) % pages) });
+      const by = top + h - 12;
+      buttons.forEach((b, i) => {
+        const narrow = b.label.length <= 1;
+        const bx = MID_X + (i - (buttons.length - 1) / 2) * 76;
+        const btn = makeButton(s, bx, by, narrow ? 20 : 72, 13, b.label, b.onClick, b.confirm ? 0x2f7a3d : undefined);
+        if (b.confirm) confirm = btn;
+        root.add(btn);
+      });
+      if (pages > 1) root.add(text(s, LEFT + 10, by - 2, `${page + 1}/${pages}`, { color: WHITE }));
+      refresh();
+    };
+    render(0);
   }
 
   private open(): Phaser.GameObjects.Container {
     this.close();
-    const s = this.scene;
-    const shade = s.add.rectangle(LEFT, 0, WIDTH, 720, 0x000000, 0.55).setOrigin(0).setInteractive();
-    this.root = s.add.container(0, 0, [shade]).setDepth(DEPTH);
+    const shade = this.scene.add.rectangle(LEFT, 0, WIDTH, 360, 0x000000, 0.5).setOrigin(0).setInteractive();
+    this.root = this.scene.add.container(0, 0, [shade]).setDepth(DEPTH);
     return this.root;
   }
 
   private panel(x: number, y: number, w: number, h: number): Phaser.GameObjects.Graphics {
     const g = this.scene.add.graphics();
-    g.fillStyle(0x151a33, 0.97).fillRoundedRect(x - w / 2, y - h / 2, w, h, 10);
-    g.lineStyle(2, 0x6c7bd1).strokeRoundedRect(x - w / 2, y - h / 2, w, h, 10);
+    g.fillStyle(PANEL).fillRect(Math.round(x), Math.round(y), w, h);
+    border(g, Math.round(x), Math.round(y), w, h, INK);
+    border(g, Math.round(x) + 1, Math.round(y) + 1, w - 2, h - 2, 0x6c7bd1);
     return g;
   }
 }

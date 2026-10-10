@@ -11,7 +11,9 @@
     "fetch-data": "node tools/fetch-data.mjs",
     "build-data": "node tools/build-data.mjs",
     "smoke": "node tools/smoke-duel.ts",
-    "fetch-art": "node tools/fetch-art.mjs"
+    "fetch-art": "node tools/fetch-art.mjs",
+    "build-fonts": "node tools/build-pixel-font.mjs public/assets/fonts/3x3_font_for_nerds.ttf nerds3 228.3 && node tools/build-tiny5-font.mjs",
+    "build-art": "node tools/build-art.mjs"
   },
   "dependencies": {
     "ocgcore-wasm": "^0.1.2",
@@ -19,6 +21,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "opentype.js": "^2.0.0",
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.4"
   }

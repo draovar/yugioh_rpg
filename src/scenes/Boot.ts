@@ -1,42 +1,38 @@
 import Phaser from "phaser";
 import { loadEngine } from "../duel/loadEngine.ts";
-import { CARD_BACK, cardTexture } from "../ui/duel/CardSprite.ts";
+import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, FRAMES, frameKey } from "../ui/duel/CardSprite.ts";
+import { FONT_CARD, FONT_UI, WHITE, text } from "../ui/pixel.ts";
 
 export class Boot extends Phaser.Scene {
   constructor() {
     super("Boot");
   }
 
+  preload() {
+    this.load.bitmapFont(FONT_UI, "assets/fonts/tiny5.png", "assets/fonts/tiny5.xml");
+    this.load.bitmapFont(FONT_CARD, "assets/fonts/nerds3.png", "assets/fonts/nerds3.xml");
+    for (const f of FRAMES) this.load.image(frameKey(f), `assets/cards/frames/${f}.png`);
+    this.load.image(CARD_BACK, "assets/cards/back.png");
+    this.load.spritesheet(ATTRIBUTE_SHEET, "assets/cards/attributes.png", { frameWidth: 16, frameHeight: 16 });
+    // Built by `npm run build-art`; cards without art fall back to a grey box.
+    this.load.atlas(ART_ATLAS, "cards/art32.png", "cards/art32.json");
+  }
+
   create() {
-    const label = this.add.text(640, 360, "Loading duel engine…", { fontSize: "24px", color: "#ffffff" }).setOrigin(0.5);
-    this.makeCardBack();
+    this.cameras.main.setBackgroundColor(0x040218);
+    const label = text(this, 320, 176, "LOADING DUEL ENGINE...", { color: WHITE, originX: 0.5 });
     loadEngine()
-      .then(({ cards }) => {
-        label.setText("Loading cards…");
-        // Card images come from `npm run fetch-art`; missing ones fall back to a drawn frame.
-        for (const code of cards.records.keys()) this.load.image(cardTexture(code), `cards/${code}.jpg`);
+      .then(() => {
         // Dev shortcut: /?duel jumps straight into a duel; &lp=1000 for a short one, &seed=N to replay one.
         const params = new URLSearchParams(location.search);
         const lp = Number(params.get("lp")) || undefined;
         const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
-        this.load.once(Phaser.Loader.Events.COMPLETE, () =>
-          params.has("duel") ? this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp, seed }) : this.scene.start("Overworld"));
-        this.load.start();
+        if (params.has("duel")) this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp, seed });
+        else this.scene.start("Overworld");
       })
       .catch((e) => {
         console.error(e);
-        label.setText(`Engine failed to load:\n${e}`).setColor("#ff6666");
+        label.setText(`ENGINE FAILED TO LOAD: ${e}`).setTint(0xff6666);
       });
-  }
-
-  private makeCardBack() {
-    const w = 128, h = 186;
-    const g = this.make.graphics({}, false);
-    g.fillStyle(0x3b2414).fillRoundedRect(0, 0, w, h, 8);
-    g.fillStyle(0x6b3f1d).fillRoundedRect(6, 6, w - 12, h - 12, 6);
-    g.fillStyle(0x1a0f08).fillEllipse(w / 2, h / 2, w * 0.62, h * 0.5);
-    g.lineStyle(3, 0xd8a24a).strokeEllipse(w / 2, h / 2, w * 0.62, h * 0.5);
-    g.generateTexture(CARD_BACK, w, h);
-    g.destroy();
   }
 }
