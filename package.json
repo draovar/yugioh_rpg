@@ -1,0 +1,24 @@
+{
+  "name": "yugioh-rpg",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "fetch-data": "node tools/fetch-data.mjs",
+    "build-data": "node tools/build-data.mjs",
+    "smoke": "node tools/smoke-duel.ts"
+  },
+  "dependencies": {
+    "ocgcore-wasm": "^0.1.2",
+    "phaser": "^3.88.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
+}

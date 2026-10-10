@@ -1,0 +1,8 @@
+{
+  "_comment": "Card passcodes available in the game. tools/build-data.mjs extracts only these (plus engine utility scripts) into public/data/.",
+  "cards": [
+    89631139, 46986414, 70781052, 91152256, 69140098, 14898066, 97590747, 54652250, 26202165,
+    55144522, 53129443, 12580477, 83764718, 5318639, 44095762, 56120475, 4206964, 4031928,
+    72302403, 19613556
+  ]
+}
