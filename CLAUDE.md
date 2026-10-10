@@ -20,8 +20,11 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art`.
 After changing `data/pool.json`, rerun `build-data` and `fetch-art`, then `smoke`.
 
-Dev URL options: `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&timeout` keeps the game
-loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel). Use `&timeout` for automated browser testing.
+Dev URL options: `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
+`&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
+Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
+choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
+`.animator.current`, `.animator.speed`).
 
 ## Layout
 
@@ -37,7 +40,10 @@ loop running when the tab/pane is hidden (rAF pauses there, which freezes the du
   `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
   card action menus (idle/battle), zone highlights (place), and `Modal` dialogs/card pickers for everything else.
   Rare prompts (announce, counters, sort, RPS) are still auto-answered by `autoBot`.
-- `src/ui/` — `widgets.ts` (buttons), `duel/` (CardSprite, Modal, layout geometry, log text).
+- `src/ui/` — `widgets.ts` (buttons), `duel/` (CardSprite, Modal, layout geometry, log text, DuelAnimator).
+  `DuelAnimator.play(messages)` tweens the displayed sprites per message (draw, move, summon, flip, activate,
+  attack, LP, turn banner); `DuelController` awaits it before the next prompt/AI move, then the scene redraws
+  from the snapshot, so animations only need to *look* right. Speed toggle (1×/2×/4×) is saved in localStorage.
 - `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx).
 - `data/pool.json` — the card passcodes the game uses. Source of truth for the card pool.
 - `vendor/` — Project Ignis repos (gitignored, ~130 MB).
@@ -70,8 +76,8 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 
 1. ✅ Environment: Vite + TS + Phaser 3.88, ocgcore-wasm, data pipeline, headless smoke test, engine runs in the browser.
 2. ✅ **Duel screen v1**: playable human-vs-bot duel with all common prompts, card art, info panel, log, LP, end screen.
-   Next polish: move/attack/summon animations (board currently redraws instantly), chain display,
-   targeting arrows, Sangan/Witch-style deck search UX, sound.
+   ✅ Animations for draws, moves, summons, flips, activations, attacks, LP and turn changes.
+   Next polish: chain-link display, targeting arrows, deck search UX, sound.
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.

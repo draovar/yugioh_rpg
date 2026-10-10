@@ -15,11 +15,12 @@ export class Boot extends Phaser.Scene {
         label.setText("Loading cards…");
         // Card images come from `npm run fetch-art`; missing ones fall back to a drawn frame.
         for (const code of cards.records.keys()) this.load.image(cardTexture(code), `cards/${code}.jpg`);
-        // Dev shortcut: /?duel jumps straight into a duel; add &lp=1000 for a short one.
+        // Dev shortcut: /?duel jumps straight into a duel; &lp=1000 for a short one, &seed=N to replay one.
         const params = new URLSearchParams(location.search);
         const lp = Number(params.get("lp")) || undefined;
+        const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
         this.load.once(Phaser.Loader.Events.COMPLETE, () =>
-          params.has("duel") ? this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp }) : this.scene.start("Overworld"));
+          params.has("duel") ? this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp, seed }) : this.scene.start("Overworld"));
         this.load.start();
       })
       .catch((e) => {

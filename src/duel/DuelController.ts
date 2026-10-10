@@ -18,8 +18,11 @@ const HINT_SELECTMSG = 3;
 export type HumanPrompt = OcgMessage & { player: number };
 
 export interface DuelEvents {
-  /** Messages produced by one engine step, plus the board as the human sees it afterwards. */
-  onUpdate(messages: OcgMessage[], snapshot: FieldSnapshot): void;
+  /**
+   * Messages produced by one engine step, plus the board as the human sees it afterwards.
+   * May return a promise (e.g. animations); the duel waits for it before continuing.
+   */
+  onUpdate(messages: OcgMessage[], snapshot: FieldSnapshot): void | Promise<void>;
   /** The human must answer; `hint` is the pending "Select the card(s) to …" system string id, if any. */
   onPrompt(prompt: HumanPrompt, hint: bigint | null): void;
   onEnd(winner: number | null): void;
@@ -40,6 +43,7 @@ export class DuelController {
   private readonly schedule: (ms: number, fn: () => void) => void;
   private readonly aiDelayMs: number;
   private pending: HumanPrompt | null = null;
+  private destroyed = false;
   private hint: bigint | null = null;
   turn = 0;
   turnPlayer = 0;
@@ -53,7 +57,7 @@ export class DuelController {
   }
 
   start(): void {
-    this.step();
+    void this.step();
   }
 
   /** Answer the currently pending human prompt. */
@@ -61,21 +65,27 @@ export class DuelController {
     if (!this.pending) throw new Error("DuelController.answer: no pending prompt");
     this.pending = null;
     this.session.respond(response);
-    this.step();
+    void this.step();
   }
 
   get waitingForHuman(): HumanPrompt | null {
     return this.pending;
   }
 
+  /** Stops the loop (scene shut down mid-animation); the session is destroyed by its owner. */
+  stop(): void {
+    this.destroyed = true;
+  }
+
   snapshot(): FieldSnapshot {
     return this.session.snapshot(HUMAN);
   }
 
-  private step(): void {
+  private async step(): Promise<void> {
     const result = this.session.advance();
     for (const m of result.messages) this.track(m);
-    this.events.onUpdate(result.messages, this.session.snapshot(HUMAN));
+    await this.events.onUpdate(result.messages, this.session.snapshot(HUMAN));
+    if (this.destroyed) return;
 
     if (result.ended) {
       this.events.onEnd(result.winner);
@@ -84,15 +94,16 @@ export class DuelController {
     const prompt = result.prompt as HumanPrompt;
     if (prompt.player === AI) {
       this.schedule(this.aiDelayMs, () => {
+        if (this.destroyed) return;
         this.session.respond(autoRespond(prompt));
-        this.step();
+        void this.step();
       });
       return;
     }
     const trivial = this.trivialAnswer(prompt);
     if (trivial) {
       this.session.respond(trivial);
-      this.schedule(0, () => this.step());
+      this.schedule(0, () => void (!this.destroyed && this.step()));
       return;
     }
     this.pending = prompt;

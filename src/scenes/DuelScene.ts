@@ -15,11 +15,11 @@ import { loadEngine, type Engine } from "../duel/loadEngine.ts";
 import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
 import { AI, DuelController, HUMAN, type HumanPrompt } from "../duel/DuelController.ts";
 import { autoRespond, freePlaces } from "../duel/autoBot.ts";
-import { PHASE_NAMES } from "../duel/text.ts";
 import { CardSprite, type CardHighlight } from "../ui/duel/CardSprite.ts";
 import { Modal, type PickerCard } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
-import { FIELD_CARD, FIELD_CENTER_X, HAND_CARD, INFO_PANEL, ROWS, SIDE_PANEL, slotXY, type Slot } from "../ui/duel/layout.ts";
+import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
+import { FIELD_CARD, FIELD_CENTER_X, INFO_PANEL, ROWS, SIDE_PANEL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
 import { FONT, makeButton, type Button } from "../ui/widgets.ts";
 
 export interface DuelSceneData {
@@ -27,6 +27,8 @@ export interface DuelSceneData {
   opponentDeck?: Deck;
   opponentName?: string;
   startingLP?: number;
+  /** Fixed duel seed (replays the exact same duel); random when omitted. */
+  seed?: number;
   /** Scene to return to when the duel ends. */
   returnScene?: string;
 }
@@ -52,6 +54,12 @@ export class DuelScene extends Phaser.Scene {
   private menu: Phaser.GameObjects.Container | null = null;
   private placeTargets: Phaser.GameObjects.GameObject[] = [];
   private snapshot: FieldSnapshot | null = null;
+  private animator!: DuelAnimator;
+  private handCount: [number, number] = [0, 0];
+  private lpValue: [number, number] = [8000, 8000];
+  private turn = 0;
+  private turnPlayer = 0;
+  private phaseName = "";
 
   private info!: { card: CardSprite; name: Phaser.GameObjects.Text; body: Phaser.GameObjects.Text };
   private lpText!: [Phaser.GameObjects.Text, Phaser.GameObjects.Text];
@@ -71,6 +79,9 @@ export class DuelScene extends Phaser.Scene {
     this.logLines = [];
     this.menu = null;
     this.placeTargets = [];
+    this.handCount = [0, 0];
+    this.lpValue = [data?.startingLP ?? 8000, data?.startingLP ?? 8000];
+    this.turn = 0;
   }
 
   async create() {
@@ -80,8 +91,22 @@ export class DuelScene extends Phaser.Scene {
 
     this.drawStaticBoard();
     this.createInfoPanel();
-    this.createSidePanel();
     this.board = this.add.container(0, 0);
+    this.animator = new DuelAnimator({
+      scene: this,
+      cards,
+      sprites: this.sprites,
+      board: this.board,
+      handCount: this.handCount,
+      setPhaseText: (phase) => this.setPhase(phase),
+      changeLP: (player, lp, delta) => this.changeLP(player, lp, delta),
+      lp: (player) => this.lpValue[player === HUMAN ? 0 : 1],
+    });
+    try {
+      const saved = Number(localStorage.getItem("duel.animSpeed"));
+      if ([1, 2, 4].includes(saved)) this.animator.speed = saved;
+    } catch { /* storage unavailable */ }
+    this.createSidePanel();
     this.input.on("pointerdown", (_p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
       if (this.menu && !over.some((o) => this.menu!.exists(o))) this.closeMenu();
     });
@@ -93,6 +118,7 @@ export class DuelScene extends Phaser.Scene {
     const session = new DuelSession({
       core, cards, readScript,
       startingLP: this.sceneData.startingLP,
+      seed: this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as [bigint, bigint, bigint, bigint]) : undefined,
       decks: [this.sceneData.playerDeck ?? fallback(), this.sceneData.opponentDeck ?? fallback()],
     });
     this.controller = new DuelController({
@@ -104,7 +130,12 @@ export class DuelScene extends Phaser.Scene {
         onEnd: (winner) => this.onEnd(winner),
       },
     });
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => session.destroy());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.controller.stop();
+      session.destroy();
+    });
+    // Debug handle for the browser console (dev builds only).
+    if (import.meta.env.DEV) (window as unknown as { duelScene: DuelScene }).duelScene = this;
     this.controller.start();
   }
 
@@ -166,6 +197,14 @@ export class DuelScene extends Phaser.Scene {
       }, 0x7a2d2d),
     };
     this.setPhaseButtons(false, false, false);
+
+    const speeds = [1, 2, 4];
+    const label = () => `Animation speed: ${this.animator.speed}×`;
+    const toggle = makeButton(this, x, 456, 200, 30, label(), () => {
+      this.animator.speed = speeds[(speeds.indexOf(this.animator.speed) + 1) % speeds.length];
+      (toggle.getAt(1) as Phaser.GameObjects.Text).setText(label());
+      try { localStorage.setItem("duel.animSpeed", String(this.animator.speed)); } catch { /* storage unavailable */ }
+    }, 0x33405e);
   }
 
   private setPhaseButtons(bp: boolean, m2: boolean, ep: boolean) {
@@ -180,24 +219,53 @@ export class DuelScene extends Phaser.Scene {
     // Show as many recent lines as fit between the opponent LP and the buttons.
     for (let n = Math.min(this.logLines.length, 28); n > 0; n--) {
       this.logText.setText(this.logLines.slice(-n).join("\n"));
-      if (this.logText.height <= 380) break;
+      if (this.logText.height <= 340) break;
     }
   }
 
   // ---------------------------------------------------------------- engine events
 
-  private onUpdate(messages: OcgMessage[], snapshot: FieldSnapshot) {
-    for (const m of messages) {
+  private async onUpdate(messages: OcgMessage[], snapshot: FieldSnapshot): Promise<void> {
+    if (!this.snapshot) {
+      // First update: show full decks and empty hands so the opening draw has something to animate from.
+      this.renderBoard({
+        players: snapshot.players.map((p) => ({ ...p, hand: [], deckCount: p.deckCount + p.hand.length })) as unknown as FieldSnapshot["players"],
+      });
+    }
+    await this.animator.play(messages, (m) => {
+      if (m.type === OcgMessageType.NEW_TURN) {
+        this.turn++;
+        this.turnPlayer = m.player;
+      }
       const line = describeMessage(m, this.engine.text);
       if (line) this.log(line);
-      if (m.type === OcgMessageType.DAMAGE || m.type === OcgMessageType.PAY_LPCOST) this.floatLP(m.player, `-${m.amount}`, "#ff6666");
-      if (m.type === OcgMessageType.RECOVER) this.floatLP(m.player, `+${m.amount}`, "#66ff99");
-    }
+    });
     this.snapshot = snapshot;
     this.renderBoard(snapshot);
-    const c = this.controller;
-    const turn = c.turnPlayer === HUMAN ? "Your" : "Opponent's";
-    this.phaseText.setText(c.turn ? `Turn ${c.turn} · ${turn} ${PHASE_NAMES[c.phase] ?? ""}` : "");
+  }
+
+  private setPhase(phase: string) {
+    this.phaseName = phase;
+    const whose = this.turnPlayer === HUMAN ? "Your" : "Opponent's";
+    this.phaseText.setText(this.turn ? `Turn ${this.turn} · ${whose} ${phase}` : phase);
+  }
+
+  /** Counts the LP display to `lp`, with a floating +/- label. */
+  private changeLP(player: number, lp: number, delta: number): Promise<void> {
+    const i = player === HUMAN ? 0 : 1;
+    const from = this.lpValue[i];
+    const to = Math.max(0, lp);
+    this.lpValue[i] = to;
+    if (delta) this.floatLP(player, delta > 0 ? `+${delta}` : `${delta}`, delta > 0 ? "#66ff99" : "#ff6666");
+    const name = i === 0 ? "You" : this.sceneData.opponentName ?? "Opponent";
+    return new Promise((resolve) => {
+      this.tweens.addCounter({
+        from, to, duration: 450 / this.animator.speed,
+        onUpdate: (t) => this.lpText[i].setText(`${name}
+LP ${Math.round(t.getValue() ?? to)}`),
+        onComplete: () => resolve(),
+      });
+    });
   }
 
   private floatLP(player: number, text: string, color: string) {
@@ -221,6 +289,8 @@ export class DuelScene extends Phaser.Scene {
     this.sprites.clear();
     snap.players.forEach((p, side) => {
       const s = side as 0 | 1;
+      this.handCount[s] = p.hand.length;
+      this.lpValue[s] = p.lp;
       this.lpText[side].setText(`${side === HUMAN ? "You" : this.sceneData.opponentName ?? "Opponent"}\nLP ${p.lp}`);
       p.monsters.forEach((c, seq) => c && this.placeCard(c, slotXY(s, { kind: "mzone", seq })));
       p.spells.forEach((c, seq) => c && this.placeCard(c, slotXY(s, { kind: "szone", seq })));
@@ -256,12 +326,9 @@ export class DuelScene extends Phaser.Scene {
   }
 
   private drawHand(side: 0 | 1, hand: CardView[]) {
-    const size = side === HUMAN ? HAND_CARD : FIELD_CARD;
-    const y = side === HUMAN ? ROWS.myHand : ROWS.oppHand;
-    const pitch = Math.min(size.w + 8, 600 / Math.max(1, hand.length));
     hand.forEach((c, i) => {
-      const x = FIELD_CENTER_X + (i - (hand.length - 1) / 2) * pitch;
-      const sp = this.cardSprite(c, x, y, size.w, size.h);
+      const { x, y, w, h } = handXY(side, i, hand.length);
+      const sp = this.cardSprite(c, x, y, w, h);
       if (side === HUMAN) {
         sp.on("pointerover", () => this.tweens.add({ targets: sp, y: y - 18, duration: 90 }));
         sp.on("pointerout", () => this.tweens.add({ targets: sp, y, duration: 90 }));
@@ -305,6 +372,7 @@ export class DuelScene extends Phaser.Scene {
   }
 
   private clearInteraction() {
+    this.setPhase(this.phaseName); // undo prompt titles like "Select the zone…"
     this.actions.clear();
     this.closeMenu();
     for (const o of this.placeTargets) o.destroy();

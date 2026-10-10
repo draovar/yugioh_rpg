@@ -35,3 +35,15 @@ export function slotXY(side: 0 | 1, slot: Slot): { x: number; y: number } {
 }
 
 export const FIELD_CENTER_X = CENTER_X;
+
+/** Position of card `i` of `n` in a hand. The human's hand uses larger cards. */
+export function handXY(side: 0 | 1, i: number, n: number): { x: number; y: number; w: number; h: number } {
+  const size = side === 0 ? HAND_CARD : FIELD_CARD;
+  const pitch = Math.min(size.w + 8, 600 / Math.max(1, n));
+  return {
+    x: CENTER_X + (i - (n - 1) / 2) * pitch,
+    y: side === 0 ? ROWS.myHand : ROWS.oppHand,
+    w: size.w,
+    h: size.h,
+  };
+}

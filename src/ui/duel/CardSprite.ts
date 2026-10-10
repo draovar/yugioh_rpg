@@ -28,6 +28,7 @@ export class CardSprite extends Phaser.GameObjects.Container {
   readonly h: number;
   private face: Phaser.GameObjects.GameObject[] = [];
   private outline: Phaser.GameObjects.Graphics;
+  /** Passcode currently shown face-up, 0 while showing the back. */
   code = 0;
 
   constructor(scene: Phaser.Scene, x: number, y: number, w: number, h: number) {
@@ -44,7 +45,7 @@ export class CardSprite extends Phaser.GameObjects.Container {
   show(code: number, record: CardRecord | undefined, opts: { back?: boolean; dim?: boolean } = {}): this {
     for (const o of this.face) o.destroy();
     this.face = [];
-    this.code = code;
+    this.code = opts.back ? 0 : code;
     const { w, h } = this;
     const sc = this.scene;
     if (opts.back || !code) {
