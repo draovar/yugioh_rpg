@@ -43,7 +43,8 @@ const key = (l: Loc) => `${l.controller}:${l.location}:${l.sequence}`;
 
 /**
  * Timings (ms, at speed 1). Pixel-art style: quick, direct moves; no squash/stretch, no overshoot,
- * no in-between scales or angles. Faces swap instantly, rotations snap.
+ * no in-between scales or angles. Faces swap instantly, rotations snap. Exception: a set Spell/Trap
+ * flipping up to activate squashes to its centre line and opens on its face (like the card action menu).
  */
 const T = {
   /** Card flying between zones / to the hand / to the GY. */
@@ -59,6 +60,8 @@ const T = {
   lunge: 190,
   /** Position change: rotating between attack and defense. */
   rotate: 300,
+  /** Each half of a set Spell/Trap flipping face-up (squash, then open). */
+  flip: 50,
   /** White (summon / hit) or red (destroyed) flash on a card. */
   flash: 240,
   /** Activated card shown at 2x in the middle of the field. */
@@ -248,7 +251,11 @@ export class DuelAnimator {
     const angle = monster && position & DEFENSE ? 90 : 0;
     if (sp.angle !== angle) await this.tween({ targets: sp, angle, duration: T.rotate, ease: "Sine.easeInOut" });
     const showCode = this.visible(code, { ...l, position }) ? code : 0;
-    if (showCode !== sp.code) this.reveal(sp, showCode);
+    if (showCode !== sp.code) {
+      // A set Spell/Trap turning face-up (to activate) flips over; everything else swaps instantly.
+      if (!monster && showCode && !sp.code) await this.flipReveal(sp, showCode);
+      else this.reveal(sp, showCode);
+    }
     // A monster flipped face-up flashes like a summon; Spells/Traps flash when they activate instead.
     if (monster && prevPosition & FACEDOWN && !(position & FACEDOWN)) {
       this.justFlipped = key(l);
@@ -260,7 +267,7 @@ export class DuelAnimator {
   private async activate(l: Loc, code: number): Promise<void> {
     const h = this.host;
     const src = h.sprites.get(key(l));
-    if (src && src.code !== code) this.reveal(src, code); // face-down card being activated
+    if (src && src.code !== code) await this.flipReveal(src, code); // face-down card being activated
     if (src) await this.flash(src, 0xffffff);
     const big = new CardSprite(h.scene, FIELD_CENTER.x, FIELD_CENTER.y).show(code, h.cards.records.get(code)).setScale(2).setDepth(600);
     await this.wait(T.activateHold);
@@ -363,6 +370,13 @@ export class DuelAnimator {
   /** Shows another face (or the back) instantly -- no squash/stretch flip. */
   private reveal(sp: CardSprite, code: number) {
     sp.show(code, this.host.cards.records.get(code), { back: !code });
+  }
+
+  /** Squashes the card to its centre line, swaps the face, opens it again. */
+  private async flipReveal(sp: CardSprite, code: number): Promise<void> {
+    await this.tween({ targets: sp, scaleX: 0, duration: T.flip });
+    this.reveal(sp, code);
+    await this.tween({ targets: sp, scaleX: 1, duration: T.flip });
   }
 
   private async flash(sp: CardSprite, color: number): Promise<void> {

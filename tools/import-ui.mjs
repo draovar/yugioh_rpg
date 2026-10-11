@@ -29,6 +29,10 @@ const SPRITES = {
   // Attack declaration arrows (red): up when you attack, down when the opponent attacks.
   "attack-up": ["13_Runewood_Theme/SpritesColors/UI_Runewood_IconAlert03b.png", false],
   "attack-down": ["13_Runewood_Theme/SpritesColors/UI_Runewood_IconAlert04b.png", false],
+  // Card action menu: a card-sized dark frame with list-row buttons (c = darker row, on hover).
+  "menu-back": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame01a.png", false],
+  "menu-button": ["13_Runewood_Theme/Sprites/UI_Runewood_FrameList09a.png", false],
+  "menu-button-hover": ["13_Runewood_Theme/Sprites/UI_Runewood_FrameList09c.png", false],
 };
 
 mkdirSync(OUT, { recursive: true });

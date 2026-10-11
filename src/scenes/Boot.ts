@@ -5,6 +5,7 @@ import { FONT_CARD, FONT_UI, WHITE, text } from "../ui/pixel.ts";
 import { PHASE_LOOK } from "../ui/duel/phaseThemes.ts";
 import { LP_BAR_TEXTURES } from "../ui/duel/LPBar.ts";
 import { PANEL_TEXTURES } from "../ui/duel/panelStyles.ts";
+import { MENU_TEXTURES } from "../ui/duel/CardMenu.ts";
 
 export class Boot extends Phaser.Scene {
   constructor() {
@@ -18,7 +19,7 @@ export class Boot extends Phaser.Scene {
     this.load.image(CARD_BACK, "assets/cards/back.png");
     this.load.spritesheet(ATTRIBUTE_SHEET, "assets/cards/attributes.png", { frameWidth: 16, frameHeight: 16 });
     for (const state of Object.keys(PHASE_LOOK)) this.load.image(`ui-phase-${state}`, `assets/ui/phase-${state}.png`);
-    for (const t of [...LP_BAR_TEXTURES, ...PANEL_TEXTURES, "star", "attack-up", "attack-down"]) this.load.image(`ui-${t}`, `assets/ui/${t}.png`);
+    for (const t of [...LP_BAR_TEXTURES, ...PANEL_TEXTURES, ...MENU_TEXTURES, "star", "attack-up", "attack-down"]) this.load.image(`ui-${t}`, `assets/ui/${t}.png`);
     // Built by `npm run build-art`; cards without art fall back to a grey box.
     this.load.atlas(ART_ATLAS, "cards/art32.png", "cards/art32.json");
   }

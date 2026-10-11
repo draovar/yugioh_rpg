@@ -19,6 +19,7 @@ import { ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, type CardHighlight } from
 import { Modal, type PickerCard } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
+import { CardMenu } from "../ui/duel/CardMenu.ts";
 import { CARD, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, pileCenters, slotXY, zoneCenters, type Slot } from "../ui/duel/layout.ts";
 import { INK, INK_SOFT, PAPER, WHITE, border, text } from "../ui/pixel.ts";
 import { makeButton, makeWoodButton, type WoodButton } from "../ui/widgets.ts";
@@ -93,7 +94,7 @@ export class DuelScene extends Phaser.Scene {
   private sprites = new Map<string, CardSprite>();
   private actions = new Map<string, CardAction[]>();
   private phaseActions = new Map<PhaseAction, OcgResponse>();
-  private menu: Phaser.GameObjects.Container | null = null;
+  private menu: CardMenu | null = null;
   private placeTargets: Phaser.GameObjects.GameObject[] = [];
   private snapshot: FieldSnapshot | null = null;
   private animator!: DuelAnimator;
@@ -174,7 +175,7 @@ export class DuelScene extends Phaser.Scene {
     this.drawPhaseColumn();
     this.createPromptBand();
     this.input.on("pointerdown", (_p: Phaser.Input.Pointer, over: Phaser.GameObjects.GameObject[]) => {
-      if (this.menu && !over.some((o) => this.menu!.exists(o))) this.closeMenu();
+      if (this.menu && !over.some((o) => this.menu!.exists(o))) this.closeMenu(true);
     });
 
     const fallback = (): Deck => {
@@ -555,7 +556,7 @@ export class DuelScene extends Phaser.Scene {
     const k = key(c.controller, c.location, c.sequence);
     sp.on("pointerover", () => c.code && this.showInfo(c.code));
     sp.on("pointerout", () => this.hoverEnd());
-    sp.on("pointerup", (p: Phaser.Input.Pointer) => this.onCardClick(k, p));
+    sp.on("pointerup", () => this.onCardClick(k));
     this.sprites.set(k, sp);
     this.board.add(sp);
     return sp;
@@ -633,13 +634,16 @@ export class DuelScene extends Phaser.Scene {
         const add = (cards: OcgCardLoc[], label: string, action: SelectIdleCMDAction) =>
           cards.forEach((c, index) => this.addAction(c, label, { type: OcgResponseType.SELECT_IDLECMD, action, index }));
         add(m.summons, "Summon", SelectIdleCMDAction.SELECT_SUMMON);
-        add(m.special_summons, "Sp. Summon", SelectIdleCMDAction.SELECT_SPECIAL_SUMMON);
+        add(m.special_summons, "Sp.Sum", SelectIdleCMDAction.SELECT_SPECIAL_SUMMON);
         add(m.monster_sets, "Set", SelectIdleCMDAction.SELECT_MONSTER_SET);
-        add(m.spell_sets, "Set", SelectIdleCMDAction.SELECT_SPELL_SET);
-        add(m.pos_changes, "Position", SelectIdleCMDAction.SELECT_POS_CHANGE);
-        m.activates.forEach((c, index) => this.addAction(c, "Activate", {
+        m.pos_changes.forEach((c, index) => this.addAction(c, this.positionLabel(c), {
+          type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.SELECT_POS_CHANGE, index,
+        }));
+        m.activates.forEach((c, index) => this.addAction(c, "Use", {
           type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.SELECT_ACTIVATE, index,
         }));
+        // Last, so a Spell/Trap in hand lists USE before SET.
+        add(m.spell_sets, "Set", SelectIdleCMDAction.SELECT_SPELL_SET);
         if (m.to_bp) this.phaseActions.set("bp", { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_BP, index: null });
         if (m.to_ep) this.phaseActions.set("ep", { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null });
         this.drawPhaseColumn();
@@ -648,7 +652,7 @@ export class DuelScene extends Phaser.Scene {
       }
       case OcgMessageType.SELECT_BATTLECMD: {
         m.attacks.forEach((c, index) => this.addAction(c, "Attack", { type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.SELECT_BATTLE, index }));
-        m.chains.forEach((c, index) => this.addAction(c, "Activate", {
+        m.chains.forEach((c, index) => this.addAction(c, "Use", {
           type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.SELECT_CHAIN, index,
         }));
         if (m.to_m2) this.phaseActions.set("m2", { type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.TO_M2, index: null });
@@ -780,6 +784,13 @@ export class DuelScene extends Phaser.Scene {
     return d && !d.startsWith("#") ? d : "Activate";
   }
 
+  /** Card menu labels fit 6 letters: a set monster can be flipped, a face-up one switched. */
+  private positionLabel(c: OcgCardLoc): string {
+    const pos = this.snapshot?.players[c.controller].monsters[c.sequence]?.position ?? 0;
+    if (pos & (OcgPosition.FACEDOWN_ATTACK | OcgPosition.FACEDOWN_DEFENSE)) return "Flip";
+    return pos & OcgPosition.FACEUP_DEFENSE ? "To Atk" : "To Def";
+  }
+
   private addAction(c: OcgCardLoc, label: string, response: OcgResponse) {
     const k = locKey(c);
     const list = this.actions.get(k) ?? [];
@@ -787,20 +798,18 @@ export class DuelScene extends Phaser.Scene {
     this.actions.set(k, list);
   }
 
-  private onCardClick(k: string, p: Phaser.Input.Pointer) {
+  private onCardClick(k: string) {
     if (this.modal.isOpen) return;
     const list = this.actions.get(k);
-    if (!list) return;
-    this.closeMenu();
-    const w = 58, h = 11;
-    const x = Phaser.Math.Clamp(Math.round(p.x), FIELD.left + w / 2, FIELD.right - w / 2 - 1);
-    const top = Math.max(h, Math.round(p.y) - 8 - list.length * (h + 1));
-    this.menu = this.add.container(0, 0).setDepth(900);
-    list.forEach((a, i) => this.menu!.add(makeButton(this, x, top + i * (h + 1), w, h, a.label.toUpperCase(), () => this.answer(a.response), 0x3a3f8f)));
+    const sp = this.sprites.get(k);
+    if (!list || !sp) return;
+    this.closeMenu(true);
+    this.menu = new CardMenu(this, sp, list.map((a) => ({ label: a.label, onClick: () => this.answer(a.response) })));
   }
 
-  private closeMenu() {
-    this.menu?.destroy();
+  /** `animate`: the card flips back face-up (dismissed); otherwise it reappears at once (action chosen). */
+  private closeMenu(animate = false) {
+    this.menu?.close(animate);
     this.menu = null;
   }
 

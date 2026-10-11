@@ -80,6 +80,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Duel UI chrome is Runewood (Crusenho pack): phase buttons (`phaseThemes.ts`), LP bars (`LPBar.ts`), info
   panel = light wood board + cream paper inset for description/log (`panelStyles.ts`). Sprites are nine-sliced;
   insets come from the sprites' pixel rows (see comments). Info panel positions derive from `LAYOUT` in DuelScene.
+- Card action menu (`CardMenu.ts`): clicking a card squash-flips it to a card-sized Frame01a with FrameList09a
+  buttons (09c on hover) inside its rim, plus BACK. 11px buttons, 4 fit (3 actions + BACK); labels max 30px (SUMMON,
+  SET, SP.SUM, USE, ATTACK, FLIP / TO ATK / TO DEF). The same squash flip turns set Spells/Traps face-up (`T.flip`).
 
 ## Engine facts worth knowing
 
