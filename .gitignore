@@ -14,3 +14,5 @@ public/assets/tilesets/Modern_Exteriors_*
 public/cards/
 # Third-party asset packs (sources for tools/import-ui.mjs); only the sprites we use are copied to public/
 /assets/
+# Dev frame captures / GIFs (src/dev/capture.ts, tools/make-gif.mjs)
+captures/

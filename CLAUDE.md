@@ -26,7 +26,8 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
 After changing `data/pool.json`, rerun `build-data`, `fetch-art`, `build-art`, then `smoke`.
 
-Dev URL options: `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
+Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations (`src/scenes/animPreview.ts`);
+`/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
 choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
@@ -48,6 +49,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   Rare prompts (announce, counters, sort, RPS) are still auto-answered by `autoBot`.
 - `src/ui/` — `pixel.ts` (bitmap text, crisp 1px borders), `widgets.ts` (buttons), `duel/` (CardSprite, Modal,
   layout geometry, log text, DuelAnimator).
+  Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
+  squash/overshoot; faces swap instantly). Hover effects are suppressed while `animator.busy`.
   `DuelAnimator.play(messages)` tweens the displayed sprites per message (draw, move, summon, flip, activate,
   attack, LP, turn banner); `DuelController` awaits it before the next prompt/AI move, then the scene redraws
   from the snapshot, so animations only need to *look* right. Speed toggle (1×/2×/4×) is saved in localStorage.
@@ -83,6 +86,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Use the **sync** core (`createCore({ sync: true })`); the async build needs JSPI.
 - After `createDuel`, load `constant.lua` then `utility.lua` before adding cards (`DuelSession` does this).
 - Card script lookup order: `goat/` → `official/` → `pre-errata/` → `unofficial/`. Root-level `*.lua` (procs, utility) are always bundled.
+- ocgcore-wasm's MOVE parser drops the move reason; `DuelSession` re-adds it (`MoveMessage.reason`, REASON_*
+  bits) by querying the card at its destination right after each batch. Used to flash only real destructions.
 - ocgcore does **not** shuffle decks at start (EDOPro does it client-side); `DuelSession` shuffles with a PRNG seeded from the duel seed.
 - `duelQueryField` LP is unsigned (overkill wraps to ~4.29e9) and missing from the TS type; `snapshot()` handles both.
 - For SELECT_PLACE the preceding HINT carries the card passcode, not a string id.

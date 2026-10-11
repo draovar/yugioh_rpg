@@ -22,6 +22,7 @@ import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
 import { CARD, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, pileCenters, slotXY, zoneCenters, type Slot } from "../ui/duel/layout.ts";
 import { INK, INK_SOFT, PAPER, WHITE, border, text } from "../ui/pixel.ts";
 import { makeButton, makeWoodButton, type WoodButton } from "../ui/widgets.ts";
+import { installAnimPreview } from "./animPreview.ts";
 import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
 import { PANEL } from "../ui/duel/panelStyles.ts";
 import { PHASE_LOOK, TURN_TEXT, type PhaseState } from "../ui/duel/phaseThemes.ts";
@@ -192,6 +193,10 @@ export class DuelScene extends Phaser.Scene {
     // Debug handle for the browser console (dev builds only).
     if (import.meta.env.DEV) (window as unknown as { duelScene: DuelScene }).duelScene = this;
     this.controller.start();
+    // Dev: `&anims` adds a dropdown to replay single animations (see animPreview.ts).
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has("anims")) {
+      installAnimPreview({ scene: this, animator: this.animator, snapshot: () => this.snapshot, renderBoard: (snap) => this.renderBoard(snap) });
+    }
   }
 
   // ---------------------------------------------------------------- static layout
@@ -522,17 +527,24 @@ export class DuelScene extends Phaser.Scene {
       const { x, y } = handXY(side, i, hand.length);
       const sp = this.cardSprite(c, x, y);
       if (side === HUMAN) {
-        sp.on("pointerover", () => this.tweens.add({ targets: sp, y: y - 6, duration: 80 }));
-        sp.on("pointerout", () => this.tweens.add({ targets: sp, y, duration: 80 }));
+        // Hover lift. Skipped while animating, and for a sprite that has since left the hand (an
+        // animation may be flying it to the field), so it never fights an animation.
+        const k = key(c.controller, c.location, c.sequence);
+        const lift = (dy: number) => {
+          if (this.animator.busy || this.sprites.get(k) !== sp) return;
+          this.tweens.add({ targets: sp, y: y - dy, duration: 80 });
+        };
+        sp.on("pointerover", () => lift(6));
+        sp.on("pointerout", () => lift(0));
       }
     });
   }
 
   private cardSprite(c: CardView, x: number, y: number): CardSprite {
-    const own = c.controller === HUMAN;
     const onField = c.location === OcgLocation.MZONE;
     const sp = new CardSprite(this, x, y).show(c.code, this.engine.cards.records.get(c.code), {
-      back: c.code === 0, dim: own && c.faceDown,
+      // Face-down cards show the back, yours too; hovering your own still shows it in the info panel.
+      back: c.code === 0 || c.faceDown,
       atk: onField ? c.attack : undefined, def: onField ? c.defense : undefined,
     });
     sp.setInteractive({ useHandCursor: true });

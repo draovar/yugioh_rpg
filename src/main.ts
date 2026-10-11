@@ -31,3 +31,9 @@ const game = new Phaser.Game({
 });
 
 window.addEventListener("resize", () => game.scale.setZoom(integerZoom()));
+
+// Dev: console access to the game and the frame-capture helper (src/dev/capture.ts).
+if (import.meta.env.DEV) {
+  (window as unknown as { game: Phaser.Game }).game = game;
+  void import("./dev/capture.ts");
+}

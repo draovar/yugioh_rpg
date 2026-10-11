@@ -63,6 +63,12 @@ export interface FieldSnapshot {
 
 const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE) as OcgQueryFlags;
 
+/** A MOVE message with the move reason added by DuelSession (see annotateMoveReasons). */
+export type MoveMessage = Extract<OcgMessage, { type: OcgMessageType.MOVE }> & { reason?: number };
+
+/** ocgcore REASON_* bits we care about. */
+export const REASON = { DESTROY: 0x1, RELEASE: 0x2, BATTLE: 0x20, COST: 0x80, DISCARD: 0x4000 } as const;
+
 export interface StepResult {
   /** Every message the engine produced during this step, in order. */
   messages: OcgMessage[];
@@ -123,6 +129,7 @@ export class DuelSession {
     while (!this.ended) {
       const status = this.core.duelProcess(this.handle);
       const batch = this.core.duelGetMessage(this.handle);
+      this.annotateMoveReasons(batch);
       messages.push(...batch);
       for (const m of batch) {
         if (m.type === OcgMessageType.RETRY) throw new Error("ocgcore rejected the last response (RETRY)");
@@ -134,6 +141,21 @@ export class DuelSession {
       }
     }
     return { messages, prompt: null, winner, ended: true };
+  }
+
+  /**
+   * ocgcore-wasm's MOVE parser drops the move reason, so look it up: right after the batch, the moved
+   * card sits at its destination and the engine still knows why it got there (REASON_* bits).
+   */
+  private annotateMoveReasons(batch: OcgMessage[]) {
+    for (const m of batch) {
+      if (m.type !== OcgMessageType.MOVE || !m.to.location) continue;
+      const q = this.core.duelQuery(this.handle, {
+        flags: (OcgQueryFlags.CODE | OcgQueryFlags.REASON) as OcgQueryFlags,
+        controller: m.to.controller, location: m.to.location, sequence: m.to.sequence, overlaySequence: 0,
+      });
+      if (q && q.code === m.card && q.reason !== undefined) (m as MoveMessage).reason = q.reason;
+    }
   }
 
   respond(response: OcgResponse): void {

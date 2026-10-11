@@ -5,6 +5,7 @@ import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgMessage } from "ocgcore-wasm";
 import type { CardDb } from "../../duel/cardData.ts";
 import { HUMAN } from "../../duel/DuelController.ts";
+import { REASON, type MoveMessage } from "../../duel/DuelSession.ts";
 import { PHASE_NAMES } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
 import { CardSprite } from "./CardSprite.ts";
@@ -37,13 +38,46 @@ const FACEDOWN = OcgPosition.FACEDOWN_ATTACK | OcgPosition.FACEDOWN_DEFENSE;
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
 const ON_FIELD = OcgLocation.MZONE | OcgLocation.SZONE;
 const key = (l: Loc) => `${l.controller}:${l.location}:${l.sequence}`;
+
+/**
+ * Timings (ms, at speed 1). Pixel-art style: quick, direct moves; no squash/stretch, no overshoot,
+ * no in-between scales or angles. Faces swap instantly, rotations snap.
+ */
+const T = {
+  /** Card flying between zones / to the hand / to the GY. */
+  move: 320,
+  /** Each drawn card's flight from the deck, and the delay between consecutive cards. */
+  draw: 350,
+  drawStagger: 150,
+  /** Other hand cards sliding to make room. */
+  relayout: 210,
+  /** Attack: lunge toward the target and back. */
+  lunge: 190,
+  /** Position change: rotating between attack and defense. */
+  rotate: 300,
+  /** White (summon / hit) or red (destroyed) flash on a card. */
+  flash: 240,
+  /** Activated card shown at 2x in the middle of the field. */
+  activateHold: 950,
+  /** Turn banner on screen. */
+  banner: 1100,
+};
+const EASE = "Quad.easeOut";
+
 const sideOf = (controller: number) => (controller === HUMAN ? 0 : 1) as 0 | 1;
 
 export class DuelAnimator {
   /** Global speed multiplier (2 = twice as fast). */
   speed = 1;
+  /** True while messages are being animated (hover effects stay off meanwhile). */
+  get busy(): boolean {
+    return this.current !== null;
+  }
+
   /** Message currently being animated (debugging aid). */
   current: OcgMessage | null = null;
+  /** Card just flipped face-up (it already flashed, so a following FLIPSUMMONING doesn't flash again). */
+  private justFlipped: string | null = null;
   private readonly host: AnimHost;
 
   constructor(host: AnimHost) {
@@ -62,6 +96,7 @@ export class DuelAnimator {
 
   private async playOne(m: OcgMessage): Promise<void> {
     const h = this.host;
+    if (m.type !== OcgMessageType.POS_CHANGE && m.type !== OcgMessageType.FLIPSUMMONING) this.justFlipped = null;
     switch (m.type) {
       case OcgMessageType.NEW_TURN:
         return this.banner(m.player === HUMAN ? "YOUR TURN" : "OPPONENT'S TURN", m.player === HUMAN ? 0x1d6da0 : 0xa02020);
@@ -71,13 +106,15 @@ export class DuelAnimator {
       case OcgMessageType.DRAW:
         return this.draw(m.player, m.drawn.map((d) => d.code));
       case OcgMessageType.MOVE:
-        return this.move(m.card, m.from, m.to);
+        return this.move(m.card, m.from, m.to, ((m as MoveMessage).reason ?? 0) & REASON.DESTROY ? "destroyed" : null);
       case OcgMessageType.SUMMONING:
       case OcgMessageType.SPSUMMONING:
       case OcgMessageType.FLIPSUMMONING:
-        return this.summonBurst(m, m.type === OcgMessageType.SPSUMMONING ? 0xc58cff : 0xfff2a8);
+        // A Flip Summon's flip already flashed (see posChange); don't flash twice.
+        if (m.type === OcgMessageType.FLIPSUMMONING && this.justFlipped === key(m)) return;
+        return this.summonBurst(m, m.type === OcgMessageType.SPSUMMONING ? 0x5aa8ff : 0xfff2a8);
       case OcgMessageType.POS_CHANGE:
-        return this.posChange(m, m.code, m.position);
+        return this.posChange(m, m.code, m.prev_position, m.position);
       case OcgMessageType.CHAINING:
         return this.activate(m, m.code);
       case OcgMessageType.ATTACK:
@@ -100,23 +137,24 @@ export class DuelAnimator {
     const h = this.host;
     const side = sideOf(player);
     const deck = slotXY(side, { kind: "deck" });
-    const flights: Promise<void>[] = [];
-    for (const [i, code] of codes.entries()) {
-      const index = h.handCount[side]++;
-      this.relayoutHand(side);
-      const target = handXY(side, index, h.handCount[side]);
+    // Every card goes straight to its place in the final hand, so the hand doesn't re-space mid-draw.
+    const first = h.handCount[side];
+    const finalCount = first + codes.length;
+    this.relayoutHand(side, finalCount);
+    h.handCount[side] = finalCount;
+    const flights = codes.map((code, i) => {
+      const target = handXY(side, first + i, finalCount);
       const sp = this.tempSprite(deck.x, deck.y, 0);
-      h.sprites.set(key({ controller: player, location: OcgLocation.HAND, sequence: index }), sp);
-      const reveal = player === HUMAN ? code : 0;
-      flights.push(this.wait(i * 90).then(async () => {
-        await this.tween({ targets: sp, x: target.x, y: target.y, duration: 260, ease: "Cubic.easeOut" });
-        if (reveal) await this.flip(sp, reveal);
-      }));
-    }
+      h.sprites.set(key({ controller: player, location: OcgLocation.HAND, sequence: first + i }), sp);
+      return this.wait(i * T.drawStagger).then(async () => {
+        await this.tween({ targets: sp, x: target.x, y: target.y, duration: T.draw, ease: EASE });
+        if (player === HUMAN) this.reveal(sp, code);
+      });
+    });
     await Promise.all(flights);
   }
 
-  private async move(code: number, from: Loc, to: Loc): Promise<void> {
+  private async move(code: number, from: Loc, to: Loc, cause: "destroyed" | null = null): Promise<void> {
     const h = this.host;
     const dest = this.locXY(to);
     if (!dest) return;
@@ -138,48 +176,57 @@ export class DuelAnimator {
     const target = toHand ? handXY(toSide, h.handCount[toSide]++, h.handCount[toSide]) : dest;
     if (toHand) this.relayoutHand(toSide);
 
-    // Destroyed cards flash red before leaving the field.
-    if (from.location & ON_FIELD && to.location & (OcgLocation.GRAVE | OcgLocation.REMOVED)) {
-      await this.flash(sp, 0xff4444);
-    }
+    // Destroyed cards (by battle or effect) flash red before leaving; other moves to the GY don't.
+    if (cause === "destroyed") await this.destroyFlash(sp);
     h.board.bringToTop(sp);
-    const angle = to.location === OcgLocation.MZONE && (to.position ?? 0) & DEFENSE ? 90 : 0;
-    await this.tween({ targets: sp, x: target.x, y: target.y, angle, duration: 320, ease: "Cubic.easeInOut" });
     const showCode = this.visible(code, to) ? code : 0;
-    if (showCode !== sp.code) await this.flip(sp, showCode, to.controller === HUMAN && this.faceDown(to));
+    // Going face-down (a Set): turn to the back as it leaves, like placing a real card face-down.
+    if (!showCode && sp.code) this.reveal(sp, 0);
+    // Rotate into defense position (or back to attack) while flying.
+    const angle = to.location === OcgLocation.MZONE && (to.position ?? 0) & DEFENSE ? 90 : 0;
+    await this.tween({ targets: sp, x: target.x, y: target.y, angle, duration: T.move, ease: EASE });
+    // Becoming visible (e.g. a monster summoned face-up from the hand of the opponent): reveal on landing.
+    if (showCode !== sp.code) this.reveal(sp, showCode);
     h.sprites.set(key(to), sp);
     if (toHand) this.rekeyHand(to.controller);
   }
 
+  /** #3 Destroy: red flash on the card before it leaves for the GY. */
+  private async destroyFlash(sp: CardSprite): Promise<void> {
+    await this.flash(sp, 0xff4444);
+  }
+
+  /** Summoned card flashes (white for Normal/Flip, blue for Special Summons). */
   private async summonBurst(l: Loc, color: number): Promise<void> {
     const sp = this.host.sprites.get(key(l));
-    const at = this.locXY(l);
-    if (!at) return;
-    const ring = this.host.scene.add.circle(at.x, at.y, 10, color, 0).setStrokeStyle(2, color);
-    this.host.board.add(ring);
-    const pulse = sp ? this.tween({ targets: sp, scale: 1.25, duration: 160, yoyo: true }) : Promise.resolve();
-    await Promise.all([pulse, this.tween({ targets: ring, radius: 40, alpha: 0, duration: 380, onComplete: () => ring.destroy() })]);
+    if (sp) await this.flash(sp, color);
   }
 
-  private async posChange(l: Loc, code: number, position: number): Promise<void> {
+  /**
+   * Attack <-> defense: rotate smoothly, change face at the end. A card flipped face-up (Flip Summon,
+   * or a set monster that got attacked) then flashes white, like a summon.
+   */
+  private async posChange(l: Loc, code: number, prevPosition: number, position: number): Promise<void> {
     const sp = this.host.sprites.get(key(l));
     if (!sp) return;
-    const faceDown = (position & FACEDOWN) !== 0;
+    const angle = position & DEFENSE ? 90 : 0;
+    if (sp.angle !== angle) await this.tween({ targets: sp, angle, duration: T.rotate, ease: "Sine.easeInOut" });
     const showCode = this.visible(code, { ...l, position }) ? code : 0;
-    await this.tween({ targets: sp, angle: position & DEFENSE ? 90 : 0, duration: 240, ease: "Sine.easeInOut" });
-    if (showCode !== sp.code) await this.flip(sp, showCode, l.controller === HUMAN && faceDown);
+    if (showCode !== sp.code) this.reveal(sp, showCode);
+    if (prevPosition & FACEDOWN && !(position & FACEDOWN)) {
+      this.justFlipped = key(l);
+      await this.flash(sp, 0xfff2a8);
+    }
   }
 
-  /** The activated card zooms (2x) to the middle of the field, then shrinks back. */
+  /** The activated card is shown at exactly 2x in the middle of the field for a moment. */
   private async activate(l: Loc, code: number): Promise<void> {
     const h = this.host;
-    const from = this.locXY(l) ?? FIELD_CENTER;
     const src = h.sprites.get(key(l));
-    if (src && src.code !== code) await this.flip(src, code); // face-down card being activated
-    const big = new CardSprite(h.scene, from.x, from.y).show(code, h.cards.records.get(code)).setDepth(600);
-    await this.tween({ targets: big, x: FIELD_CENTER.x, y: FIELD_CENTER.y, scale: 2, duration: 260, ease: "Back.easeOut" });
-    await this.wait(420);
-    await this.tween({ targets: big, x: from.x, y: from.y, scale: 1, alpha: 0, duration: 220, ease: "Cubic.easeIn" });
+    if (src && src.code !== code) this.reveal(src, code); // face-down card being activated
+    if (src) await this.flash(src, 0xffffff);
+    const big = new CardSprite(h.scene, FIELD_CENTER.x, FIELD_CENTER.y).show(code, h.cards.records.get(code)).setScale(2).setDepth(600);
+    await this.wait(T.activateHold);
     big.destroy();
   }
 
@@ -191,37 +238,33 @@ export class DuelAnimator {
     if (!to) return;
     h.board.bringToTop(sp);
     const sx = sp.x, sy = sp.y;
-    await this.tween({ targets: sp, x: sx + (to.x - sx) * 0.75, y: sy + (to.y - sy) * 0.75, duration: 200, ease: "Quad.easeIn" });
+    await this.tween({ targets: sp, x: sx + (to.x - sx) * 0.7, y: sy + (to.y - sy) * 0.7, duration: T.lunge, ease: "Quad.easeIn" });
     if (target) {
       const victim = h.sprites.get(key(target));
       if (victim) void this.flash(victim, 0xffffff);
     }
-    await this.tween({ targets: sp, x: sx, y: sy, duration: 220, ease: "Quad.easeOut" });
+    await this.tween({ targets: sp, x: sx, y: sy, duration: T.lunge, ease: EASE });
   }
 
+  /** Turn banner: a coloured band with the text, on and off without transitions. */
   private async banner(label: string, color: number): Promise<void> {
     const s = this.host.scene;
-    const band = s.add.rectangle(FIELD.left, FIELD_CENTER.y - 9, FIELD.right - FIELD.left, 18, color).setOrigin(0).setDepth(700).setAlpha(0);
-    const t = text(s, FIELD_CENTER.x - 60, FIELD_CENTER.y - 5, label, { color: 0xffffff, scale: 2 }).setDepth(701).setAlpha(0);
-    const finalX = Math.round(FIELD_CENTER.x - t.width / 2);
-    await Promise.all([
-      this.tween({ targets: band, alpha: 0.9, duration: 200 }),
-      this.tween({ targets: t, alpha: 1, x: finalX, duration: 200, ease: "Cubic.easeOut" }),
-    ]);
-    await this.wait(450);
-    await this.tween({ targets: [band, t], alpha: 0, duration: 180 });
+    const band = s.add.rectangle(FIELD.left, FIELD_CENTER.y - 9, FIELD.right - FIELD.left, 18, color, 0.9).setOrigin(0).setDepth(700);
+    const t = text(s, FIELD_CENTER.x, FIELD_CENTER.y - 5, label, { color: 0xffffff, scale: 2, originX: 0.5 }).setDepth(701);
+    await this.wait(T.banner);
     band.destroy();
     t.destroy();
   }
 
   // ---------------------------------------------------------------- helpers
 
+  /** Whether a card at `l` is drawn face-up. Face-down cards on the field show their back for everyone. */
   private visible(code: number, l: Loc): boolean {
     if (!code) return false;
     if (l.location & (OcgLocation.GRAVE | OcgLocation.REMOVED)) return true;
+    if (l.location & ON_FIELD) return !this.faceDown(l);
     if (l.controller === HUMAN) return l.location !== OcgLocation.DECK;
-    if (l.location === OcgLocation.HAND || l.location === OcgLocation.DECK || l.location === OcgLocation.EXTRA) return false;
-    return !this.faceDown(l);
+    return false; // opponent's hand / deck / extra deck
   }
 
   private faceDown(l: Loc): boolean {
@@ -264,14 +307,13 @@ export class DuelAnimator {
     hand.forEach(([, s], i) => this.host.sprites.set(prefix + i, s));
   }
 
-  /** Slides the cards still in a hand to their positions for the current hand size. */
-  private relayoutHand(side: 0 | 1) {
+  /** Slides the cards already in a hand to their positions for a hand of `n` cards (default: current size). */
+  private relayoutHand(side: 0 | 1, n = this.host.handCount[side]) {
     const prefix = `${side === 0 ? HUMAN : 1 - HUMAN}:${OcgLocation.HAND}:`;
-    const n = this.host.handCount[side];
     const hand = [...this.host.sprites].filter(([k]) => k.startsWith(prefix)).sort((a, b) => a[1].x - b[1].x);
     hand.forEach(([, s], i) => {
       const p = handXY(side, i, Math.max(n, hand.length));
-      this.host.scene.tweens.add({ targets: s, x: p.x, y: p.y, duration: 200 / this.speed });
+      this.host.scene.tweens.add({ targets: s, x: p.x, y: p.y, duration: T.relayout / this.speed, ease: EASE });
     });
   }
 
@@ -281,21 +323,20 @@ export class DuelAnimator {
     return sp;
   }
 
-  /** Squash horizontally, swap the face, expand again. */
-  private async flip(sp: CardSprite, code: number, dim = false): Promise<void> {
-    const sx = sp.scaleX;
-    await this.tween({ targets: sp, scaleX: 0, duration: 90, ease: "Sine.easeIn" });
-    sp.show(code, this.host.cards.records.get(code), { back: !code, dim });
-    await this.tween({ targets: sp, scaleX: sx, duration: 90, ease: "Sine.easeOut" });
+  /** Shows another face (or the back) instantly -- no squash/stretch flip. */
+  private reveal(sp: CardSprite, code: number) {
+    sp.show(code, this.host.cards.records.get(code), { back: !code });
   }
 
   private async flash(sp: CardSprite, color: number): Promise<void> {
     const r = this.host.scene.add.rectangle(sp.x, sp.y, sp.w, sp.h, color, 0.75).setAngle(sp.angle);
     this.host.board.add(r);
-    await this.tween({ targets: r, alpha: 0, duration: 260, onComplete: () => r.destroy() });
+    await this.tween({ targets: r, alpha: 0, duration: T.flash, onComplete: () => r.destroy() });
   }
 
   private tween(config: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> {
+    // The animation takes over its target: stop anything else moving it (e.g. the hand hover lift).
+    this.host.scene.tweens.killTweensOf(config.targets);
     return new Promise((resolve) => {
       const onComplete = config.onComplete;
       this.host.scene.tweens.add({
