@@ -158,7 +158,8 @@ export class DuelAnimator {
       case OcgMessageType.RECOVER:
         return h.changeLP(m.player, h.lp(m.player) + m.amount, m.amount);
       case OcgMessageType.LPUPDATE:
-        return h.changeLP(m.player, m.lp, 0);
+        // LP set to a value (e.g. by an effect): show the difference like any other change.
+        return h.changeLP(m.player, m.lp, m.lp - h.lp(m.player));
     }
   }
 

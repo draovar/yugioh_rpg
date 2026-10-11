@@ -92,15 +92,17 @@ export class DuelController {
       return;
     }
     const prompt = result.prompt as HumanPrompt;
+    const trivial = this.trivialAnswer(prompt);
     if (prompt.player === AI) {
-      this.schedule(this.aiDelayMs, () => {
+      // The AI only "thinks" when it has a real choice; passing with nothing to do is instant
+      // (otherwise every empty chain window, e.g. around attacks, adds a pause).
+      this.schedule(trivial ? 0 : this.aiDelayMs, () => {
         if (this.destroyed) return;
-        this.session.respond(autoRespond(prompt));
+        this.session.respond(trivial ?? autoRespond(prompt));
         void this.step();
       });
       return;
     }
-    const trivial = this.trivialAnswer(prompt);
     if (trivial) {
       this.session.respond(trivial);
       this.schedule(0, () => void (!this.destroyed && this.step()));
@@ -112,7 +114,7 @@ export class DuelController {
     this.events.onPrompt(prompt, hint);
   }
 
-  /** Prompts that have exactly one sensible answer and would only slow the player down. */
+  /** Prompts that have exactly one sensible answer and would only slow things down (either player). */
   private trivialAnswer(m: HumanPrompt): OcgResponse | null {
     if (m.type === OcgMessageType.SELECT_CHAIN && m.selects.length === 0 && !m.forced)
       return { type: OcgResponseType.SELECT_CHAIN, index: null };

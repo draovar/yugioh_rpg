@@ -164,7 +164,24 @@ const PREVIEWS: Preview[] = [
   damagePreview("#8 Damage: opponent takes 1500", 1, 1500),
   damagePreview("#8 Damage: you take 450", 0, 450),
   damagePreview("#8 Damage: lethal (opponent to 0)", 1, 8000),
+  lpPreview("#9 LP: you gain 1000 (recover)", { type: OcgMessageType.RECOVER, player: 0, amount: 1000 }),
+  lpPreview("#9 LP: you pay 1000 (cost)", { type: OcgMessageType.PAY_LPCOST, player: 0, amount: 1000 }),
+  lpPreview("#9 LP: opponent's LP set to 4000", { type: OcgMessageType.LPUPDATE, player: 1, lp: 4000 }),
+  lpPreview("#10 Turn banner: your turn", { type: OcgMessageType.NEW_TURN, player: 0 }),
+  lpPreview("#10 Turn banner: opponent's turn", { type: OcgMessageType.NEW_TURN, player: 1 }),
+  {
+    label: "#11 Phase change: whole turn (no actions)",
+    async run(host) {
+      // Draw, Standby, Main 1, Battle, Main 2, End, back-to-back as the engine sends them.
+      await host.animator.play([0x1, 0x2, 0x4, 0x8, 0x100, 0x200].map((phase) => ({ type: OcgMessageType.NEW_PHASE, phase }) as OcgMessage));
+    },
+  },
 ];
+
+/** Plays a single engine message. */
+function lpPreview(label: string, msg: object): Preview {
+  return { label, run: (host) => host.animator.play([msg as OcgMessage]) };
+}
 
 function damagePreview(label: string, player: number, amount: number): Preview {
   return {

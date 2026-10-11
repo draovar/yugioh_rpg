@@ -116,7 +116,9 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 2. ✅ **Duel screen v1**: playable human-vs-bot duel with all common prompts, card art, info panel, log, LP, end screen.
    ✅ Animations for draws, moves, summons, flips, activations, attacks, LP and turn changes.
    ✅ 640x360 pixel-art duel screen from the layout sketch, custom frames, downscaled art, bitmap fonts.
-   Next polish: chain-link display, targeting arrows, deck search UX, sound.
+   ✅ Animation review pass (#1-#12 reviewed with the user; `&anims` dropdown replays each).
+   Next: Runewood look for the remaining UI (action menu SUMMON/SET…, prompt dialogs, card pickers, turn
+   banner?) and a rework of the card action menus. Later: chain-link display, deck search UX, sound.
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
