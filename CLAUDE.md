@@ -83,7 +83,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Field (`src/ui/duel/field.ts`): cream plank table (the info panel's paper colour) with a dark green felt
   playmat in a Frame01a rim around the four zone rows; zones outlined light green, monster zones tinted, empty
   piles labelled FIELD / EXTRA / GY / DECK. Dialogs shade the field (and the info panel's cut corners).
-- Duel UI chrome is themed (`src/ui/theme.ts`, only `runewood` so far; `&theme=NAME` or localStorage "theme",
+- Duel UI chrome is themed (`src/ui/theme.ts`: `runewood` (default), `hologram`; `&theme=NAME` or localStorage "theme",
   reload to switch). A theme = sprites for the 15 `UI_ROLES` (`public/assets/ui/<theme>/<role>.png`, loaded as
   `ui-<role>`, file mapping in `tools/import-ui.mjs`) + their nine-slice insets / text offsets (measured from the
   sprites' pixel rows) + every UI colour (inks, plates, LP bar, field table/mat, targeting, banners). Code reads

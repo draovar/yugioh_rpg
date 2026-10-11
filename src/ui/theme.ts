@@ -1,4 +1,4 @@
-// Duel-screen UI themes. A theme is the sprites for a fixed set of roles (tools/import-ui.mjs copies them
+// Duel-screen UI themes (runewood, hologram). A theme is the sprites for a fixed set of roles (tools/import-ui.mjs copies them
 // from the UI pack into public/assets/ui/<theme>/<role>.png; Boot loads them as `ui-<role>`), the
 // nine-slice insets and text offsets measured from those sprites, and the UI colours that go with them.
 // Cards (frames, backs, attribute icons) and gameplay feedback (attack red, summon flashes) are not themed.
@@ -12,6 +12,7 @@ export const UI_ROLES = [
   "panel-frame", "panel-paper", // info panel board, dialog / picker boards, paper inset
   "menu-back", "menu-button", "menu-button-hover", // dark plates (card menu, stats, mat rim) and list-row buttons
   "attack-up", "attack-down", "star",
+  "zone-monster", // monster zones in the "open" field layout (the other zones use "menu-back")
 ] as const;
 export type UiRole = (typeof UI_ROLES)[number];
 
@@ -40,8 +41,11 @@ export interface Theme {
    * corners are cut in a staircase this many pixels deep (row 0 misses that many, row 1 one fewer...).
    */
   panel: { rim: number; paperRim: number; cornerCut: number; ink: number; inkSoft: number; paperInk: number };
-  /** Dark plates ("menu-back"): rim, value text, label text. */
-  plate: { rim: number; ink: number; inkSoft: number };
+  /**
+   * Plates ("menu-back"): `slice` = nine-slice inset (the border kept unstretched), `rim` = how far content
+   * sits inside the edge (can be less than `slice` when the border has a soft inner ring); value / label text.
+   */
+  plate: { slice: number; rim: number; ink: number; inkSoft: number };
   /** Card name in the info panel: light text with a 1px drop shadow. */
   cardName: { ink: number; shadow: number };
   /** List-row buttons ("menu-button", "-hover"). */
@@ -54,8 +58,16 @@ export interface Theme {
   };
   /** Prompt strip across the field. */
   prompt: { strip: number; stripAlpha: number; text: number };
-  /** Table and playmat (field.ts). */
-  field: { table: number; seam: number; felt: number; line: number; monster: number; label: number };
+  /**
+   * Table and zones (field.ts). Table pattern: wooden planks, or a blueprint grid (8px cells). Layout "mat":
+   * a framed felt playmat with outlined zones (felt / line / monster colours); "open": no mat, each zone is
+   * a card-sized sprite straight on the table: "zone-monster" for monster zones, the plate sprite
+   * ("menu-back", same shape and slicing) for the rest.
+   */
+  field: {
+    table: number; seam: number; pattern: "planks" | "grid"; layout: "mat" | "open";
+    felt: number; line: number; monster: number; label: number;
+  };
   /** Choosing cards / zones on the board. */
   pick: { choice: number; selected: number; zone: number; zoneAlpha: number; zoneHoverAlpha: number };
   /** Turn banner per player: band fill, its light top line (and turn number), dark bottom line (and text shadow). */
@@ -80,7 +92,7 @@ const RUNEWOOD: Theme = {
   turnText: { mine: 0x9fdcff, theirs: 0xff9a84 },
   woodButton: { raised: { slice: [4, 4, 5, 7], textY: 5 }, pressed: { slice: [4, 4, 8, 4], textY: 8 }, ink: 0x3b2414 },
   panel: { rim: 9, paperRim: 4, cornerCut: 5, ink: 0x2a1408, inkSoft: 0x5a3018, paperInk: 0x2a1408 },
-  plate: { rim: 3, ink: 0xf2c096, inkSoft: 0xb08a68 },
+  plate: { slice: 3, rim: 3, ink: 0xf2c096, inkSoft: 0xb08a68 },
   cardName: { ink: 0xfbe8c8, shadow: 0x2a1408 },
   listButton: { h: 11, slice: 2, textY: 3, ink: 0x2a1408, inkHover: 0xf2c096 },
   lpBar: {
@@ -93,7 +105,7 @@ const RUNEWOOD: Theme = {
     label: 0xf6e3c4, shadow: 0x432925, loss: 0xff5040, gain: 0x7dff6a,
   },
   prompt: { strip: 0x171715, stripAlpha: 0.85, text: 0xffffff },
-  field: { table: 0xf0d2af, seam: 0xcfae86, felt: 0x1d4636, line: 0x4f8a6c, monster: 0x225240, label: 0x6fa88a },
+  field: { table: 0xf0d2af, seam: 0xcfae86, pattern: "planks", layout: "mat", felt: 0x1d4636, line: 0x4f8a6c, monster: 0x225240, label: 0x6fa88a },
   pick: { choice: 0xffd400, selected: 0xff8a1e, zone: 0xffd400, zoneAlpha: 0.3, zoneHoverAlpha: 0.6 },
   banner: {
     mine: { fill: 0x1d6da0, light: 0x7cc4f0, dark: 0x0b2f47 },
@@ -102,7 +114,47 @@ const RUNEWOOD: Theme = {
   shadeAlpha: 0.5,
 };
 
-export const THEMES: Record<string, Theme> = { runewood: RUNEWOOD };
+/**
+ * Hologram (same pack): dark navy panels with 2px cyan outlines, bevelled buttons that turn solid light cyan
+ * when current/hovered. Light cyan text on navy; a dark navy table with a deep teal mat. Insets from the
+ * trimmed sprites (tools/import-ui.mjs).
+ */
+const HOLOGRAM: Theme = {
+  name: "hologram",
+  phase: {
+    // 32x19 bevelled buttons: 6px bevels top-left / bottom-right; all states share the shape.
+    clickable: { slice: [7, 7, 7, 7], text: 0xb7ffff, textDy: 0 },
+    idle: { slice: [7, 7, 7, 7], text: 0x4a6a9a, textDy: 0 },
+    current: { slice: [7, 7, 7, 7], text: 0x1a2a50, textDy: 0 },
+  },
+  // Current-phase label on the light cyan button: dark blue / dark red.
+  turnText: { mine: 0x0b3a8a, theirs: 0x8a1020 },
+  woodButton: { raised: { slice: [7, 7, 7, 7], textY: 6 }, pressed: { slice: [7, 7, 7, 7], textY: 6 }, ink: 0xb7ffff },
+  panel: { rim: 2, paperRim: 2, cornerCut: 1, ink: 0xb7ffff, inkSoft: 0x5a8ac0, paperInk: 0xd8f8ff },
+  // Slot Available: 4px border (glow, cyan line, inner ring); content may overlap the inner ring.
+  plate: { slice: 4, rim: 3, ink: 0xb7ffff, inkSoft: 0x5a8ac0 },
+  cardName: { ink: 0xe8ffff, shadow: 0x0a1430 },
+  listButton: { h: 11, slice: 2, textY: 3, ink: 0xb7ffff, inkHover: 0x1a2a50 },
+  lpBar: {
+    rim: 3,
+    fills: [
+      { min: 0.5, role: "lp-fill-green", slice: [1, 1, 1, 1] },
+      { min: 0.25, role: "lp-fill-orange", slice: [1, 1, 1, 1] },
+      { min: 0, role: "lp-fill-red", slice: [1, 1, 1, 1] },
+    ],
+    label: 0xe8ffff, shadow: 0x0a1430, loss: 0xff5060, gain: 0x7dff9a,
+  },
+  prompt: { strip: 0x0a1430, stripAlpha: 0.85, text: 0xb7ffff },
+  field: { table: 0x111a33, seam: 0x1a2850, pattern: "grid", layout: "open", felt: 0x0e2a3c, line: 0x1fa0c0, monster: 0x123448, label: 0x3fb8d8 },
+  pick: { choice: 0xffd400, selected: 0xff8a1e, zone: 0xffd400, zoneAlpha: 0.3, zoneHoverAlpha: 0.6 },
+  banner: {
+    mine: { fill: 0x0f5e9e, light: 0x6fe0ff, dark: 0x061a33 },
+    theirs: { fill: 0x9e1030, light: 0xff7a90, dark: 0x33060f },
+  },
+  shadeAlpha: 0.55,
+};
+
+export const THEMES: Record<string, Theme> = { runewood: RUNEWOOD, hologram: HOLOGRAM };
 
 function chooseTheme(): Theme {
   let name: string | null = null;

@@ -328,12 +328,12 @@ export class DuelScene extends Phaser.Scene {
     if (!buttons.length) return [];
     // Plate: Frame01a (3px rim) + 2px padding around the buttons, 1px between them.
     const { x: cx, y: cy } = slotXY(0, { kind: "extra" });
-    const rim = THEME.plate.rim, pad = 2;
+    const rim = THEME.plate.rim, pad = 2, ps = THEME.plate.slice;
     const w = BUTTON_PLATE_W, btnW = w - 2 * (rim + pad);
     const counterH = counter ? 8 : 0; // 5px text + gap
     const h = 2 * (rim + pad) + counterH + buttons.length * (LIST_BUTTON_H + 1) - 1;
     const left = Math.round(cx - w / 2), plateTop = Math.round(cy - h / 2);
-    this.promptBand.add(this.add.nineslice(left, plateTop, ui("menu-back"), undefined, w, h, rim, rim, rim, rim).setOrigin(0));
+    this.promptBand.add(this.add.nineslice(left, plateTop, ui("menu-back"), undefined, w, h, ps, ps, ps, ps).setOrigin(0));
     if (counter) {
       this.promptCounter = text(this, cx, plateTop + rim + pad + 1, "", { color: PROMPT_COUNTER_INK, originX: 0.5 });
       this.promptBand.add(this.promptCounter);
@@ -462,7 +462,7 @@ export class DuelScene extends Phaser.Scene {
       p.add(this.add.image(iconsX + 20, iconsY, SPELL_SHEET, kind).setOrigin(0));
       types = [r.type & 0x2 ? "SPELL" : "TRAP", spellTrapKind(r.type)];
     }
-    const pr = THEME.plate.rim;
+    const pr = THEME.plate.slice;
     p.add(this.add.nineslice(statX, typesY, ui("menu-back"), undefined, statW, artY + ART_FRAME - typesY, pr, pr, pr, pr).setOrigin(0));
     types.forEach((str, i) => p.add(text(this, statX + 5, typesY + 5 + i * 8, str, { color: STAT_VALUE })));
     const descY = artY + ART_FRAME + 5;
@@ -476,7 +476,7 @@ export class DuelScene extends Phaser.Scene {
    * left, a small label ("ATK") over the value in 2x light text.
    */
   private statPlate(p: Phaser.GameObjects.Container, x: number, y: number, w: number, label: string, value: string, icon: PixelIcon) {
-    const pr = THEME.plate.rim;
+    const pr = THEME.plate.slice;
     p.add(this.add.nineslice(x, y, ui("menu-back"), undefined, w, STAT_PLATE_H, pr, pr, pr, pr).setOrigin(0));
     const g = this.add.graphics();
     const iconY = y + Math.floor((STAT_PLATE_H - icon.rows.length) / 2);

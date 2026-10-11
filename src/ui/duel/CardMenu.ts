@@ -8,12 +8,14 @@ import type { CardSprite } from "./CardSprite.ts";
 import { CARD } from "./layout.ts";
 
 /** Frame01a: 3px rim with 3x3 corners. */
-const BACK_SLICE = THEME.plate.rim;
+const BACK_SLICE = THEME.plate.slice;
+/** Buttons sit this far inside the frame's edge. */
+const BACK_RIM = THEME.plate.rim;
 /**
  * List-row buttons sit inside the frame's rim (x 3-34), leaving a 30px face for the label; four (11px + 1px
  * gap) fit in the frame's 50px interior.
  */
-const BTN_W = CARD.w - 2 * BACK_SLICE;
+const BTN_W = CARD.w - 2 * BACK_RIM;
 const BTN_H = LIST_BUTTON_H;
 const GAP = 1;
 /** Half of each flip (squash to the centre line, open from it). */
