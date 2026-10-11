@@ -18,6 +18,19 @@ import type { CardDb } from "./cardData.ts";
 export interface Deck {
   main: number[];
   extra?: number[];
+  /**
+   * Cards placed before the duel starts (dev test setups): in the hand, or face-up on the field
+   * (`sequence` = zone). The opening hand is still drawn from `main` on top of these.
+   */
+  start?: StartCard[];
+}
+
+export interface StartCard {
+  code: number;
+  /** HAND, MZONE or SZONE. */
+  location: OcgLocation;
+  sequence?: number;
+  position?: OcgPosition;
 }
 
 export interface DuelConfig {
@@ -117,6 +130,11 @@ export class DuelSession {
         });
       shuffle([...deck.main], rng).forEach((c) => add(c, OcgLocation.DECK));
       deck.extra?.forEach((c) => add(c, OcgLocation.EXTRA));
+      deck.start?.forEach((c) =>
+        this.core.duelNewCard(this.handle, {
+          team: team as 0 | 1, duelist: 0, code: c.code, controller: team as 0 | 1, location: c.location, sequence: c.sequence ?? 0,
+          position: c.position ?? (c.location === OcgLocation.HAND ? OcgPosition.FACEDOWN_DEFENSE : OcgPosition.FACEUP_ATTACK),
+        }));
     });
 
     this.core.startDuel(this.handle);

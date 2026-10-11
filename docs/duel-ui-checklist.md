@@ -27,6 +27,12 @@ To see any of #3–#14 without setting it up in a duel, open `/?duel&dialogs` an
 
 ## Card pickers (`Modal.picker`)
 
+#9, #10 and #11 happen **on the board** when every choice is a card on the field or in your hand (attack
+targets, tributes, Man-Eater Bug...): choices get a dark green 1px outline, picked ones a bright green 2px
+one, and the prompt + CONFIRM / CANCEL / FINISH sit in the strip across the field. They fall back to the
+picker dialog when a choice is in the Graveyard, Deck, etc. Try the board version with
+`&dialogs` → "#9 On the field".
+
 | # | Prompt | Shows | Style | How to see it | Tested |
 |---|---|---|---|---|---|
 | 8 | Chain (`SELECT_CHAIN`) | Cards you can chain (caption: effect name or location), "DON'T CHAIN" (unless forced) | Runewood | Have Mirror Force / Sakuretsu / Trap Hole / MST set when the opponent attacks or summons | [ ] |

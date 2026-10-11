@@ -30,6 +30,7 @@ Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations
 `&dialogs` adds one that opens every prompt UI with sample cards (`src/scenes/dialogPreview.ts`; answers are only
 logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`);
 `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
+`&setup=tribute` starts from a test board (`src/scenes/devSetups.ts`: cards placed in hand/on the field first),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
 choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
@@ -87,7 +88,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   SET, SP.SUM, USE, ATTACK, FLIP / TO ATK / TO DEF). The same squash flip turns set Spells/Traps face-up (`T.flip`).
 - Prompt dialogs (`Modal.dialog`): info-panel wood board, message as plain text, list-row buttons (`makeListButton`
   in `widgets.ts`, shared with the card menu). With a card: card (2x) left, text top-right wrapped to the button
-  grid's width, buttons bottom-right; otherwise text over buttons. The board shrinks to fit its content.
+  grid's width, buttons bottom-right; otherwise text over buttons. Boards are 240px wide (408 for 6+ cards).
+- Card choices (`pickCards` in DuelScene): SELECT_CARD / TRIBUTE / UNSELECT_CARD are picked on the board when
+  every candidate is a field/hand card (dark green 1px outline = choice, bright green 2px = picked; prompt and
+  CONFIRM/CANCEL in the field strip), else in the `Modal.picker` dialog.
 
 ## Engine facts worth knowing
 

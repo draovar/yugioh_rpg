@@ -16,15 +16,16 @@ import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../du
 import { AI, DuelController, HUMAN, type HumanPrompt } from "../duel/DuelController.ts";
 import { autoRespond, freePlaces } from "../duel/autoBot.ts";
 import { ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, type CardHighlight } from "../ui/duel/CardSprite.ts";
-import { Modal } from "../ui/duel/Modal.ts";
+import { Modal, type PickerOptions } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
 import { CardMenu } from "../ui/duel/CardMenu.ts";
 import { CARD, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, pileCenters, slotXY, zoneCenters, type Slot } from "../ui/duel/layout.ts";
-import { INK, INK_SOFT, PAPER, WHITE, border, text } from "../ui/pixel.ts";
-import { makeButton, makeWoodButton, type WoodButton } from "../ui/widgets.ts";
+import { FONT_UI, INK, INK_SOFT, PAPER, WHITE, border, measure, text } from "../ui/pixel.ts";
+import { LIST_BUTTON_H, makeButton, makeListButton, makeWoodButton, type ListButton, type WoodButton } from "../ui/widgets.ts";
 import { installAnimPreview } from "./animPreview.ts";
 import { installDialogPreview } from "./dialogPreview.ts";
+import { withDevSetup } from "./devSetups.ts";
 import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
 import { PANEL } from "../ui/duel/panelStyles.ts";
 import { PHASE_LOOK, TURN_TEXT, type PhaseState } from "../ui/duel/phaseThemes.ts";
@@ -38,6 +39,8 @@ export interface DuelSceneData {
   seed?: number;
   /** Scene to return to when the duel ends. */
   returnScene?: string;
+  /** Dev: name of a test board from devSetups.ts (`&setup=tribute`), placed before the duel starts. */
+  setup?: string;
 }
 
 interface CardAction {
@@ -128,6 +131,11 @@ export class DuelScene extends Phaser.Scene {
   private lpBars!: [LPBar, LPBar];
   private phaseGfx!: Phaser.GameObjects.Container;
   private promptBand!: Phaser.GameObjects.Container;
+  /**
+   * Card choice happening on the board (see `pickCards`): `keys[i]` is the sprite key of `opts.cards[i]`;
+   * `confirm` is the strip's CONFIRM button in multi mode.
+   */
+  private fieldPick: { keys: string[]; selected: Set<number>; opts: PickerOptions; confirm: ListButton | null } | null = null;
 
   constructor() {
     super("Duel");
@@ -193,7 +201,7 @@ export class DuelScene extends Phaser.Scene {
       core, cards, readScript,
       startingLP: this.sceneData.startingLP,
       seed: this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as [bigint, bigint, bigint, bigint]) : undefined,
-      decks: [this.sceneData.playerDeck ?? fallback(), this.sceneData.opponentDeck ?? fallback()],
+      decks: withDevSetup([this.sceneData.playerDeck ?? fallback(), this.sceneData.opponentDeck ?? fallback()], this.sceneData.setup),
     });
     this.controller = new DuelController({
       session,
@@ -282,12 +290,30 @@ export class DuelScene extends Phaser.Scene {
     this.promptBand = this.add.container(0, 0).setDepth(800).setVisible(false);
   }
 
-  private setPrompt(label: string | null) {
+  /**
+   * The strip across the middle of the field: prompt text, and optional list-row buttons at its right end
+   * (returned in order, e.g. to update CONFIRM). A button is as wide as its label, min 44.
+   */
+  private setPrompt(label: string | null, buttons: { label: string; onClick: () => void; enabled?: boolean }[] = []): ListButton[] {
     this.promptBand.removeAll(true).setVisible(!!label);
-    if (!label) return;
-    const t = text(this, FIELD_CENTER.x, FIELD_CENTER.y - 3, label.toUpperCase(), { color: WHITE, originX: 0.5 });
-    const bg = this.add.rectangle(FIELD.left, FIELD_CENTER.y - 6, FIELD.right - FIELD.left, 11, INK, 0.85).setOrigin(0);
-    this.promptBand.add([bg, t]);
+    if (!label) return [];
+    const top = FIELD_CENTER.y - 6;
+    this.promptBand.add(this.add.rectangle(FIELD.left, top, FIELD.right - FIELD.left, LIST_BUTTON_H, INK, 0.85).setOrigin(0));
+    const widths = buttons.map((b) => Math.max(44, measure(this, FONT_UI, b.label.toUpperCase()) + 10));
+    let x = FIELD.right - 2 - widths.reduce((n, w) => n + w + 2, -2);
+    const textRight = buttons.length ? x - 4 : FIELD.right;
+    const made = buttons.map((b, i) => {
+      const btn = makeListButton(this, x, top, widths[i], b.label, b.onClick);
+      if (b.enabled === false) btn.setEnabled(false);
+      this.promptBand.add(btn);
+      x += widths[i] + 2;
+      return btn;
+    });
+    // Centred on the field; only a text too long to clear the buttons is centred in the space left of them.
+    const t = text(this, FIELD_CENTER.x, top + 3, label.toUpperCase(), { color: WHITE, originX: 0.5 });
+    if (t.x + t.width > textRight) t.setX(Math.round((FIELD.left + textRight - t.width) / 2));
+    this.promptBand.add(t);
+    return made;
   }
 
   // ---------------------------------------------------------------- info panel, log, LP
@@ -639,6 +665,7 @@ export class DuelScene extends Phaser.Scene {
   }
 
   private clearInteraction() {
+    this.fieldPick = null;
     this.setPrompt(null);
     this.actions.clear();
     this.phaseActions.clear();
@@ -666,15 +693,73 @@ export class DuelScene extends Phaser.Scene {
 
   /**
    * Playable cards aren't outlined; only the cursor tells them apart (hand cursor on cards with an
-   * action, plain arrow elsewhere). `extra` can still mark cards explicitly.
+   * action, plain arrow elsewhere). During field targeting, candidates get a dark green outline and picked
+   * ones a bright green one. `extra` can still mark cards explicitly.
    */
   private applyHighlights(extra?: Map<string, CardHighlight>) {
     const [attacker, target] = this.attackMarks;
     this.drawAttackArrow(attacker ? this.sprites.get(attacker) : undefined);
+    const fp = this.fieldPick;
     for (const [k, sp] of this.sprites) {
-      sp.setHighlight(extra?.get(k) ?? (k === attacker ? "attacker" : k === target ? "attacked" : "none"));
-      if (sp.input) sp.input.cursor = this.actions.has(k) ? "pointer" : "default";
+      const i = fp ? fp.keys.indexOf(k) : -1;
+      const locked = i >= 0 && !!fp!.opts.cards[i].locked;
+      const pick: CardHighlight | undefined = i < 0 ? undefined : fp!.selected.has(i) || locked ? "selected" : "choice";
+      sp.setHighlight(extra?.get(k) ?? pick ?? (k === attacker ? "attacker" : k === target ? "attacked" : "none"));
+      if (sp.input) sp.input.cursor = this.actions.has(k) || (i >= 0 && !locked) ? "pointer" : "default";
     }
+  }
+
+  /**
+   * Lets the player choose cards for a prompt. On the board when every candidate is a card shown there
+   * (field or hand): candidates are outlined dark green, clicking picks (single mode: answers at once;
+   * multi: toggles, then CONFIRM in the strip), the prompt text and buttons go in the strip across the
+   * field. Otherwise (Graveyard, Deck...) in a picker dialog. `locs[i]` is where `opts.cards[i]` is.
+   */
+  private pickCards(locs: OcgCardLoc[], opts: PickerOptions) {
+    const keys = locs.map(locKey);
+    const shown = OcgLocation.MZONE | OcgLocation.SZONE | OcgLocation.HAND;
+    if (!locs.every((c) => c.location & shown) || !keys.every((k) => this.sprites.has(k))) {
+      this.modal.picker(opts);
+      return;
+    }
+    const selected = new Set(opts.cards.flatMap((c, i) => (c.selected || c.locked ? [i] : [])));
+    const fp = (this.fieldPick = { keys, selected, opts, confirm: null as ListButton | null });
+    const count = opts.counter ?? (opts.max ? { value: (sel: number[]) => sel.length, of: opts.max } : null);
+    const buttons = [...(opts.buttons ?? [])];
+    // CONFIRM first, sized for its counter at the longest; refreshFieldPick sets the real label.
+    if (opts.mode === "multi") {
+      buttons.unshift({ label: count ? `Confirm ${count.of}/${count.of}` : "Confirm", onClick: () => opts.onConfirm([...selected].sort((a, b) => a - b)) });
+    }
+    const made = this.setPrompt(opts.title, buttons);
+    if (opts.mode === "multi") fp.confirm = made[0];
+    this.refreshFieldPick();
+  }
+
+  private refreshFieldPick() {
+    const fp = this.fieldPick;
+    if (!fp) return;
+    const sel = [...fp.selected].sort((a, b) => a - b);
+    const count = fp.opts.counter ?? (fp.opts.max ? { value: (s: number[]) => s.length, of: fp.opts.max } : null);
+    fp.confirm?.setEnabled(fp.opts.isValid ? fp.opts.isValid(sel) : true);
+    if (count) fp.confirm?.setLabel(`Confirm ${count.value(sel)}/${count.of}`);
+    this.applyHighlights();
+  }
+
+  /** A card clicked during field targeting (same rules as the picker dialog). */
+  private fieldPickClick(k: string) {
+    const fp = this.fieldPick!;
+    const i = fp.keys.indexOf(k);
+    if (i < 0 || fp.opts.cards[i].locked) return;
+    if (fp.opts.mode === "single") {
+      fp.opts.onConfirm([i]);
+      return;
+    }
+    const max = fp.opts.max;
+    if (fp.selected.has(i)) fp.selected.delete(i);
+    else if (!max || fp.selected.size < max) fp.selected.add(i);
+    else if (max === 1) { fp.selected.clear(); fp.selected.add(i); } // swap the one pick
+    else return; // full: unpick one first
+    this.refreshFieldPick();
   }
 
   private onPrompt(m: HumanPrompt, hint: bigint | null) {
@@ -754,7 +839,7 @@ export class DuelScene extends Phaser.Scene {
         return;
       }
       case OcgMessageType.SELECT_CARD:
-        this.modal.picker({
+        this.pickCards(m.selects, {
           title: title(`Select ${range(m.min, m.max)} card(s)`),
           cards: m.selects.map((c) => ({ code: c.code, caption: locationName(c.location, c.controller) })),
           mode: m.min === 1 && m.max === 1 ? "single" : "multi",
@@ -767,7 +852,7 @@ export class DuelScene extends Phaser.Scene {
         });
         return;
       case OcgMessageType.SELECT_TRIBUTE:
-        this.modal.picker({
+        this.pickCards(m.selects, {
           title: title("Select monster(s) to Tribute"),
           // Tributes are normally your own field monsters: caption only the unusual ones (hand, opponent's).
           cards: m.selects.map((c) => ({
@@ -802,7 +887,7 @@ export class DuelScene extends Phaser.Scene {
         const button = m.can_finish || !m.can_cancel
           ? { label: `Finish ${chosen}/${m.max}`, enabled: m.can_finish, onClick: () => this.answer(done) }
           : { label: "Cancel", onClick: () => this.answer(done) };
-        this.modal.picker({
+        this.pickCards(entries.map((e) => e.c), {
           title: title(`Select ${range(m.min, m.max)} card(s)`),
           cards: entries.map((e) => ({ code: e.c.code, caption: e.chosen ? "CHOSEN" : locationName(e.c.location, e.c.controller), selected: e.chosen })),
           mode: "single",
@@ -882,6 +967,10 @@ export class DuelScene extends Phaser.Scene {
 
   private onCardClick(k: string) {
     if (this.modal.isOpen) return;
+    if (this.fieldPick) {
+      this.fieldPickClick(k);
+      return;
+    }
     const list = this.actions.get(k);
     const sp = this.sprites.get(k);
     if (!list || !sp) return;

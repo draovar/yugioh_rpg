@@ -29,11 +29,13 @@ export class Boot extends Phaser.Scene {
     const label = text(this, 320, 176, "LOADING DUEL ENGINE...", { color: WHITE, originX: 0.5 });
     loadEngine()
       .then(() => {
-        // Dev shortcut: /?duel jumps straight into a duel; &lp=1000 for a short one, &seed=N to replay one.
+        // Dev shortcut: /?duel jumps straight into a duel; &lp=1000 for a short one, &seed=N to replay one,
+        // &setup=NAME to start from a test board (devSetups.ts).
         const params = new URLSearchParams(location.search);
         const lp = Number(params.get("lp")) || undefined;
         const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
-        if (params.has("duel")) this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp, seed });
+        const setup = params.get("setup") ?? undefined;
+        if (params.has("duel")) this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp, seed, setup });
         else this.scene.start("Overworld");
       })
       .catch((e) => {

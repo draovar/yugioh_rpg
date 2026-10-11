@@ -108,6 +108,14 @@ const PREVIEWS: Preview[] = [
     },
   },
   {
+    label: "#9 On the field: pick 1 card in your hand",
+    run: (h) => h.prompt(msg({ type: OcgMessageType.SELECT_CARD, can_cancel: true, min: 1, max: 1, selects: myHand(h) }), 501n),
+  },
+  {
+    label: "#9 On the field: pick 2 cards in your hand",
+    run: (h) => h.prompt(msg({ type: OcgMessageType.SELECT_CARD, can_cancel: false, min: 2, max: 2, selects: myHand(h) }), 501n),
+  },
+  {
     label: "#10 Tribute (2 of 3)",
     run: (h) => h.prompt(msg({
       type: OcgMessageType.SELECT_TRIBUTE, can_cancel: true, min: 2, max: 2,
@@ -172,6 +180,11 @@ function selectUnselect(h: DialogPreviewHost, pickable: number[], chosen: number
     return true;
   });
   ask();
+}
+
+/** Your real hand cards (so on-field targeting can be tried: the cards exist on the board). */
+function myHand(h: DialogPreviewHost) {
+  return (h.snapshot()?.players[0].hand ?? []).map((c, i) => ({ code: c.code, controller: 0, location: OcgLocation.HAND, sequence: i, position: c.position }));
 }
 
 /** Adds the dropdown + Show button (plain HTML above the game). Call once the duel has started. */
