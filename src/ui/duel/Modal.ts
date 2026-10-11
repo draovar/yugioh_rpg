@@ -120,13 +120,14 @@ export class Modal {
   }
 
   /**
-   * Card picker on the same wood board as the dialogs, shrunk to fit: title, up to 3 rows of 9 cards with a
-   * caption under each, then a row of list-row buttons (CONFIRM in multi mode, the caller's buttons, < >
-   * for pages). Single mode: clicking a card picks it (cards lift a little on hover). Multi mode: clicked
+   * Card picker on the same wood board as the dialogs: title, one row of up to 9 cards with a caption under
+   * each, then a row of list-row buttons (CONFIRM in multi mode, the caller's buttons, < > for pages). More
+   * than 9 cards make more pages, never more rows, and every page has the first page's size (the board
+   * doesn't jump when paging). Single mode: clicking a card picks it (cards lift a little on hover). Multi mode: clicked
    * cards toggle and stay raised; CONFIRM is enabled while `isValid` holds.
    */
   picker(opts: PickerOptions): void {
-    const perRow = 9, rowsPerPage = 3, perPage = perRow * rowsPerPage;
+    const perPage = 9;
     const selected = new Set(opts.cards.flatMap((c, i) => (c.selected || c.locked ? [i] : [])));
     const pages = Math.max(1, Math.ceil(opts.cards.length / perPage));
     const confirmed = () => [...selected].sort((a, b) => a - b);
@@ -135,14 +136,11 @@ export class Modal {
       const root = this.open();
       const rim = WOOD.rim, pad = CARD_GAP;
       const shown = opts.cards.slice(page * perPage, (page + 1) * perPage);
-      const cols = Math.max(1, Math.min(perRow, shown.length));
-      const rows = Math.max(1, Math.ceil(shown.length / perRow));
-      // Room under each card for its caption (unless no card on the page has one), and above it for the lift.
-      const captions = shown.some((c) => c.caption !== "");
-      const rowH = CARD.h + (captions ? 2 + 3 : 0);
-      const pitchY = rowH + 4 + SELECTED_LIFT;
+      // Sized for the first (fullest) page, with room under the cards for captions unless no card has one.
+      const cols = Math.max(1, Math.min(perPage, opts.cards.length));
+      const captions = opts.cards.some((c) => c.caption !== "");
       const cardsW = cols * PICK_PITCH_X - (PICK_PITCH_X - CARD.w);
-      const cardsH = rows * pitchY - (pitchY - rowH);
+      const cardsH = CARD.h + (captions ? 2 + 3 : 0);
 
       const titleW = measure(s, FONT_UI, opts.title.toUpperCase()) + 1;
       const buttons: { label: string; onClick: () => void; confirm?: boolean; narrow?: boolean; enabled?: boolean }[] = [];
@@ -186,11 +184,10 @@ export class Modal {
       const cardsTop = top + rim + pad + title.height + 3 + SELECTED_LIFT;
       shown.forEach((c, j) => {
         const i = page * perPage + j;
-        const row = Math.floor(j / perRow), col = j % perRow;
-        const n = Math.min(perRow, shown.length - row * perRow);
-        const rowLeft = innerX + Math.round((innerW - (n * PICK_PITCH_X - (PICK_PITCH_X - CARD.w))) / 2);
-        const x = rowLeft + col * PICK_PITCH_X + CARD.w / 2;
-        const y = cardsTop + row * pitchY + CARD.h / 2;
+        // A shorter last page is centred in the same board.
+        const rowLeft = innerX + Math.round((innerW - (shown.length * PICK_PITCH_X - (PICK_PITCH_X - CARD.w))) / 2);
+        const x = rowLeft + j * PICK_PITCH_X + CARD.w / 2;
+        const y = cardsTop + CARD.h / 2;
         const sp = new CardSprite(s, x, y).show(c.code, this.cards.records.get(c.code));
         sp.setInteractive({ useHandCursor: !c.locked });
         sp.on("pointerover", () => {
