@@ -15,7 +15,10 @@ import { loadEngine, type Engine } from "../duel/loadEngine.ts";
 import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
 import { AI, DuelController, HUMAN, type HumanPrompt } from "../duel/DuelController.ts";
 import { autoRespond, freePlaces } from "../duel/autoBot.ts";
-import { ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, type CardHighlight } from "../ui/duel/CardSprite.ts";
+import {
+  ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, SPELL_ATTRIBUTE, SPELL_KIND_ICON, SPELL_NORMAL_ICON, SPELL_SHEET, TRAP_ATTRIBUTE,
+  type CardHighlight,
+} from "../ui/duel/CardSprite.ts";
 import { Modal, type PickerOptions } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
@@ -88,6 +91,27 @@ const LAYOUT = (() => {
 const STAR_SIZE = 7, STAR_GAP = 3;
 /** How long an LP change ("-1500") stays inside the LP bar. */
 const LP_DELTA_MS = 1200;
+/** Info-panel ATK / DEF plates: height, label (small) and value (2x) colours on the dark wood. */
+const STAT_PLATE_H = 26;
+const STAT_LABEL = 0xb08a68, STAT_VALUE = 0xf2c096;
+/** Info-panel card name: light text with a 1px dark drop shadow. */
+const NAME_INK = 0xfbe8c8, NAME_SHADOW = 0x2a1408;
+
+/** Tiny pixel icons: one string per row, each character a colour key ("." = empty). */
+interface PixelIcon { rows: string[]; colors: Record<string, number> }
+const STAT_ICON: Record<"sword" | "shield", PixelIcon> = {
+  // Upright sword: steel blade with a light edge, gold guard, brown grip and pommel.
+  sword: {
+    rows: ["...b...", "..bw...", "..bw...", "..bw...", "..bw...", "..bw...", "..bw...", "ggggggg", "...h...", "...h...", "..ggg.."],
+    colors: { b: 0x9aa6b4, w: 0xe6edf3, g: 0xe0a040, h: 0x7a4a2c },
+  },
+  // Heater shield: blue face with a light left edge and a gold rim.
+  shield: {
+    rows: ["ggggggg", "gwbbbbg", "gwbbbbg", "gwbbbbg", "gwbbbbg", "gwbbbbg", ".gwbbg.", ".gwbbg.", "..gbg..", "...g..."],
+    colors: { g: 0xe0a040, w: 0x8fb0e8, b: 0x3d5e9e },
+  },
+};
+
 /** Info-panel art: 128px art inside a 3px wooden frame. */
 const ART_FRAME = 128 + 6;
 /** The duel log text starts below its "DUEL LOG" header, inside the paper. */
@@ -394,11 +418,14 @@ export class DuelScene extends Phaser.Scene {
     const L = LAYOUT, ink = PANEL.ink;
     const monster = (r.type & 0x1) !== 0;
 
-    // Name at 2x; names wider than the space before the attribute icon scroll (see scrollName).
-    const nameW = L.w - 20;
-    const name = text(this, L.x, L.top, r.name.toUpperCase(), { scale: 2, color: ink });
+    // Name at 2x, light with a 1px dark drop shadow, left-aligned; names wider than their space scroll (see
+    // scrollName). Monsters stop before the attribute icon; Spells/Traps (icons sit by the art) get the full width.
+    const nameW = monster ? L.w - 20 : L.w;
+    const nameStr = r.name.toUpperCase();
+    const nameText = text(this, 0, 0, nameStr, { scale: 2, color: NAME_INK });
+    const name = this.add.container(L.x, L.top, [text(this, 1, 1, nameStr, { scale: 2, color: NAME_SHADOW }), nameText]);
     p.add(name);
-    if (name.width > nameW) this.scrollName(name, nameW);
+    if (nameText.width > nameW) this.scrollName(name, nameText.width, nameW);
     const attr = ATTRIBUTE_INDEX[r.attribute];
     if (monster && attr !== undefined) p.add(this.add.image(L.x + L.w - 16, L.top - 1, ATTRIBUTE_SHEET, attr).setOrigin(0));
     if (monster) for (let i = 0; i < (r.level & 0xff); i++) p.add(this.add.image(L.x + i * (STAR_SIZE + STAR_GAP), L.top + 14, "ui-star").setOrigin(0));
@@ -413,11 +440,28 @@ export class DuelScene extends Phaser.Scene {
       this.load.once(`filecomplete-image-${artKey}`, placeArt);
       this.load.start();
     }
-    const stats = monster
-      ? [`ATK ${r.atk < 0 ? "?" : r.atk}`, `DEF ${r.def < 0 ? "?" : r.def}`, `LV ${r.level & 0xff}`, raceName(BigInt(r.race))]
-      : [r.type & 0x2 ? "SPELL" : "TRAP", spellTrapKind(r.type)];
-    const statX = L.x + ART_FRAME + 4;
-    stats.forEach((s, i) => p.add(text(this, statX, artY + 4 + i * 16, s, { scale: s.length * 8 > L.x + L.w - statX ? 1 : 2, color: ink })));
+    // Column right of the art: monsters get ATK and DEF plates (dark wood); Spells/Traps their SPELL / TRAP
+    // and kind icons in that space. Under them, down to the bottom of the art, the type plate:
+    // race + monster types, or SPELL / TRAP + kind, one per line.
+    const statX = L.x + ART_FRAME + 4, statW = L.x + L.w - statX;
+    const typesY = artY + 2 * (STAT_PLATE_H + 4);
+    let types: string[];
+    if (monster) {
+      const stat = (v: number) => (v < 0 ? "?" : String(v));
+      this.statPlate(p, statX, artY, statW, "ATK", stat(r.atk), STAT_ICON.sword);
+      this.statPlate(p, statX, artY + STAT_PLATE_H + 4, statW, "DEF", stat(r.def), STAT_ICON.shield);
+      types = [raceName(BigInt(r.race)), ...monsterTypes(r.type)];
+    } else {
+      // SPELL / TRAP icon and the kind icon side by side, 1x, centred where monsters have ATK / DEF.
+      const plateH = 2 * STAT_PLATE_H + 4;
+      const kind = SPELL_KIND_ICON.find(([bit]) => r.type & bit)?.[1] ?? SPELL_NORMAL_ICON;
+      const iconsX = statX + (statW - (16 + 4 + 16)) / 2, iconsY = artY + (plateH - 16) / 2;
+      p.add(this.add.image(iconsX, iconsY, ATTRIBUTE_SHEET, r.type & 0x2 ? SPELL_ATTRIBUTE : TRAP_ATTRIBUTE).setOrigin(0));
+      p.add(this.add.image(iconsX + 20, iconsY, SPELL_SHEET, kind).setOrigin(0));
+      types = [r.type & 0x2 ? "SPELL" : "TRAP", spellTrapKind(r.type)];
+    }
+    p.add(this.add.nineslice(statX, typesY, "ui-menu-back", undefined, statW, artY + ART_FRAME - typesY, 3, 3, 3, 3).setOrigin(0));
+    types.forEach((str, i) => p.add(text(this, statX + 5, typesY + 5 + i * 8, str, { color: STAT_VALUE })));
     const descY = artY + ART_FRAME + 5;
     this.paper(L.x, descY, L.w, L.bottom - descY);
     const pad = PANEL.paperRim + 1;
@@ -425,14 +469,32 @@ export class DuelScene extends Phaser.Scene {
   }
 
   /**
-   * Marquee for long card names: wait, scroll left until the end is visible, pause, jump back to the
-   * start, pause, repeat. The name is clipped to `width` by a geometry mask.
+   * One stat in the info panel: a dark wood plate (Frame01a, as the card menu) with a pixel icon on the
+   * left, a small label ("ATK") over the value in 2x light text.
    */
-  private scrollName(name: Phaser.GameObjects.BitmapText, width: number) {
+  private statPlate(p: Phaser.GameObjects.Container, x: number, y: number, w: number, label: string, value: string, icon: PixelIcon) {
+    p.add(this.add.nineslice(x, y, "ui-menu-back", undefined, w, STAT_PLATE_H, 3, 3, 3, 3).setOrigin(0));
+    const g = this.add.graphics();
+    const iconY = y + Math.floor((STAT_PLATE_H - icon.rows.length) / 2);
+    icon.rows.forEach((row, iy) => [...row].forEach((ch, ix) => {
+      const color = icon.colors[ch];
+      if (color !== undefined) g.fillStyle(color).fillRect(x + 5 + ix, iconY + iy, 1, 1);
+    }));
+    p.add(g);
+    const tx = x + 5 + icon.rows[0].length + 4;
+    p.add(text(this, tx, y + 5, label, { color: STAT_LABEL }));
+    p.add(text(this, tx, y + 12, value, { scale: 2, color: STAT_VALUE }));
+  }
+
+  /**
+   * Marquee for long card names: wait, scroll left until the end is visible, pause, jump back to the
+   * start, pause, repeat. The name (text + shadow, `nameWidth` wide) is clipped to `width` by a geometry mask.
+   */
+  private scrollName(name: Phaser.GameObjects.Container, nameWidth: number, width: number) {
     const mask = this.make.graphics({}, false);
-    mask.fillStyle(0xffffff).fillRect(name.x, name.y - 1, width, name.height + 2);
+    mask.fillStyle(0xffffff).fillRect(name.x, name.y - 1, width, 2 * 7 + 3);
     name.setMask(mask.createGeometryMask());
-    const overflow = name.width - width;
+    const overflow = nameWidth - width;
     this.nameScroll = {
       mask,
       tween: this.tweens.add({
@@ -1055,6 +1117,21 @@ const RACES: [bigint, string][] = [
 ];
 function raceName(race: bigint): string {
   return RACES.find(([bit]) => race & bit)?.[1] ?? "";
+}
+
+/**
+ * A monster's types in card type-line order (after the race): special kinds, Flip, then Effect or Normal.
+ * Man-Eater Bug: FLIP, EFFECT.
+ */
+function monsterTypes(type: number): string[] {
+  const kinds: [number, string][] = [
+    [0x40, "FUSION"], [0x80, "RITUAL"], [0x2000, "SYNCHRO"], [0x200, "SPIRIT"], [0x400, "UNION"],
+    [0x800, "GEMINI"], [0x400000, "TOON"], [0x1000, "TUNER"], [0x200000, "FLIP"],
+  ];
+  const out = kinds.filter(([bit]) => type & bit).map(([, name]) => name);
+  if (type & 0x20) out.push("EFFECT");
+  else if (type & 0x10) out.push("NORMAL");
+  return out;
 }
 
 function spellTrapKind(type: number): string {

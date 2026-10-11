@@ -8,6 +8,7 @@ import { CARD } from "./layout.ts";
 export const CARD_BACK = "card-back";
 export const ART_ATLAS = "art32";
 export const ATTRIBUTE_SHEET = "attributes";
+export const SPELL_SHEET = "spells";
 
 const TYPE_MONSTER = 0x1, TYPE_SPELL = 0x2, TYPE_TRAP = 0x4, TYPE_EFFECT = 0x20, TYPE_FUSION = 0x40, TYPE_RITUAL = 0x80;
 
@@ -23,8 +24,19 @@ export function frameFor(type: number): (typeof FRAMES)[number] {
   return "normal_monster";
 }
 
-/** Attribute bit -> index in attributes.png (DARK EARTH FIRE LIGHT WATER WIND DIVINE). */
+/**
+ * Spell/Trap kind icons, index in spells.png (16x16 each): COUNTER QUICK-PLAY EQUIP RITUAL FIELD NORMAL
+ * (plain circle) CONTINUOUS. Checked in this order, NORMAL when no kind bit is set.
+ */
+export const SPELL_KIND_ICON: [number, number][] = [
+  [0x100000, 0], [0x10000, 1], [0x40000, 2], [0x80, 3], [0x80000, 4], [0x20000, 6],
+];
+export const SPELL_NORMAL_ICON = 5;
+
+/** Attribute bit -> index in attributes.png (DARK EARTH FIRE LIGHT WATER WIND DIVINE, then SPELL TRAP). */
 export const ATTRIBUTE_INDEX: Record<number, number> = { 0x20: 0, 0x01: 1, 0x04: 2, 0x10: 3, 0x02: 4, 0x08: 5, 0x40: 6 };
+/** The Spell and Trap "attribute" icons in attributes.png. */
+export const SPELL_ATTRIBUTE = 7, TRAP_ATTRIBUTE = 8;
 /** Small 3x3 attribute swatch colours for the card's name bar (sampled from attributes.png). */
 const ATTRIBUTE_COLOR: Record<number, number> = { 0x20: 0x7d1f9e, 0x01: 0x2f4a19, 0x04: 0x7a1a14, 0x10: 0x9c8d55, 0x02: 0x1d2f7a, 0x08: 0x4c7a2a, 0x40: 0xc9b400 };
 

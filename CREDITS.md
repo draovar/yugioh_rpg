@@ -11,7 +11,7 @@
   licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Used: Runewood theme sprites
   (phase buttons, LP bars, panel frames, card action menu), trimmed/nine-sliced; see `tools/import-ui.mjs`.
 - **3x3 Font for Nerds** — Norwegian Ink (www.noink.no). *License terms to be confirmed before release.*
-- Card frames, card back, attribute icons and level star — made for this project.
+- Card frames, card back, attribute icons, Spell/Trap kind icons and level star — made for this project.
 - **tiny5** pixel font — made for this project.
 
 ## Card artwork
