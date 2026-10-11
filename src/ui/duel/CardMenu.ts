@@ -2,14 +2,13 @@
 // its actions (SUMMON, SET, USE...) and BACK as list-row buttons (FrameList09a, FrameList09c on hover),
 // from Crusenho's Complete UI Essential Pack (CC BY 4.0). Closing flips the card face-up again.
 import Phaser from "phaser";
-import { LIST_BUTTON_H, LIST_BUTTON_TEXTURES, makeListButton } from "../widgets.ts";
+import { THEME, ui } from "../theme.ts";
+import { LIST_BUTTON_H, makeListButton } from "../widgets.ts";
 import type { CardSprite } from "./CardSprite.ts";
 import { CARD } from "./layout.ts";
 
-export const MENU_TEXTURES = ["menu-back", ...LIST_BUTTON_TEXTURES];
-
 /** Frame01a: 3px rim with 3x3 corners. */
-const BACK_SLICE = 3;
+const BACK_SLICE = THEME.plate.rim;
 /**
  * List-row buttons sit inside the frame's rim (x 3-34), leaving a 30px face for the label; four (11px + 1px
  * gap) fit in the frame's 50px interior.
@@ -32,7 +31,7 @@ export class CardMenu extends Phaser.GameObjects.Container {
     super(scene, card.x, card.y);
     this.card = card;
     // Clicking the frame (between the buttons) flips the card face-up again.
-    const back = scene.add.nineslice(0, 0, "ui-menu-back", undefined, CARD.w, CARD.h, BACK_SLICE, BACK_SLICE, BACK_SLICE, BACK_SLICE)
+    const back = scene.add.nineslice(0, 0, ui("menu-back"), undefined, CARD.w, CARD.h, BACK_SLICE, BACK_SLICE, BACK_SLICE, BACK_SLICE)
       .setInteractive();
     back.on("pointerup", () => this.close());
     this.add(back);

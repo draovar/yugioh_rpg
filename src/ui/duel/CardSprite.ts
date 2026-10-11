@@ -3,6 +3,7 @@
 import Phaser from "phaser";
 import type { CardRecord } from "../../duel/cardData.ts";
 import { FONT_CARD, FONT_UI, INK, INK_SOFT, border, fit, text } from "../pixel.ts";
+import { THEME } from "../theme.ts";
 import { CARD } from "./layout.ts";
 
 export const CARD_BACK = "card-back";
@@ -40,13 +41,11 @@ export const SPELL_ATTRIBUTE = 7, TRAP_ATTRIBUTE = 8;
 /** Small 3x3 attribute swatch colours for the card's name bar (sampled from attributes.png). */
 const ATTRIBUTE_COLOR: Record<number, number> = { 0x20: 0x7d1f9e, 0x01: 0x2f4a19, 0x04: 0x7a1a14, 0x10: 0x9c8d55, 0x02: 0x1d2f7a, 0x08: 0x4c7a2a, 0x40: 0xc9b400 };
 
-/** Field targeting colours: can be picked (yellow, like zone choices), picked (orange). */
-export const PICK_COLOR = { choice: 0xffd400, selected: 0xff8a1e };
 
 /** Field targeting: "choice" = can be picked (yellow, 1px), "selected" = picked (orange, 2px). */
 export type CardHighlight = "none" | "action" | "choice" | "selected" | "target" | "attacker" | "attacked";
 const HIGHLIGHT_COLOR: Record<CardHighlight, number> = {
-  none: 0, action: 0xffd400, choice: PICK_COLOR.choice, selected: PICK_COLOR.selected, target: 0xff4136, attacker: 0xff4136, attacked: 0xff4136,
+  none: 0, action: 0xffd400, choice: THEME.pick.choice, selected: THEME.pick.selected, target: 0xff4136, attacker: 0xff4136, attacked: 0xff4136,
 };
 /** Attack declarations and pickable cards use a thin 1px outline; other highlights 2px. */
 const HIGHLIGHT_WIDTH: Partial<Record<CardHighlight, number>> = { choice: 1, attacker: 1, attacked: 1 };

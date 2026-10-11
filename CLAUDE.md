@@ -19,7 +19,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` (gitignored) |
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
-| `node tools/import-ui.mjs` | copy + trim the UI sprites we use from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/` |
+| `node tools/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession`; fails on RETRY/crash |
 
@@ -83,9 +83,12 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Field (`src/ui/duel/field.ts`): cream plank table (the info panel's paper colour) with a dark green felt
   playmat in a Frame01a rim around the four zone rows; zones outlined light green, monster zones tinted, empty
   piles labelled FIELD / EXTRA / GY / DECK. Dialogs shade the field (and the info panel's cut corners).
-- Duel UI chrome is Runewood (Crusenho pack): phase buttons (`phaseThemes.ts`), LP bars (`LPBar.ts`), info
-  panel = light wood board + cream paper inset for description/log (`panelStyles.ts`). Sprites are nine-sliced;
-  insets come from the sprites' pixel rows (see comments). Info panel positions derive from `LAYOUT` in DuelScene.
+- Duel UI chrome is themed (`src/ui/theme.ts`, only `runewood` so far; `&theme=NAME` or localStorage "theme",
+  reload to switch). A theme = sprites for the 15 `UI_ROLES` (`public/assets/ui/<theme>/<role>.png`, loaded as
+  `ui-<role>`, file mapping in `tools/import-ui.mjs`) + their nine-slice insets / text offsets (measured from the
+  sprites' pixel rows) + every UI colour (inks, plates, LP bar, field table/mat, targeting, banners). Code reads
+  `THEME.*` and `ui(role)`; never hard-code UI colours or `ui-` keys. Cards and gameplay feedback (attack red,
+  summon flashes) are not themed. Info panel positions derive from `LAYOUT` in DuelScene.
 - Card action menu (`CardMenu.ts`): clicking a card squash-flips it to a card-sized Frame01a with FrameList09a
   buttons (09c on hover) inside its rim, plus BACK. 11px buttons, 4 fit (3 actions + BACK); labels max 30px (SUMMON,
   SET, SP.SUM, USE, ATTACK, FLIP / TO ATK / TO DEF). The same squash flip turns set Spells/Traps face-up (`T.flip`).

@@ -2,10 +2,7 @@ import Phaser from "phaser";
 import { loadEngine } from "../duel/loadEngine.ts";
 import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, FRAMES, SPELL_SHEET, frameKey } from "../ui/duel/CardSprite.ts";
 import { FONT_CARD, FONT_UI, WHITE, text } from "../ui/pixel.ts";
-import { PHASE_LOOK } from "../ui/duel/phaseThemes.ts";
-import { LP_BAR_TEXTURES } from "../ui/duel/LPBar.ts";
-import { PANEL_TEXTURES } from "../ui/duel/panelStyles.ts";
-import { MENU_TEXTURES } from "../ui/duel/CardMenu.ts";
+import { THEME, UI_ROLES, ui } from "../ui/theme.ts";
 
 export class Boot extends Phaser.Scene {
   constructor() {
@@ -19,8 +16,8 @@ export class Boot extends Phaser.Scene {
     this.load.image(CARD_BACK, "assets/cards/back.png");
     this.load.spritesheet(ATTRIBUTE_SHEET, "assets/cards/attributes.png", { frameWidth: 16, frameHeight: 16 });
     this.load.spritesheet(SPELL_SHEET, "assets/cards/spells.png", { frameWidth: 16, frameHeight: 16 });
-    for (const state of Object.keys(PHASE_LOOK)) this.load.image(`ui-phase-${state}`, `assets/ui/phase-${state}.png`);
-    for (const t of [...LP_BAR_TEXTURES, ...PANEL_TEXTURES, ...MENU_TEXTURES, "star", "attack-up", "attack-down"]) this.load.image(`ui-${t}`, `assets/ui/${t}.png`);
+    // The theme's UI sprites (public/assets/ui/<theme>/, from tools/import-ui.mjs).
+    for (const role of UI_ROLES) this.load.image(ui(role), `assets/ui/${THEME.name}/${role}.png`);
     // Built by `npm run build-art`; cards without art fall back to a grey box.
     this.load.atlas(ART_ATLAS, "cards/art32.png", "cards/art32.json");
   }

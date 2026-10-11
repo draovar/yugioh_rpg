@@ -1,26 +1,20 @@
-// The duel field: a dark green felt playmat in a thin dark wood frame (Runewood Frame01a, CC BY 4.0) on a
-// cream plank table (the info panel's paper colour), so the wood UI and the cards stand out. Zones are
+// The duel field: a felt playmat in a thin dark frame (the theme's plate sprite) on a plank table (colours
+// from the theme; Runewood: dark green felt on the info panel's cream paper colour). Zones are
 // plain card-sized slots outlined in light green (a sideways defence card fits in the 20px gap between
 // zones), monster zones faintly tinted; empty piles are labelled FIELD / EXTRA / GY / DECK (cards cover
 // the labels). Drawn once, under everything else.
 import Phaser from "phaser";
 import { FONT_CARD, text } from "../pixel.ts";
+import { THEME, ui } from "../theme.ts";
 import { CARD, FIELD, ROWS, slotXY, type Slot } from "./layout.ts";
 
-const TABLE = {
-  wood: 0xf0d2af, // the info panel's cream paper
-  seam: 0xcfae86, // 1px seams between planks (the paper's own shade line)
-};
+const TABLE = { wood: THEME.field.table, seam: THEME.field.seam };
+/** Felt, zone outlines, faint tint inside monster zones, pile labels. */
+const MAT = { felt: THEME.field.felt, line: THEME.field.line, monster: THEME.field.monster, label: THEME.field.label };
+const RIM = THEME.plate.rim;
 
-const MAT = {
-  felt: 0x1d4636,
-  line: 0x4f8a6c, // zone outlines
-  monster: 0x225240, // faint tint inside monster zones
-  label: 0x6fa88a,
-};
-
-/** From the frame's outer edge to the outermost zones, on every side (3px rim + 1px of felt). */
-const MAT_EDGE = 4;
+/** From the frame's outer edge to the outermost zones, on every side (the rim + 1px of felt). */
+const MAT_EDGE = RIM + 1;
 
 const MAIN = [0, 1, 2, 3, 4];
 const PILES: [Slot, string][] = [
@@ -33,10 +27,10 @@ export function drawField(scene: Phaser.Scene, layer: Phaser.GameObjects.Contain
   const top = ROWS.oppBack - CARD.h / 2 - MAT_EDGE, bottom = ROWS.myBack + CARD.h / 2 + MAT_EDGE;
   const left = slotXY(0, { kind: "extra" }).x - CARD.w / 2 - MAT_EDGE;
   const right = slotXY(0, { kind: "deck" }).x + CARD.w / 2 + MAT_EDGE;
-  layer.add(scene.add.nineslice(left, top, "ui-menu-back", undefined, right - left, bottom - top, 3, 3, 3, 3).setOrigin(0));
+  layer.add(scene.add.nineslice(left, top, ui("menu-back"), undefined, right - left, bottom - top, RIM, RIM, RIM, RIM).setOrigin(0));
 
   const m = scene.add.graphics();
-  m.fillStyle(MAT.felt).fillRect(left + 3, top + 3, right - left - 6, bottom - top - 6);
+  m.fillStyle(MAT.felt).fillRect(left + RIM, top + RIM, right - left - 2 * RIM, bottom - top - 2 * RIM);
   for (const side of [0, 1] as const) {
     const slots: Slot[] = [
       ...MAIN.map((seq) => ({ kind: "mzone", seq }) as Slot), ...MAIN.map((seq) => ({ kind: "szone", seq }) as Slot), ...PILES.map(([s]) => s),

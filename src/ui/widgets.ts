@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { INK, WHITE, border, text } from "./pixel.ts";
+import { THEME, ui } from "./theme.ts";
 
 export interface Button extends Phaser.GameObjects.Container {
   setEnabled(on: boolean): this;
@@ -45,16 +46,16 @@ export interface WoodButton {
 }
 
 /**
- * Small raised Runewood button (the phase-column sprites), top-left at (x, y). Shows the pressed frame
- * while held and fires on release. Height 18 leaves a 6px face for one line of tiny5 text.
+ * Small raised button made from the phase-column sprites (theme), top-left at (x, y). Shows the pressed
+ * frame while held and fires on release. Height 18 leaves a 6px face for one line of tiny5 text.
  */
 export function makeWoodButton(scene: Phaser.Scene, x: number, y: number, w: number, label: string, onClick: () => void): WoodButton {
   const h = 18;
-  // Raised: 5 rows of rim above the face, 7 of side below. Pressed: face 3px lower.
-  const raised = { key: "ui-phase-clickable", slice: [4, 4, 5, 7] as const, textY: 5 };
-  const pressed = { key: "ui-phase-idle", slice: [4, 4, 8, 4] as const, textY: 8 };
+  const look = THEME.woodButton;
+  const raised = { key: ui("phase-clickable"), ...look.raised };
+  const pressed = { key: ui("phase-idle"), ...look.pressed };
   const box = scene.add.nineslice(x, y, raised.key, undefined, w, h, ...raised.slice).setOrigin(0);
-  const t = text(scene, x + w / 2, y + raised.textY, label, { color: 0x3b2414, originX: 0.5 });
+  const t = text(scene, x + w / 2, y + raised.textY, label, { color: look.ink, originX: 0.5 });
   const press = (down: boolean) => {
     const look = down ? pressed : raised;
     box.setTexture(look.key).setSlices(w, h, ...look.slice);
@@ -69,11 +70,10 @@ export function makeWoodButton(scene: Phaser.Scene, x: number, y: number, w: num
   };
 }
 
-/** Runewood list-row button textures (FrameList09a, 09c on hover), 64x11: 1px outline, 2px corners. */
-export const LIST_BUTTON_TEXTURES = ["menu-button", "menu-button-hover"];
-export const LIST_BUTTON_H = 11;
-const LIST_SLICE = 2;
-const LIST_INK = { normal: 0x2a1408, hover: 0xf2c096 };
+/** List-row buttons ("menu-button", "menu-button-hover" sprites of the theme). */
+export const LIST_BUTTON_H = THEME.listButton.h;
+const LIST_SLICE = THEME.listButton.slice;
+const LIST_INK = { normal: THEME.listButton.ink, hover: THEME.listButton.inkHover };
 
 /** A list-row button's parts (frame, label, hit zone), to add to a container, plus enabled/label setters. */
 export type ListButton = Phaser.GameObjects.GameObject[] & { setEnabled(on: boolean): void; setLabel(label: string): void };
@@ -85,11 +85,11 @@ export type ListButton = Phaser.GameObjects.GameObject[] & { setEnabled(on: bool
 export function makeListButton(
   scene: Phaser.Scene, x: number, y: number, w: number, label: string, onClick: () => void,
 ): ListButton {
-  const box = scene.add.nineslice(x, y, "ui-menu-button", undefined, w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE).setOrigin(0);
-  const t = text(scene, x + w / 2, y + 3, label.toUpperCase(), { color: LIST_INK.normal, originX: 0.5 });
+  const box = scene.add.nineslice(x, y, ui("menu-button"), undefined, w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE).setOrigin(0);
+  const t = text(scene, x + w / 2, y + THEME.listButton.textY, label.toUpperCase(), { color: LIST_INK.normal, originX: 0.5 });
   let enabled = true;
   const hover = (on: boolean) => {
-    box.setTexture(on ? "ui-menu-button-hover" : "ui-menu-button").setSlices(w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE);
+    box.setTexture(ui(on ? "menu-button-hover" : "menu-button")).setSlices(w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE);
     t.setTint(on ? LIST_INK.hover : LIST_INK.normal);
   };
   const hit = scene.add.zone(x, y, w, LIST_BUTTON_H).setOrigin(0).setInteractive({ useHandCursor: true });

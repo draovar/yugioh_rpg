@@ -8,6 +8,7 @@ import { HUMAN } from "../../duel/DuelController.ts";
 import { REASON, type MoveMessage, type NewTurnMessage } from "../../duel/DuelSession.ts";
 import { PHASE_NAMES } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
+import { THEME } from "../theme.ts";
 import { CardSprite } from "./CardSprite.ts";
 import { FIELD, FIELD_CENTER, ROWS, handXY, slotXY } from "./layout.ts";
 
@@ -74,10 +75,7 @@ const T = {
 const EASE = "Quad.easeOut";
 
 /** Turn banner colours: band fill, its 1px top (and turn-number) / bottom (and text shadow) lines. */
-const BANNER = {
-  mine: { fill: 0x1d6da0, light: 0x7cc4f0, dark: 0x0b2f47 },
-  theirs: { fill: 0xa02020, light: 0xf08a7c, dark: 0x470b0b },
-};
+const BANNER = THEME.banner;
 
 const sideOf = (controller: number) => (controller === HUMAN ? 0 : 1) as 0 | 1;
 

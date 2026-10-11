@@ -31,8 +31,9 @@ import { installAnimPreview } from "./animPreview.ts";
 import { installDialogPreview } from "./dialogPreview.ts";
 import { withDevSetup } from "./devSetups.ts";
 import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
-import { PANEL } from "../ui/duel/panelStyles.ts";
-import { PHASE_LOOK, TURN_TEXT, type PhaseState } from "../ui/duel/phaseThemes.ts";
+/** Info panel board and text (theme). */
+const PANEL = { ...THEME.panel, frame: ui("panel-frame"), paper: ui("panel-paper") };
+import { THEME, ui, type PhaseState } from "../ui/theme.ts";
 
 export interface DuelSceneData {
   playerDeck?: Deck;
@@ -54,9 +55,9 @@ interface CardAction {
 
 /** Button plate on the Extra Deck slot: as wide as fits left of the Spell/Trap zones; light counter text. */
 const BUTTON_PLATE_W = 56;
-const PROMPT_COUNTER_INK = 0xf2c096;
+const PROMPT_COUNTER_INK = THEME.plate.ink;
 /** Free zones in a zone choice: yellow fill, more opaque on hover / once picked. */
-const ZONE_PICK = { color: 0xffd400, alpha: 0.3, hoverAlpha: 0.6 };
+const ZONE_PICK = { color: THEME.pick.zone, alpha: THEME.pick.zoneAlpha, hoverAlpha: THEME.pick.zoneHoverAlpha };
 const key = (controller: number, location: number, sequence: number) => `${controller}:${location}:${sequence}`;
 const locKey = (c: OcgCardLoc) => key(c.controller, c.location, c.sequence);
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
@@ -93,9 +94,9 @@ const STAR_SIZE = 7, STAR_GAP = 3;
 const LP_DELTA_MS = 1200;
 /** Info-panel ATK / DEF plates: height, label (small) and value (2x) colours on the dark wood. */
 const STAT_PLATE_H = 26;
-const STAT_LABEL = 0xb08a68, STAT_VALUE = 0xf2c096;
+const STAT_LABEL = THEME.plate.inkSoft, STAT_VALUE = THEME.plate.ink;
 /** Info-panel card name: light text with a 1px dark drop shadow. */
-const NAME_INK = 0xfbe8c8, NAME_SHADOW = 0x2a1408;
+const NAME_INK = THEME.cardName.ink, NAME_SHADOW = THEME.cardName.shadow;
 
 /** Tiny pixel icons: one string per row, each character a colour key ("." = empty). */
 interface PixelIcon { rows: string[]; colors: Record<string, number> }
@@ -112,8 +113,8 @@ const STAT_ICON: Record<"sword" | "shield", PixelIcon> = {
   },
 };
 
-/** Info-panel art: 128px art inside a 3px wooden frame. */
-const ART_FRAME = 128 + 6;
+/** Info-panel art: 128px art inside the LP bar's frame (theme rim). */
+const ART_FRAME = 128 + 2 * THEME.lpBar.rim;
 /** The duel log text starts below its "DUEL LOG" header, inside the paper. */
 const LOG_Y = LAYOUT.top + 13;
 
@@ -284,21 +285,21 @@ export class DuelScene extends Phaser.Scene {
       const action = PHASE_ACTION[i];
       const clickable = !!action && this.phaseActions.has(action);
       const state: PhaseState = (this.phase & p.bits) !== 0 ? "current" : clickable ? "clickable" : "idle";
-      const look = PHASE_LOOK[state];
-      const box = this.add.nineslice(x, y, `ui-phase-${state}`, undefined, PHASE_COL.w, PHASE_COL.h, ...look.slice).setOrigin(0);
+      const look = THEME.phase[state];
+      const box = this.add.nineslice(x, y, ui(`phase-${state}`), undefined, PHASE_COL.w, PHASE_COL.h, ...look.slice).setOrigin(0);
       this.phaseGfx.add(box);
       // Letters stacked vertically, centred on the button face.
-      const color = state === "current" ? (this.turnPlayer === HUMAN ? TURN_TEXT.mine : TURN_TEXT.theirs) : look.text;
+      const color = state === "current" ? (this.turnPlayer === HUMAN ? THEME.turnText.mine : THEME.turnText.theirs) : look.text;
       const letters = [...p.label];
       const top = y + Math.floor((PHASE_COL.h - letters.length * 6 + 1) / 2) + look.textDy;
       const glyphs = letters.flatMap((ch, j) => (ch === " " ? [] : [text(this, x + PHASE_COL.w / 2, top + j * 6, ch, { color, originX: 0.5 })]));
       this.phaseGfx.add(glyphs);
       if (clickable) {
         // Press feedback: swap to the pressed frame while the pointer is down.
-        const pressed = PHASE_LOOK.idle;
+        const pressed = THEME.phase.idle;
         const hit = this.add.zone(x, y, PHASE_COL.w, PHASE_COL.h).setOrigin(0).setInteractive({ useHandCursor: true });
         hit.on("pointerdown", () => {
-          box.setTexture("ui-phase-idle").setSlices(PHASE_COL.w, PHASE_COL.h, ...pressed.slice);
+          box.setTexture(ui("phase-idle")).setSlices(PHASE_COL.w, PHASE_COL.h, ...pressed.slice);
           for (const g of glyphs) g.y += pressed.textDy - look.textDy;
         });
         hit.on("pointerout", () => this.drawPhaseColumn());
@@ -322,17 +323,17 @@ export class DuelScene extends Phaser.Scene {
     this.promptCounter = null;
     if (!label) return [];
     const top = FIELD_CENTER.y - 6;
-    this.promptBand.add(this.add.rectangle(FIELD.left, top, FIELD.right - FIELD.left, LIST_BUTTON_H, INK, 0.85).setOrigin(0));
-    this.promptBand.add(text(this, FIELD_CENTER.x, top + 3, label.toUpperCase(), { color: WHITE, originX: 0.5 }));
+    this.promptBand.add(this.add.rectangle(FIELD.left, top, FIELD.right - FIELD.left, LIST_BUTTON_H, THEME.prompt.strip, THEME.prompt.stripAlpha).setOrigin(0));
+    this.promptBand.add(text(this, FIELD_CENTER.x, top + 3, label.toUpperCase(), { color: THEME.prompt.text, originX: 0.5 }));
     if (!buttons.length) return [];
     // Plate: Frame01a (3px rim) + 2px padding around the buttons, 1px between them.
     const { x: cx, y: cy } = slotXY(0, { kind: "extra" });
-    const rim = 3, pad = 2;
+    const rim = THEME.plate.rim, pad = 2;
     const w = BUTTON_PLATE_W, btnW = w - 2 * (rim + pad);
     const counterH = counter ? 8 : 0; // 5px text + gap
     const h = 2 * (rim + pad) + counterH + buttons.length * (LIST_BUTTON_H + 1) - 1;
     const left = Math.round(cx - w / 2), plateTop = Math.round(cy - h / 2);
-    this.promptBand.add(this.add.nineslice(left, plateTop, "ui-menu-back", undefined, w, h, rim, rim, rim, rim).setOrigin(0));
+    this.promptBand.add(this.add.nineslice(left, plateTop, ui("menu-back"), undefined, w, h, rim, rim, rim, rim).setOrigin(0));
     if (counter) {
       this.promptCounter = text(this, cx, plateTop + rim + pad + 1, "", { color: PROMPT_COUNTER_INK, originX: 0.5 });
       this.promptBand.add(this.promptCounter);
@@ -428,12 +429,13 @@ export class DuelScene extends Phaser.Scene {
     if (nameText.width > nameW) this.scrollName(name, nameText.width, nameW);
     const attr = ATTRIBUTE_INDEX[r.attribute];
     if (monster && attr !== undefined) p.add(this.add.image(L.x + L.w - 16, L.top - 1, ATTRIBUTE_SHEET, attr).setOrigin(0));
-    if (monster) for (let i = 0; i < (r.level & 0xff); i++) p.add(this.add.image(L.x + i * (STAR_SIZE + STAR_GAP), L.top + 14, "ui-star").setOrigin(0));
+    if (monster) for (let i = 0; i < (r.level & 0xff); i++) p.add(this.add.image(L.x + i * (STAR_SIZE + STAR_GAP), L.top + 14, ui("star")).setOrigin(0));
     // 128x128 art in a wooden frame (the LP bar's frame, nine-sliced), loaded on first view.
     const artY = L.top + 24;
     const artKey = `art128-${code}`;
-    p.add(this.add.nineslice(L.x, artY, "ui-lp-frame", undefined, ART_FRAME, ART_FRAME, 3, 3, 3, 3).setOrigin(0));
-    const placeArt = () => { if (this.infoCode === code && p.active) p.add(this.add.image(L.x + 3, artY + 3, artKey).setOrigin(0)); };
+    const lpRim = THEME.lpBar.rim;
+    p.add(this.add.nineslice(L.x, artY, ui("lp-frame"), undefined, ART_FRAME, ART_FRAME, lpRim, lpRim, lpRim, lpRim).setOrigin(0));
+    const placeArt = () => { if (this.infoCode === code && p.active) p.add(this.add.image(L.x + lpRim, artY + lpRim, artKey).setOrigin(0)); };
     if (this.textures.exists(artKey)) placeArt();
     else {
       this.load.image(artKey, `cards/art128/${code}.png`);
@@ -460,7 +462,8 @@ export class DuelScene extends Phaser.Scene {
       p.add(this.add.image(iconsX + 20, iconsY, SPELL_SHEET, kind).setOrigin(0));
       types = [r.type & 0x2 ? "SPELL" : "TRAP", spellTrapKind(r.type)];
     }
-    p.add(this.add.nineslice(statX, typesY, "ui-menu-back", undefined, statW, artY + ART_FRAME - typesY, 3, 3, 3, 3).setOrigin(0));
+    const pr = THEME.plate.rim;
+    p.add(this.add.nineslice(statX, typesY, ui("menu-back"), undefined, statW, artY + ART_FRAME - typesY, pr, pr, pr, pr).setOrigin(0));
     types.forEach((str, i) => p.add(text(this, statX + 5, typesY + 5 + i * 8, str, { color: STAT_VALUE })));
     const descY = artY + ART_FRAME + 5;
     this.paper(L.x, descY, L.w, L.bottom - descY);
@@ -473,7 +476,8 @@ export class DuelScene extends Phaser.Scene {
    * left, a small label ("ATK") over the value in 2x light text.
    */
   private statPlate(p: Phaser.GameObjects.Container, x: number, y: number, w: number, label: string, value: string, icon: PixelIcon) {
-    p.add(this.add.nineslice(x, y, "ui-menu-back", undefined, w, STAT_PLATE_H, 3, 3, 3, 3).setOrigin(0));
+    const pr = THEME.plate.rim;
+    p.add(this.add.nineslice(x, y, ui("menu-back"), undefined, w, STAT_PLATE_H, pr, pr, pr, pr).setOrigin(0));
     const g = this.add.graphics();
     const iconY = y + Math.floor((STAT_PLATE_H - icon.rows.length) / 2);
     icon.rows.forEach((row, iy) => [...row].forEach((ch, ix) => {
@@ -755,7 +759,7 @@ export class DuelScene extends Phaser.Scene {
     if (!sp) return;
     const mine = sp.y > FIELD_CENTER.y;
     const y = (mine ? sp.y - CARD.h / 2 : sp.y + CARD.h / 2) - 3;
-    this.attackArrow = this.add.image(sp.x - 4, y, mine ? "ui-attack-up" : "ui-attack-down").setOrigin(0).setDepth(50);
+    this.attackArrow = this.add.image(sp.x - 4, y, ui(mine ? "attack-up" : "attack-down")).setOrigin(0).setDepth(50);
     this.board.add(this.attackArrow);
   }
 

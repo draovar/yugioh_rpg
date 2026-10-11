@@ -6,11 +6,14 @@ import { FONT_CARD, FONT_UI, fit, measure, text } from "../pixel.ts";
 import { LIST_BUTTON_H, makeListButton, type ListButton } from "../widgets.ts";
 import { CardSprite } from "./CardSprite.ts";
 import { CARD, INFO } from "./layout.ts";
-import { PANEL as WOOD } from "./panelStyles.ts";
+import { THEME, ui } from "../theme.ts";
+
+/** The board and its text (theme). */
+const WOOD = { ...THEME.panel, frame: ui("panel-frame") };
 
 const DEPTH = 1000;
 /** Darkening over the field while a dialog or picker is open. */
-const SHADE_ALPHA = 0.5;
+const SHADE_ALPHA = THEME.shadeAlpha;
 const LEFT = INFO.x + INFO.w;
 const WIDTH = 640 - LEFT;
 const MID_X = LEFT + Math.floor(WIDTH / 2);
@@ -235,11 +238,11 @@ export class Modal {
     this.close();
     const shade = this.scene.add.rectangle(LEFT, 0, WIDTH, 360, 0x000000, SHADE_ALPHA).setOrigin(0).setInteractive();
     // The info panel stays unshaded (hovered cards show there), but its frame's cut corners let the table
-    // show through: shade those pixels too (a 5-step staircase in each corner, Frame05b).
+    // show through: shade those pixels too (a staircase in each corner, see THEME.panel.cornerCut).
     const corners = this.scene.add.graphics().fillStyle(0x000000, SHADE_ALPHA);
-    const right = INFO.x + INFO.w, bottom = 360;
-    for (let r = 0; r < 5; r++) {
-      const n = 5 - r;
+    const right = INFO.x + INFO.w, bottom = 360, cut = WOOD.cornerCut;
+    for (let r = 0; r < cut; r++) {
+      const n = cut - r;
       corners.fillRect(INFO.x, r, n, 1).fillRect(right - n, r, n, 1);
       corners.fillRect(INFO.x, bottom - 1 - r, n, 1).fillRect(right - n, bottom - 1 - r, n, 1);
     }

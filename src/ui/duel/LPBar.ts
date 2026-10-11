@@ -1,27 +1,18 @@
-// Life-point bar: Runewood wooden frame (nine-sliced) with a coloured filler in its inset track,
+// Life-point bar: the theme's bar frame (nine-sliced) with a coloured filler in its inset track,
 // the LP number on the left and the duelist's name on the right, both drawn inside the track.
 import Phaser from "phaser";
 import { text } from "../pixel.ts";
+import { THEME, ui } from "../theme.ts";
 
 export const LP_BAR = { h: 15 };
-/** The frame's rim is 3px on every side; the fill lives in the track inside it. */
-const RIM = 3;
+/** The frame's rim on every side; the fill lives in the track inside it. */
+const RIM = THEME.lpBar.rim;
 const TRACK_H = LP_BAR.h - RIM * 2;
 
 /** Filler sprite per LP band, with its nine-slice insets (top highlight / bottom shade rows). */
-const FILLS = [
-  { min: 0.5, key: "ui-lp-fill-green", slice: [0, 0, 1, 0] },
-  { min: 0.25, key: "ui-lp-fill-orange", slice: [0, 0, 1, 1] },
-  { min: 0, key: "ui-lp-fill-red", slice: [0, 0, 1, 0] },
-] as const;
+const FILLS = THEME.lpBar.fills.map((f) => ({ ...f, key: ui(f.role) }));
 
-const LABEL = 0xf6e3c4;
-const SHADOW = 0x432925;
-/** LP change colours (inside the bar, same font/shadow as the LP number). */
-const LOSS = 0xff5040;
-const GAIN = 0x7dff6a;
-
-export const LP_BAR_TEXTURES = ["lp-frame", "lp-fill-green", "lp-fill-orange", "lp-fill-red"];
+const { label: LABEL, shadow: SHADOW, loss: LOSS, gain: GAIN } = THEME.lpBar;
 
 export class LPBar extends Phaser.GameObjects.Container {
   private readonly max: number;
@@ -36,7 +27,7 @@ export class LPBar extends Phaser.GameObjects.Container {
     super(scene, x, y);
     this.max = max;
     this.trackW = width - RIM * 2;
-    this.add(scene.add.nineslice(0, 0, "ui-lp-frame", undefined, width, LP_BAR.h, RIM, RIM, RIM, RIM).setOrigin(0));
+    this.add(scene.add.nineslice(0, 0, ui("lp-frame"), undefined, width, LP_BAR.h, RIM, RIM, RIM, RIM).setOrigin(0));
     this.fill = scene.add.container(RIM, RIM);
     this.add(this.fill);
     const ty = (this.textY = RIM + Math.floor((TRACK_H - 5) / 2));
