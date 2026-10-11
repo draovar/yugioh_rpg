@@ -589,7 +589,11 @@ export class DuelScene extends Phaser.Scene {
     const pending = this.controller.waitingForHuman;
     this.modal.picker({
       title: banished.length ? "Graveyard (newest first), then banished" : "Graveyard (newest first)",
-      cards: [...contents, ...[...banished].reverse()].map((c) => ({ code: c.code, locked: true })),
+      // No names (they're on the cards); only banished cards get a caption, to tell them apart.
+      cards: [
+        ...contents.map((c) => ({ code: c.code, locked: true, caption: "" })),
+        ...[...banished].reverse().map((c) => ({ code: c.code, locked: true, caption: "BANISHED" })),
+      ],
       mode: "single",
       onConfirm: () => {},
       // Closing sets the pending prompt up again (and ends a dev preview of this browser).
@@ -706,7 +710,11 @@ export class DuelScene extends Phaser.Scene {
       case OcgMessageType.SELECT_CHAIN:
         this.modal.picker({
           title: m.forced ? "You must activate an effect" : "Chain an effect?",
-          cards: m.selects.map((c) => ({ code: c.code, caption: this.activateLabel(c.code, c.description) })),
+          // Caption: the effect's own name when it has one, else where the card is ("ACTIVATE" says nothing).
+          cards: m.selects.map((c) => {
+            const effect = this.activateLabel(c.code, c.description);
+            return { code: c.code, caption: effect === "Activate" ? locationName(c.location, c.controller) : effect };
+          }),
           mode: "single",
           onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: i }),
           buttons: m.forced ? [] : [{ label: "Don't chain", onClick: () => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: null }) }],

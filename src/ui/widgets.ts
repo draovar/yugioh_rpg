@@ -75,22 +75,34 @@ export const LIST_BUTTON_H = 11;
 const LIST_SLICE = 2;
 const LIST_INK = { normal: 0x2a1408, hover: 0xf2c096 };
 
+/** A list-row button's parts (frame, label, hit zone), to add to a container, plus an enabled toggle. */
+export type ListButton = Phaser.GameObjects.GameObject[] & { setEnabled(on: boolean): void };
+
 /**
  * A list-row button, top-left at (x, y), 11px tall: darker on hover, fires on release. Returns its parts
- * (frame, label, hit zone) for the caller to add to a container; the label needs w >= text width + 4.
+ * for the caller to add to a container; the label needs w >= text width + 4. Disabled: faded, inert.
  */
 export function makeListButton(
   scene: Phaser.Scene, x: number, y: number, w: number, label: string, onClick: () => void,
-): Phaser.GameObjects.GameObject[] {
+): ListButton {
   const box = scene.add.nineslice(x, y, "ui-menu-button", undefined, w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE).setOrigin(0);
   const t = text(scene, x + w / 2, y + 3, label.toUpperCase(), { color: LIST_INK.normal, originX: 0.5 });
+  let enabled = true;
   const hover = (on: boolean) => {
     box.setTexture(on ? "ui-menu-button-hover" : "ui-menu-button").setSlices(w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE);
     t.setTint(on ? LIST_INK.hover : LIST_INK.normal);
   };
   const hit = scene.add.zone(x, y, w, LIST_BUTTON_H).setOrigin(0).setInteractive({ useHandCursor: true });
-  hit.on("pointerover", () => hover(true));
+  hit.on("pointerover", () => enabled && hover(true));
   hit.on("pointerout", () => hover(false));
-  hit.on("pointerup", onClick);
-  return [box, t, hit];
+  hit.on("pointerup", () => enabled && onClick());
+  return Object.assign([box, t, hit], {
+    setEnabled(on: boolean) {
+      enabled = on;
+      if (!on) hover(false);
+      box.setAlpha(on ? 1 : 0.5);
+      t.setAlpha(on ? 1 : 0.5);
+      if (hit.input) hit.input.cursor = on ? "pointer" : "default";
+    },
+  });
 }

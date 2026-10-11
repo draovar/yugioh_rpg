@@ -3,7 +3,7 @@
 Every prompt and overlay the duel screen shows, with its current look and how to reach it with the current
 20-card pool (`data/pool.json`). Tick **Tested** once you've seen it in a real duel.
 
-Style: **Runewood** = new look · **Old** = blue panel / dark strip, still to redo.
+Style: **Runewood** = new look · **to review** = has the new look via shared code, not yet tuned with you · **Old** = blue panel / dark strip, still to redo.
 
 To see any of #3–#14 without setting it up in a duel, open `/?duel&dialogs` and pick it from the dropdown
 (top-left). It uses sample cards; your answer goes to the duel log instead of the engine.
@@ -29,12 +29,12 @@ To see any of #3–#14 without setting it up in a duel, open `/?duel&dialogs` an
 
 | # | Prompt | Shows | Style | How to see it | Tested |
 |---|---|---|---|---|---|
-| 8 | Chain (`SELECT_CHAIN`) | Cards you can chain, "DON'T CHAIN" (unless forced) | Old | Have Mirror Force / Sakuretsu / Trap Hole / MST set when the opponent attacks or summons | [ ] |
-| 9 | Select card(s) (`SELECT_CARD`) | Cards with location captions, CONFIRM (multi) / CANCEL | Old | Monster Reborn, MST, Change of Heart targets; Sangan search | [ ] |
-| 10 | Tribute (`SELECT_TRIBUTE`) | Your monsters, CONFIRM / CANCEL | Old | Tribute Summon Summoned Skull / Dark Magician / Blue-Eyes | [ ] |
-| 11 | Select/unselect (`SELECT_UNSELECT_CARD`) | Cards + already CHOSEN ones, FINISH / CANCEL | Old | Some multi-target effects; none certain in this pool | [ ] |
-| 12 | Sum selection (`SELECT_SUM`) | Cards with VALUE captions, CONFIRM | Old | Ritual summons; no ritual cards in this pool | [ ] |
-| 13 | Graveyard browser | Graveyard (newest first), then banished; CLOSE | Old | Click a Graveyard pile | [ ] |
+| 8 | Chain (`SELECT_CHAIN`) | Cards you can chain (caption: effect name or location), "DON'T CHAIN" (unless forced) | Runewood | Have Mirror Force / Sakuretsu / Trap Hole / MST set when the opponent attacks or summons | [ ] |
+| 9 | Select card(s) (`SELECT_CARD`) | Cards with location captions, CONFIRM (multi) / CANCEL | Runewood (to review) | Monster Reborn, MST, Change of Heart targets; Sangan search | [ ] |
+| 10 | Tribute (`SELECT_TRIBUTE`) | Your monsters, CONFIRM / CANCEL | Runewood (to review) | Tribute Summon Summoned Skull / Dark Magician / Blue-Eyes | [ ] |
+| 11 | Select/unselect (`SELECT_UNSELECT_CARD`) | Cards + already CHOSEN ones, FINISH / CANCEL | Runewood (to review) | Some multi-target effects; none certain in this pool | [ ] |
+| 12 | Sum selection (`SELECT_SUM`) | Cards with VALUE captions, CONFIRM | Runewood (to review) | Ritual summons; no ritual cards in this pool | [ ] |
+| 13 | Graveyard browser | Graveyard (newest first), then banished; CLOSE | Runewood (to review) | Click a Graveyard pile | [ ] |
 
 ## Field prompts
 
