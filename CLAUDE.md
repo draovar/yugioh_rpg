@@ -17,7 +17,8 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run fetch-data` | clone/update ProjectIgnis `CardScripts` + `BabelCDB` into `vendor/` (gitignored) |
 | `npm run build-data` | `data/pool.json` → `public/data/{cards,scripts,strings}.json` |
 | `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` (gitignored) |
-| `npm run build-art` | downscale art: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
+| `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
+| `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession`; fails on RETRY/crash |
 
@@ -57,6 +58,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 
 - Everything is laid out in native 640x360 pixels; keep coordinates integer (odd sizes → round). Text is
   `BitmapText` only (`text()` in `src/ui/pixel.ts`); TTF text blurs at this size.
+- Card art uses ONE shared 48-colour palette, `data/palette.gpl` (GIMP palette; editable in GIMP, reusable for other
+  art; preview `docs/palette.png`). It is frozen: adding cards never changes it. Style knobs (boost, dither, sizes)
+  live in `tools/lib/art-style.mjs`; quantisation is our own k-means/Oklab code in `tools/lib/palette.mjs`
+  (sharp's `palette`/`colours` PNG option silently does nothing in this build — don't rely on it).
 - Fonts: `tiny5` (our own 3x5, UI + ATK/DEF) and `nerds3` (3x3 Font for Nerds by Norwegian Ink, card names —
   **check its license before release**). TTFs are converted to BMFont by sampling glyph outlines.
 - Card = 38x56 incl. 1px outline. Frames per type in `public/assets/cards/frames/` (drawn by the user); regions:
