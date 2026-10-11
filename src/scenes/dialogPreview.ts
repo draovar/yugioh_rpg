@@ -3,7 +3,7 @@
 // you answer is written to the duel log instead of being sent to the engine, then the real pending
 // prompt comes back. Numbers match docs/duel-ui-checklist.md.
 import Phaser from "phaser";
-import { OcgLocation, OcgMessageType, OcgPosition } from "ocgcore-wasm";
+import { OcgLocation, OcgMessageType, OcgPosition, type OcgResponse } from "ocgcore-wasm";
 import type { HumanPrompt } from "../duel/DuelController.ts";
 import type { FieldSnapshot } from "../duel/DuelSession.ts";
 
@@ -11,10 +11,13 @@ import type { FieldSnapshot } from "../duel/DuelSession.ts";
 export interface DialogPreviewHost {
   readonly scene: Phaser.Scene;
   snapshot(): FieldSnapshot | null;
-  /** Shows `prompt` as if the engine had asked it (answers are logged, not sent). */
-  prompt(prompt: HumanPrompt, hint: bigint | null): void;
+  /**
+   * Shows `prompt` as if the engine had asked it. Answers are logged, not sent, then passed to `onAnswer`
+   * if given: it may show a follow-up prompt and return true; false (or none) returns to the real duel.
+   */
+  prompt(prompt: HumanPrompt, hint: bigint | null, onAnswer?: (response: OcgResponse) => boolean): void;
   end(winner: number | null): void;
-  graveyard(codes: number[], banished: number[]): void;
+  graveyard(side: 0 | 1, codes: number[], banished: number[]): void;
 }
 
 interface Preview {
@@ -113,11 +116,11 @@ const PREVIEWS: Preview[] = [
   },
   {
     label: "#11 Select/unselect (1 chosen)",
-    run: (h) => h.prompt(msg({
-      type: OcgMessageType.SELECT_UNSELECT_CARD, can_finish: true, can_cancel: false, min: 1, max: 3,
-      select_cards: [GEMINI, LA_JINN].map((code, i) => loc(code, OcgLocation.MZONE, i + 1, 1)),
-      unselect_cards: [loc(CELTIC, OcgLocation.MZONE, 0, 1)],
-    }), 502n),
+    run: (h) => selectUnselect(h, [GEMINI, LA_JINN], [CELTIC], 1, 3, false),
+  },
+  {
+    label: "#11 Select/unselect (none chosen yet)",
+    run: (h) => selectUnselect(h, [CELTIC, GEMINI, LA_JINN], [], 1, 2, false),
   },
   {
     label: "#12 Sum selection (total 8)",
@@ -128,8 +131,12 @@ const PREVIEWS: Preview[] = [
     }), 500n),
   },
   {
-    label: "#13 Graveyard browser",
-    run: (h) => h.graveyard([POT, SANGAN, MIRROR_FORCE, VORSE], [BLUE_EYES]),
+    label: "#13 Graveyard browser (yours, + banished)",
+    run: (h) => h.graveyard(0, [POT, SANGAN, MIRROR_FORCE, VORSE], [BLUE_EYES]),
+  },
+  {
+    label: "#13 Graveyard browser (opponent's, 7 cards)",
+    run: (h) => h.graveyard(1, [RAIGEKI, SKULL, TRAP_HOLE, GEMINI, HEAVY_STORM, LA_JINN, MST], []),
   },
   {
     label: "#14 Zone choice (free monster zones)",
@@ -143,6 +150,29 @@ const PREVIEWS: Preview[] = [
     },
   },
 ];
+
+/**
+ * SELECT_UNSELECT_CARD the way the engine runs it: one card per prompt, asked again after each pick or
+ * unpick with the lists updated, until FINISH / CANCEL (or the max is reached). Opponent's monsters.
+ */
+function selectUnselect(h: DialogPreviewHost, pickable: number[], chosen: number[], min: number, max: number, canCancel: boolean) {
+  const seq = new Map([...pickable, ...chosen].map((code, i) => [code, i]));
+  const card = (code: number) => loc(code, OcgLocation.MZONE, seq.get(code)!, 1);
+  const ask = () => h.prompt(msg({
+    type: OcgMessageType.SELECT_UNSELECT_CARD, min, max,
+    can_finish: chosen.length >= min, can_cancel: canCancel && chosen.length === 0,
+    select_cards: pickable.map(card), unselect_cards: chosen.map(card),
+  }), 502n, (r) => {
+    const index = (r as { index: number | null }).index;
+    if (index === null) return false; // FINISH / CANCEL
+    if (index < pickable.length) chosen.push(...pickable.splice(index, 1));
+    else pickable.push(...chosen.splice(index - pickable.length, 1));
+    if (chosen.length >= max) return false; // the engine stops asking at the max
+    ask();
+    return true;
+  });
+  ask();
+}
 
 /** Adds the dropdown + Show button (plain HTML above the game). Call once the duel has started. */
 export function installDialogPreview(host: DialogPreviewHost) {

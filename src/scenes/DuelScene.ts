@@ -16,7 +16,7 @@ import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../du
 import { AI, DuelController, HUMAN, type HumanPrompt } from "../duel/DuelController.ts";
 import { autoRespond, freePlaces } from "../duel/autoBot.ts";
 import { ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, type CardHighlight } from "../ui/duel/CardSprite.ts";
-import { Modal, type PickerCard } from "../ui/duel/Modal.ts";
+import { Modal } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
 import { CardMenu } from "../ui/duel/CardMenu.ts";
@@ -102,6 +102,8 @@ export class DuelScene extends Phaser.Scene {
   private lastHint: bigint | null = null;
   /** A dev preview prompt is showing: its answer must not reach the engine. */
   private previewing = false;
+  /** Dev preview: answers the preview prompt itself (e.g. asks again, like the engine); false = done. */
+  private previewAnswer: ((response: OcgResponse) => boolean) | null = null;
   private animator!: DuelAnimator;
   private handCount: [number, number] = [0, 0];
   private lpValue: [number, number] = [8000, 8000];
@@ -222,9 +224,9 @@ export class DuelScene extends Phaser.Scene {
       installDialogPreview({
         scene: this,
         snapshot: () => this.snapshot,
-        prompt: (prompt, hint) => this.previewPrompt(() => this.onPrompt(prompt, hint)),
+        prompt: (prompt, hint, onAnswer) => this.previewPrompt(() => this.onPrompt(prompt, hint), onAnswer),
         end: (winner) => this.previewPrompt(() => this.endDialog(winner, () => this.answer({ type: OcgResponseType.SELECT_YESNO, yes: true }))),
-        graveyard: (codes, banished) => this.previewPrompt(() => this.browsePile(codes.map((code) => ({ code }) as CardView), banished.map((code) => ({ code }) as CardView))),
+        graveyard: (side, codes, banished) => this.previewPrompt(() => this.browsePile(side, codes.map((code) => ({ code }) as CardView), banished.map((code) => ({ code }) as CardView))),
       });
     }
   }
@@ -533,7 +535,7 @@ export class DuelScene extends Phaser.Scene {
         sp.on("pointerover", () => this.showInfo(top.code));
         sp.on("pointerout", () => this.hoverEnd());
       }
-      if (contents) sp.on("pointerup", () => this.browsePile(contents, banished));
+      if (contents) sp.on("pointerup", () => this.browsePile(side, contents, banished));
       this.board.add([sp, this.badge(x + 19, y - 28, String(count), 1)]);
     }
     // Banished cards have no zone in this layout: a badge under the Graveyard, listed when browsing it.
@@ -584,11 +586,12 @@ export class DuelScene extends Phaser.Scene {
     return sp;
   }
 
-  private browsePile(contents: CardView[], banished: CardView[]) {
+  private browsePile(side: 0 | 1, contents: CardView[], banished: CardView[]) {
     if (this.modal.isOpen || !contents.length && !banished.length) return;
     const pending = this.controller.waitingForHuman;
+    const owner = side === 0 ? "Your" : "Opponent's";
     this.modal.picker({
-      title: banished.length ? "Graveyard (newest first), then banished" : "Graveyard (newest first)",
+      title: `${owner} Graveyard (newest first)${banished.length ? ", then banished" : ""}`,
       // No names (they're on the cards); only banished cards get a caption, to tell them apart.
       cards: [
         ...contents.map((c) => ({ code: c.code, locked: true, caption: "" })),
@@ -607,12 +610,14 @@ export class DuelScene extends Phaser.Scene {
 
   /**
    * Dev (`&dialogs`): shows a prompt UI with sample data. Its answer is logged instead of sent to the
-   * engine (see `answer`), then the real pending prompt, if any, is set up again.
+   * engine (see `answer`), then handed to `onAnswer` if given (which may show a follow-up preview and
+   * return true); otherwise, or when it returns false, the real pending prompt is set up again.
    */
-  private previewPrompt(show: () => void) {
+  private previewPrompt(show: () => void, onAnswer?: (response: OcgResponse) => boolean) {
     this.modal.close();
     this.clearInteraction();
     this.previewing = true;
+    this.previewAnswer = onAnswer ?? null;
     show();
   }
 
@@ -621,6 +626,9 @@ export class DuelScene extends Phaser.Scene {
       this.previewing = false;
       this.log(`(preview) answer: ${JSON.stringify(response, (_k, v) => (typeof v === "bigint" ? String(v) : v))}`);
       this.clearInteraction();
+      const next = this.previewAnswer;
+      this.previewAnswer = null;
+      if (next?.(response)) return;
       const pending = this.controller.waitingForHuman;
       if (pending) this.onPrompt(pending, this.lastHint);
       return;
@@ -780,33 +788,51 @@ export class DuelScene extends Phaser.Scene {
         });
         return;
       case OcgMessageType.SELECT_UNSELECT_CARD: {
-        const cards: PickerCard[] = [
-          ...m.select_cards.map((c) => ({ code: c.code, caption: locationName(c.location, c.controller) })),
-          ...m.unselect_cards.map((c) => ({ code: c.code, caption: "CHOSEN", selected: true })),
-        ];
-        const buttons = [];
-        if (m.can_finish) buttons.push({ label: "Finish", onClick: () => this.answer({ type: OcgResponseType.SELECT_UNSELECT_CARD, index: null }) });
-        else if (m.can_cancel) buttons.push({ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_UNSELECT_CARD, index: null }) });
+        // The engine asks one card at a time and lists the chosen ones separately. Show all of them in
+        // board order so a card stays put when picked (it just rises, captioned CHOSEN); `index` counts
+        // select_cards first, then unselect_cards.
+        const entries = [
+          ...m.select_cards.map((c, index) => ({ c, index, chosen: false })),
+          ...m.unselect_cards.map((c, index) => ({ c, index: m.select_cards.length + index, chosen: true })),
+        ].sort((a, b) => a.c.controller - b.c.controller || a.c.location - b.c.location || a.c.sequence - b.c.sequence);
+        const chosen = m.unselect_cards.length;
+        const done = { type: OcgResponseType.SELECT_UNSELECT_CARD, index: null } as const;
+        // FINISH and CANCEL send the same answer: FINISH once enough are chosen, CANCEL before that if
+        // allowed, else a faded FINISH that only shows the count.
+        const button = m.can_finish || !m.can_cancel
+          ? { label: `Finish ${chosen}/${m.max}`, enabled: m.can_finish, onClick: () => this.answer(done) }
+          : { label: "Cancel", onClick: () => this.answer(done) };
         this.modal.picker({
-          title: title(`Select ${range(m.min, m.max)} card(s)`), cards, mode: "single", buttons,
-          onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_UNSELECT_CARD, index: i }),
+          title: title(`Select ${range(m.min, m.max)} card(s)`),
+          cards: entries.map((e) => ({ code: e.c.code, caption: e.chosen ? "CHOSEN" : locationName(e.c.location, e.c.controller), selected: e.chosen })),
+          mode: "single",
+          buttons: [button],
+          onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_UNSELECT_CARD, index: entries[i].index }),
           onHover: (code) => this.showInfo(code),
           onHoverEnd: () => this.hoverEnd(),
         });
         return;
       }
       case OcgMessageType.SELECT_SUM: {
+        // Picker indexes: the "must" cards first (locked, always counted), then the optional ones.
         const must = m.selects_must.map((c) => c.amount);
+        const value = (amount: number) => amount & 0xffff; // low half; the high half is an alternative value
+        const caption = (amount: number) => `VALUE ${value(amount)}`;
         this.modal.picker({
           title: title(`Select cards with a total of ${m.amount}`),
           cards: [
-            ...m.selects_must.map((c) => ({ code: c.code, locked: true })),
-            ...m.selects.map((c) => ({ code: c.code, caption: `VALUE ${c.amount & 0xffff}` })),
+            ...m.selects_must.map((c) => ({ code: c.code, locked: true, caption: caption(c.amount) })),
+            ...m.selects.map((c) => ({ code: c.code, caption: caption(c.amount) })),
           ],
           mode: "multi",
           isValid: (sel) => {
             const chosen = sel.filter((i) => i >= must.length).map((i) => m.selects[i - must.length].amount);
             return chosen.length >= m.min && chosen.length <= m.max && sumMatches([...must, ...chosen], m.amount, m.select_max !== 0);
+          },
+          // CONFIRM shows the running total against the target ("CONFIRM 6/8").
+          counter: {
+            value: (sel) => sel.reduce((n, i) => n + value(i < must.length ? must[i] : m.selects[i - must.length].amount), 0),
+            of: m.amount,
           },
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_SUM, indicies: sel.filter((i) => i >= must.length).map((i) => i - must.length) }),
           onHover: (code) => this.showInfo(code),

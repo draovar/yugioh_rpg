@@ -43,8 +43,11 @@ export interface PickerOptions {
   isValid?: (selected: number[]) => boolean;
   /** Multi mode: how many cards may be picked, shown as a counter on CONFIRM ("CONFIRM 1/2"). */
   max?: number;
+  /** Multi mode: a different CONFIRM counter instead of picked/max, e.g. a running sum: `CONFIRM ${value}/${of}`. */
+  counter?: { value: (selected: number[]) => number; of: number };
   onConfirm: (selected: number[]) => void;
-  buttons?: { label: string; onClick: () => void }[];
+  /** Extra buttons after CONFIRM; `enabled: false` shows one faded and inert. */
+  buttons?: { label: string; onClick: () => void; enabled?: boolean }[];
   onHover?: (code: number) => void;
   onHoverEnd?: () => void;
 }
@@ -140,14 +143,15 @@ export class Modal {
       const cardsH = rows * pitchY - (pitchY - rowH);
 
       const titleW = measure(s, FONT_UI, opts.title.toUpperCase()) + 1;
-      const buttons: { label: string; onClick: () => void; confirm?: boolean; narrow?: boolean }[] = [];
+      const buttons: { label: string; onClick: () => void; confirm?: boolean; narrow?: boolean; enabled?: boolean }[] = [];
       if (pages > 1) buttons.push({ label: "<", narrow: true, onClick: () => render((page + pages - 1) % pages) });
       if (opts.mode === "multi") buttons.push({ label: "Confirm", confirm: true, onClick: () => { this.close(); opts.onConfirm(confirmed()); } });
-      for (const b of opts.buttons ?? []) buttons.push({ label: b.label, onClick: () => { this.close(); b.onClick(); } });
+      for (const b of opts.buttons ?? []) buttons.push({ label: b.label, enabled: b.enabled, onClick: () => { this.close(); b.onClick(); } });
       if (pages > 1) buttons.push({ label: ">", narrow: true, onClick: () => render((page + 1) % pages) });
-      const confirmLabel = () => (opts.max ? `Confirm ${selected.size}/${opts.max}` : "Confirm");
+      const count = opts.counter ?? (opts.max ? { value: (sel: number[]) => sel.length, of: opts.max } : null);
+      const confirmLabel = () => (count ? `Confirm ${count.value(confirmed())}/${count.of}` : "Confirm");
       // Wide enough for the counter at its longest too.
-      const longest = (b: { label: string; confirm?: boolean }) => (b.confirm && opts.max ? `Confirm ${opts.max}/${opts.max}` : b.label);
+      const longest = (b: { label: string; confirm?: boolean }) => (b.confirm && count ? `Confirm ${count.of}/${count.of}` : b.label);
       const wideW = Math.max(44, ...buttons.filter((b) => !b.narrow).map((b) => measure(s, FONT_UI, longest(b).toUpperCase()) + 10));
       const btnW = (b: { narrow?: boolean }) => (b.narrow ? 16 : wideW);
       const buttonsW = buttons.reduce((n, b) => n + btnW(b) + BTN_GAP, -BTN_GAP);
@@ -217,6 +221,7 @@ export class Modal {
         for (const b of buttons) {
           const btn = makeListButton(s, bx, by, btnW(b), b.label, b.onClick);
           if (b.confirm) confirm = btn;
+          if (b.enabled === false) btn.setEnabled(false);
           root.add(btn);
           bx += btnW(b) + BTN_GAP;
         }
