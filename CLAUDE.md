@@ -90,8 +90,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   in `widgets.ts`, shared with the card menu). With a card: card (2x) left, text top-right wrapped to the button
   grid's width, buttons bottom-right; otherwise text over buttons. Boards are 240px wide (408 for 6+ cards).
 - Card choices (`pickCards` in DuelScene): SELECT_CARD / TRIBUTE / UNSELECT_CARD are picked on the board when
-  every candidate is a field/hand card (dark green 1px outline = choice, bright green 2px = picked; prompt and
-  CONFIRM/CANCEL in the field strip), else in the `Modal.picker` dialog.
+  every candidate is a field/hand card (dark green 1px outline = choice, bright green 2px = picked), else in the
+  `Modal.picker` dialog. The prompt text is centred in the field strip (`setPrompt`); CONFIRM / CANCEL / FINISH
+  sit stacked on a dark plate over your Extra Deck slot, with the n/max counter above them.
+- Zone choice (`pickPlaces`): free zones in semi-transparent yellow, more opaque on hover / once picked.
 
 ## Engine facts worth knowing
 
