@@ -22,6 +22,8 @@ import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
 import { CARD, DIVIDER, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, pileCenters, slotXY, zoneCenters, type Slot } from "../ui/duel/layout.ts";
 import { INK, INK_SOFT, PAPER, WHITE, border, text } from "../ui/pixel.ts";
 import { makeButton } from "../ui/widgets.ts";
+import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
+import { PHASE_LOOK, TURN_TEXT, type PhaseState } from "../ui/duel/phaseThemes.ts";
 
 export interface DuelSceneData {
   playerDeck?: Deck;
@@ -45,19 +47,19 @@ const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
 
 /** Phase column boxes, top to bottom, with the engine phase bits each one covers. */
 const PHASES = [
-  { label: "DRAW P.", bits: 0x1 },
-  { label: "STAND", bits: 0x2 },
+  { label: "DRAW", bits: 0x1 },
+  { label: "STANDBY", bits: 0x2 },
   { label: "MAIN 1", bits: 0x4 },
   { label: "BATTLE", bits: 0x8 | 0x10 | 0x20 | 0x40 | 0x80 },
   { label: "MAIN 2", bits: 0x100 },
-  { label: "END P.", bits: 0x200 },
+  { label: "END", bits: 0x200 },
 ] as const;
 type PhaseAction = "bp" | "m2" | "ep";
 const PHASE_ACTION: Partial<Record<number, PhaseAction>> = { 3: "bp", 4: "m2", 5: "ep" };
 
-const PHASE_BOX = 0xd3a64a, PHASE_MINE = 0x1d6da0, PHASE_THEIRS = 0xa02020;
 const ZONE_CENTER = 0xa29e9e, ZONE_ARM = 0xb7b5b5;
-const LP_BORDER = 0x11068c, LP_FILL = 0x1d6da0;
+/** Info panel geometry: LP bars hug the top/bottom edges, panel content fits between them. */
+const LP_Y = { opp: 3, mine: 360 - 3 - LP_BAR.h };
 
 export class DuelScene extends Phaser.Scene {
   private engine!: Engine;
@@ -84,7 +86,7 @@ export class DuelScene extends Phaser.Scene {
   private infoTimer: Phaser.Time.TimerEvent | null = null;
   private logText!: Phaser.GameObjects.BitmapText;
   private logLines: string[] = [];
-  private lpBars!: [Phaser.GameObjects.Container, Phaser.GameObjects.Container];
+  private lpBars!: [LPBar, LPBar];
   private phaseGfx!: Phaser.GameObjects.Container;
   private promptBand!: Phaser.GameObjects.Container;
 
@@ -186,21 +188,27 @@ export class DuelScene extends Phaser.Scene {
     this.phaseGfx.removeAll(true);
     PHASES.forEach((p, i) => {
       const x = PHASE_COL.x, y = PHASE_COL.top + i * PHASE_COL.pitch;
-      const current = (this.phase & p.bits) !== 0;
       const action = PHASE_ACTION[i];
       const clickable = !!action && this.phaseActions.has(action);
-      const g = this.add.graphics();
-      g.fillStyle(current ? (this.turnPlayer === HUMAN ? PHASE_MINE : PHASE_THEIRS) : PHASE_BOX).fillRect(x, y, PHASE_COL.w, PHASE_COL.h);
-      if (clickable) border(g, x - 1, y - 1, PHASE_COL.w + 2, PHASE_COL.h + 2, 0xffd400, 2);
-      this.phaseGfx.add(g);
-      // Letters stacked vertically, centred in the box.
+      const state: PhaseState = (this.phase & p.bits) !== 0 ? "current" : clickable ? "clickable" : "idle";
+      const look = PHASE_LOOK[state];
+      const box = this.add.nineslice(x, y, `ui-phase-${state}`, undefined, PHASE_COL.w, PHASE_COL.h, ...look.slice).setOrigin(0);
+      this.phaseGfx.add(box);
+      // Letters stacked vertically, centred on the button face.
+      const color = state === "current" ? (this.turnPlayer === HUMAN ? TURN_TEXT.mine : TURN_TEXT.theirs) : look.text;
       const letters = [...p.label];
-      const top = y + Math.floor((PHASE_COL.h - letters.length * 6 + 1) / 2);
-      letters.forEach((ch, j) => {
-        if (ch !== " ") this.phaseGfx.add(text(this, x + PHASE_COL.w / 2, top + j * 6, ch, { color: current ? WHITE : INK, originX: 0.5 }));
-      });
+      const top = y + Math.floor((PHASE_COL.h - letters.length * 6 + 1) / 2) + look.textDy;
+      const glyphs = letters.flatMap((ch, j) => (ch === " " ? [] : [text(this, x + PHASE_COL.w / 2, top + j * 6, ch, { color, originX: 0.5 })]));
+      this.phaseGfx.add(glyphs);
       if (clickable) {
+        // Press feedback: swap to the pressed frame while the pointer is down.
+        const pressed = PHASE_LOOK.idle;
         const hit = this.add.zone(x, y, PHASE_COL.w, PHASE_COL.h).setOrigin(0).setInteractive({ useHandCursor: true });
+        hit.on("pointerdown", () => {
+          box.setTexture("ui-phase-idle").setSlices(PHASE_COL.w, PHASE_COL.h, ...pressed.slice);
+          for (const g of glyphs) g.y += pressed.textDy - look.textDy;
+        });
+        hit.on("pointerout", () => this.drawPhaseColumn());
         hit.on("pointerup", () => { const r = this.phaseActions.get(action!); if (r) this.answer(r); });
         this.phaseGfx.add(hit);
       }
@@ -222,13 +230,14 @@ export class DuelScene extends Phaser.Scene {
   // ---------------------------------------------------------------- info panel, log, LP
 
   private createInfoPanel() {
-    this.lpBars = [this.add.container(8, 347), this.add.container(8, 4)];
-    this.drawLPBar(0, this.startLP);
-    this.drawLPBar(1, this.startLP);
+    this.lpBars = [
+      new LPBar(this, 6, LP_Y.mine, "You", this.startLP).set(this.startLP),
+      new LPBar(this, 6, LP_Y.opp, this.sceneData.opponentName ?? "Opponent", this.startLP).set(this.startLP),
+    ];
     this.infoPanel = this.add.container(0, 0);
-    this.logText = text(this, 8, 26, "", { color: INK, maxWidth: INFO.w - 14 });
+    this.logText = text(this, 8, 32, "", { color: INK, maxWidth: INFO.w - 14 });
     const speeds = [1, 2, 4];
-    const toggle = makeButton(this, 196, 337, 40, 9, `ANIM ${this.animator.speed}X`, () => {
+    const toggle = makeButton(this, 194, LP_Y.mine - 8, 40, 9, `ANIM ${this.animator.speed}X`, () => {
       this.animator.speed = speeds[(speeds.indexOf(this.animator.speed) + 1) % speeds.length];
       toggle.setLabel(`ANIM ${this.animator.speed}X`);
       try { localStorage.setItem("duel.animSpeed", String(this.animator.speed)); } catch { /* storage unavailable */ }
@@ -287,7 +296,7 @@ export class DuelScene extends Phaser.Scene {
     this.infoCode = 0;
     this.infoPanel.removeAll(true);
     this.logText.setVisible(true);
-    this.infoPanel.add(text(this, 8, 17, "DUEL LOG", { color: INK_SOFT }));
+    this.infoPanel.add(text(this, 8, 23, "DUEL LOG", { color: INK_SOFT }));
     this.renderLog();
   }
 
@@ -301,18 +310,8 @@ export class DuelScene extends Phaser.Scene {
     // Show as many recent lines as fit above the speed button.
     for (let n = Math.min(this.logLines.length, 45); n >= 0; n--) {
       this.logText.setText(this.logLines.slice(this.logLines.length - n).join("\n"));
-      if (this.logText.height <= 304) break;
+      if (this.logText.height <= LP_Y.mine - 14 - this.logText.y) break;
     }
-  }
-
-  private drawLPBar(i: 0 | 1, lp: number) {
-    const c = this.lpBars[i].removeAll(true);
-    const g = this.add.graphics();
-    border(g, 0, 0, 208, 9, LP_BORDER);
-    g.fillStyle(0xffffff).fillRect(1, 1, 206, 7);
-    g.fillStyle(LP_FILL).fillRect(1, 1, Math.round(206 * Math.min(1, Math.max(0, lp) / this.startLP)), 7);
-    const name = i === 0 ? "YOU" : (this.sceneData.opponentName ?? "OPPONENT").toUpperCase();
-    c.add([g, text(this, 3, 2, String(Math.round(lp)), { color: INK }), text(this, 205, 2, name, { color: INK, originX: 1 })]);
   }
 
   // ---------------------------------------------------------------- engine events
@@ -343,14 +342,14 @@ export class DuelScene extends Phaser.Scene {
     return new Promise((resolve) => {
       this.tweens.addCounter({
         from, to, duration: 450 / this.animator.speed,
-        onUpdate: (t) => this.drawLPBar(i, t.getValue() ?? to),
+        onUpdate: (t) => this.lpBars[i].set(t.getValue() ?? to),
         onComplete: () => resolve(),
       });
     });
   }
 
   private floatLP(i: 0 | 1, label: string, color: number) {
-    const y = i === 0 ? 334 : 16;
+    const y = i === 0 ? LP_Y.mine - 14 : LP_Y.opp + LP_BAR.h + 3;
     const f = text(this, 110, y, label, { color, scale: 2, originX: 0.5 }).setDepth(500);
     this.tweens.add({ targets: f, y: y + (i === 0 ? -24 : 24), alpha: 0, duration: 1200, onComplete: () => f.destroy() });
   }
@@ -372,7 +371,7 @@ export class DuelScene extends Phaser.Scene {
       const s = side as 0 | 1;
       this.handCount[s] = p.hand.length;
       this.lpValue[s] = p.lp;
-      this.drawLPBar(s, p.lp);
+      this.lpBars[s].set(p.lp);
       p.monsters.forEach((c, seq) => c && this.placeCard(c, slotXY(s, { kind: "mzone", seq })));
       p.spells.forEach((c, seq) => c && this.placeCard(c, slotXY(s, { kind: "szone", seq })));
       this.drawPile(s, { kind: "deck" }, p.deckCount, null);

@@ -12,3 +12,5 @@ _launcher_backup/
 public/assets/tilesets/Modern_Exteriors_*
 # Card images from YGOPRODeck — re-fetch with `npm run fetch-art`
 public/cards/
+# Third-party asset packs (sources for tools/import-ui.mjs); only the sprites we use are copied to public/
+assets/

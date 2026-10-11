@@ -19,6 +19,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` (gitignored) |
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
+| `node tools/import-ui.mjs` | copy + trim the UI sprites we use from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession`; fails on RETRY/crash |
 
@@ -91,6 +92,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Verify engine changes with `npm run smoke`, and UI changes in the browser preview.
 
 ## Licensing
+
+See `CREDITS.md` — keep it up to date when adding third-party assets. The Crusenho UI pack is CC BY 4.0
+(attribution required in the game's credits).
 
 ocgcore and CardScripts are **AGPL-3.0**, so a distributed build of this game must be AGPL-3.0 with source available.
 Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e.g. LimeZu Modern Exteriors in
