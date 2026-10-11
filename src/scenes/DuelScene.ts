@@ -751,6 +751,7 @@ export class DuelScene extends Phaser.Scene {
           cards: m.selects.map((c) => ({ code: c.code, caption: locationName(c.location, c.controller) })),
           mode: m.min === 1 && m.max === 1 ? "single" : "multi",
           isValid: (sel) => sel.length >= m.min && sel.length <= m.max,
+          max: m.max,
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_CARD, indicies: sel }),
           buttons: m.can_cancel ? [{ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_CARD, indicies: null }) }] : [],
           onHover: (code) => this.showInfo(code),
@@ -760,13 +761,18 @@ export class DuelScene extends Phaser.Scene {
       case OcgMessageType.SELECT_TRIBUTE:
         this.modal.picker({
           title: title("Select monster(s) to Tribute"),
-          cards: m.selects.map((c) => ({ code: c.code, caption: locationName(c.location, c.controller) })),
+          // Tributes are normally your own field monsters: caption only the unusual ones (hand, opponent's).
+          cards: m.selects.map((c) => ({
+            code: c.code,
+            caption: c.controller === HUMAN && c.location === OcgLocation.MZONE ? "" : locationName(c.location, c.controller),
+          })),
           mode: "multi",
           // release_param: how many tributes this card counts as (Double Tribute monsters count 2).
           isValid: (sel) => {
             const worth = sel.reduce((n, i) => n + (m.selects[i].release_param || 1), 0);
             return worth >= m.min && sel.length <= m.max && sel.length > 0;
           },
+          max: m.max,
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_TRIBUTE, indicies: sel }),
           buttons: m.can_cancel ? [{ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_TRIBUTE, indicies: null }) }] : [],
           onHover: (code) => this.showInfo(code),

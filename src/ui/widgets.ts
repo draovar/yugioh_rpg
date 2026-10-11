@@ -75,8 +75,8 @@ export const LIST_BUTTON_H = 11;
 const LIST_SLICE = 2;
 const LIST_INK = { normal: 0x2a1408, hover: 0xf2c096 };
 
-/** A list-row button's parts (frame, label, hit zone), to add to a container, plus an enabled toggle. */
-export type ListButton = Phaser.GameObjects.GameObject[] & { setEnabled(on: boolean): void };
+/** A list-row button's parts (frame, label, hit zone), to add to a container, plus enabled/label setters. */
+export type ListButton = Phaser.GameObjects.GameObject[] & { setEnabled(on: boolean): void; setLabel(label: string): void };
 
 /**
  * A list-row button, top-left at (x, y), 11px tall: darker on hover, fires on release. Returns its parts
@@ -103,6 +103,9 @@ export function makeListButton(
       box.setAlpha(on ? 1 : 0.5);
       t.setAlpha(on ? 1 : 0.5);
       if (hit.input) hit.input.cursor = on ? "pointer" : "default";
+    },
+    setLabel(s: string) {
+      t.setText(s.toUpperCase()).setX(Math.round(x + w / 2 - t.width / 2));
     },
   });
 }

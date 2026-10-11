@@ -41,6 +41,8 @@ export interface PickerOptions {
   /** "multi": toggle cards, then Confirm (enabled while `isValid` holds). "single": first click resolves. */
   mode: "multi" | "single";
   isValid?: (selected: number[]) => boolean;
+  /** Multi mode: how many cards may be picked, shown as a counter on CONFIRM ("CONFIRM 1/2"). */
+  max?: number;
   onConfirm: (selected: number[]) => void;
   buttons?: { label: string; onClick: () => void }[];
   onHover?: (code: number) => void;
@@ -143,7 +145,10 @@ export class Modal {
       if (opts.mode === "multi") buttons.push({ label: "Confirm", confirm: true, onClick: () => { this.close(); opts.onConfirm(confirmed()); } });
       for (const b of opts.buttons ?? []) buttons.push({ label: b.label, onClick: () => { this.close(); b.onClick(); } });
       if (pages > 1) buttons.push({ label: ">", narrow: true, onClick: () => render((page + 1) % pages) });
-      const wideW = Math.max(44, ...buttons.filter((b) => !b.narrow).map((b) => measure(s, FONT_UI, b.label.toUpperCase()) + 10));
+      const confirmLabel = () => (opts.max ? `Confirm ${selected.size}/${opts.max}` : "Confirm");
+      // Wide enough for the counter at its longest too.
+      const longest = (b: { label: string; confirm?: boolean }) => (b.confirm && opts.max ? `Confirm ${opts.max}/${opts.max}` : b.label);
+      const wideW = Math.max(44, ...buttons.filter((b) => !b.narrow).map((b) => measure(s, FONT_UI, longest(b).toUpperCase()) + 10));
       const btnW = (b: { narrow?: boolean }) => (b.narrow ? 16 : wideW);
       const buttonsW = buttons.reduce((n, b) => n + btnW(b) + BTN_GAP, -BTN_GAP);
 
@@ -170,6 +175,7 @@ export class Modal {
       const refresh = () => {
         for (const i of sprites.keys()) place(i);
         confirm?.setEnabled(opts.isValid ? opts.isValid(confirmed()) : true);
+        confirm?.setLabel(confirmLabel());
       };
       const cardsTop = top + rim + pad + title.height + 3 + SELECTED_LIFT;
       shown.forEach((c, j) => {
@@ -192,7 +198,10 @@ export class Modal {
         sp.on("pointerup", () => {
           if (c.locked) return;
           if (opts.mode === "single") { this.close(); opts.onConfirm([i]); return; }
-          if (selected.has(i)) selected.delete(i); else selected.add(i);
+          if (selected.has(i)) selected.delete(i);
+          else if (!opts.max || selected.size < opts.max) selected.add(i);
+          else if (opts.max === 1) { selected.clear(); selected.add(i); } // swap the one pick
+          else return; // full: unpick one first
           refresh();
         });
         sprites.set(i, sp);
