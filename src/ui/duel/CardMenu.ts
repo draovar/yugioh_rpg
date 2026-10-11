@@ -2,24 +2,21 @@
 // its actions (SUMMON, SET, USE...) and BACK as list-row buttons (FrameList09a, FrameList09c on hover),
 // from Crusenho's Complete UI Essential Pack (CC BY 4.0). Closing flips the card face-up again.
 import Phaser from "phaser";
-import { text } from "../pixel.ts";
+import { LIST_BUTTON_H, LIST_BUTTON_TEXTURES, makeListButton } from "../widgets.ts";
 import type { CardSprite } from "./CardSprite.ts";
 import { CARD } from "./layout.ts";
 
-export const MENU_TEXTURES = ["menu-back", "menu-button", "menu-button-hover"];
+export const MENU_TEXTURES = ["menu-back", ...LIST_BUTTON_TEXTURES];
 
 /** Frame01a: 3px rim with 3x3 corners. */
 const BACK_SLICE = 3;
 /**
- * FrameList09a/c, 64x11: 1px outline with 2px corners. Buttons sit inside the frame's rim (x 3-34), leaving
- * a 30px face for the label; four (11px + 1px gap) fit in the frame's 50px interior.
+ * List-row buttons sit inside the frame's rim (x 3-34), leaving a 30px face for the label; four (11px + 1px
+ * gap) fit in the frame's 50px interior.
  */
-const BTN_SLICE = 2;
 const BTN_W = CARD.w - 2 * BACK_SLICE;
-const BTN_H = 11;
+const BTN_H = LIST_BUTTON_H;
 const GAP = 1;
-const TEXT_Y = 3;
-const INK = { normal: 0x2a1408, hover: 0xf2c096 };
 /** Half of each flip (squash to the centre line, open from it). */
 const FLIP_MS = 50;
 
@@ -42,7 +39,7 @@ export class CardMenu extends Phaser.GameObjects.Container {
     // The card's actions, then BACK, centred on the card.
     const all = [...actions, { label: "Back", onClick: () => this.close() }];
     const top = Math.round(-(all.length * (BTN_H + GAP) - GAP) / 2);
-    all.forEach((a, i) => this.addButton(-BTN_W / 2, top + i * (BTN_H + GAP), a));
+    all.forEach((a, i) => this.add(makeListButton(scene, -BTN_W / 2, top + i * (BTN_H + GAP), BTN_W, a.label, a.onClick)));
     this.setDepth(900);
     scene.add.existing(this);
 
@@ -57,20 +54,6 @@ export class CardMenu extends Phaser.GameObjects.Container {
         scene.tweens.add({ targets: this, scaleX: 1, duration: FLIP_MS });
       },
     });
-  }
-
-  private addButton(x: number, y: number, a: MenuAction) {
-    const box = this.scene.add.nineslice(x, y, "ui-menu-button", undefined, BTN_W, BTN_H, BTN_SLICE, BTN_SLICE, BTN_SLICE, BTN_SLICE).setOrigin(0);
-    const t = text(this.scene, x + BTN_W / 2, y + TEXT_Y, a.label.toUpperCase(), { color: INK.normal, originX: 0.5 });
-    const hover = (on: boolean) => {
-      box.setTexture(on ? "ui-menu-button-hover" : "ui-menu-button").setSlices(BTN_W, BTN_H, BTN_SLICE, BTN_SLICE, BTN_SLICE, BTN_SLICE);
-      t.setTint(on ? INK.hover : INK.normal);
-    };
-    const hit = this.scene.add.zone(x, y, BTN_W, BTN_H).setOrigin(0).setInteractive({ useHandCursor: true });
-    hit.on("pointerover", () => hover(true));
-    hit.on("pointerout", () => hover(false));
-    hit.on("pointerup", () => a.onClick());
-    this.add([box, t, hit]);
   }
 
   /**

@@ -24,6 +24,7 @@ import { CARD, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, pileCenters, slotXY
 import { INK, INK_SOFT, PAPER, WHITE, border, text } from "../ui/pixel.ts";
 import { makeButton, makeWoodButton, type WoodButton } from "../ui/widgets.ts";
 import { installAnimPreview } from "./animPreview.ts";
+import { installDialogPreview } from "./dialogPreview.ts";
 import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
 import { PANEL } from "../ui/duel/panelStyles.ts";
 import { PHASE_LOOK, TURN_TEXT, type PhaseState } from "../ui/duel/phaseThemes.ts";
@@ -97,6 +98,10 @@ export class DuelScene extends Phaser.Scene {
   private menu: CardMenu | null = null;
   private placeTargets: Phaser.GameObjects.GameObject[] = [];
   private snapshot: FieldSnapshot | null = null;
+  /** Hint that came with the pending prompt, to set it up again after a dev preview. */
+  private lastHint: bigint | null = null;
+  /** A dev preview prompt is showing: its answer must not reach the engine. */
+  private previewing = false;
   private animator!: DuelAnimator;
   private handCount: [number, number] = [0, 0];
   private lpValue: [number, number] = [8000, 8000];
@@ -193,7 +198,11 @@ export class DuelScene extends Phaser.Scene {
       schedule: (ms, fn) => this.time.delayedCall(ms, fn),
       events: {
         onUpdate: (messages, snapshot) => this.onUpdate(messages, snapshot),
-        onPrompt: (prompt, hint) => this.onPrompt(prompt, hint),
+        onPrompt: (prompt, hint) => {
+          this.previewing = false; // a real prompt replaces any dev preview
+          this.lastHint = hint;
+          this.onPrompt(prompt, hint);
+        },
         onEnd: (winner) => this.onEnd(winner),
       },
     });
@@ -207,6 +216,16 @@ export class DuelScene extends Phaser.Scene {
     // Dev: `&anims` adds a dropdown to replay single animations (see animPreview.ts).
     if (import.meta.env.DEV && new URLSearchParams(location.search).has("anims")) {
       installAnimPreview({ scene: this, animator: this.animator, snapshot: () => this.snapshot, renderBoard: (snap) => this.renderBoard(snap) });
+    }
+    // Dev: `&dialogs` adds a dropdown to open every prompt UI with sample cards (see dialogPreview.ts).
+    if (import.meta.env.DEV && new URLSearchParams(location.search).has("dialogs")) {
+      installDialogPreview({
+        scene: this,
+        snapshot: () => this.snapshot,
+        prompt: (prompt, hint) => this.previewPrompt(() => this.onPrompt(prompt, hint)),
+        end: (winner) => this.previewPrompt(() => this.endDialog(winner, () => this.answer({ type: OcgResponseType.SELECT_YESNO, yes: true }))),
+        graveyard: (codes, banished) => this.previewPrompt(() => this.browsePile(codes.map((code) => ({ code }) as CardView), banished.map((code) => ({ code }) as CardView))),
+      });
     }
   }
 
@@ -471,9 +490,12 @@ export class DuelScene extends Phaser.Scene {
 
   private onEnd(winner: number | null) {
     this.clearInteraction();
-    const won = winner === HUMAN;
-    this.modal.dialog(won ? "YOU WIN THE DUEL!" : winner === AI ? "YOU LOST THE DUEL..." : "THE DUEL ENDED IN A DRAW.", [
-      { label: "CONTINUE", onClick: () => this.scene.start(this.sceneData.returnScene ?? "Overworld", { duelResult: { won } }) },
+    this.endDialog(winner, () => this.scene.start(this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === HUMAN } }));
+  }
+
+  private endDialog(winner: number | null, onContinue: () => void) {
+    this.modal.dialog(winner === HUMAN ? "YOU WIN THE DUEL!" : winner === AI ? "YOU LOST THE DUEL..." : "THE DUEL ENDED IN A DRAW.", [
+      { label: "CONTINUE", onClick: onContinue },
     ]);
   }
 
@@ -570,7 +592,8 @@ export class DuelScene extends Phaser.Scene {
       cards: [...contents, ...[...banished].reverse()].map((c) => ({ code: c.code, locked: true })),
       mode: "single",
       onConfirm: () => {},
-      buttons: [{ label: "Close", onClick: () => pending && this.onPrompt(pending, null, true) }],
+      // Closing sets the pending prompt up again (and ends a dev preview of this browser).
+      buttons: [{ label: "Close", onClick: () => { this.previewing = false; if (pending) this.onPrompt(pending, this.lastHint); } }],
       onHover: (code) => this.showInfo(code),
       onHoverEnd: () => this.hoverEnd(),
     });
@@ -578,7 +601,26 @@ export class DuelScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- prompts
 
+  /**
+   * Dev (`&dialogs`): shows a prompt UI with sample data. Its answer is logged instead of sent to the
+   * engine (see `answer`), then the real pending prompt, if any, is set up again.
+   */
+  private previewPrompt(show: () => void) {
+    this.modal.close();
+    this.clearInteraction();
+    this.previewing = true;
+    show();
+  }
+
   private answer(response: OcgResponse) {
+    if (this.previewing) {
+      this.previewing = false;
+      this.log(`(preview) answer: ${JSON.stringify(response, (_k, v) => (typeof v === "bigint" ? String(v) : v))}`);
+      this.clearInteraction();
+      const pending = this.controller.waitingForHuman;
+      if (pending) this.onPrompt(pending, this.lastHint);
+      return;
+    }
     if (!this.controller.waitingForHuman) return;
     this.clearInteraction();
     this.controller.answer(response);
@@ -623,11 +665,11 @@ export class DuelScene extends Phaser.Scene {
     }
   }
 
-  private onPrompt(m: HumanPrompt, hint: bigint | null, reopen = false) {
+  private onPrompt(m: HumanPrompt, hint: bigint | null) {
     const t = this.engine.text;
     const title = (fallback: string) => (hint ? t.describe(hint) : fallback);
     const name = (code: number) => t.name(code);
-    if (!reopen) this.clearInteraction();
+    this.clearInteraction();
 
     switch (m.type) {
       case OcgMessageType.SELECT_IDLECMD: {

@@ -27,6 +27,8 @@ Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run
 After changing `data/pool.json`, rerun `build-data`, `fetch-art`, `build-art`, then `smoke`.
 
 Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations (`src/scenes/animPreview.ts`);
+`&dialogs` adds one that opens every prompt UI with sample cards (`src/scenes/dialogPreview.ts`; answers are only
+logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`);
 `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
@@ -83,6 +85,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Card action menu (`CardMenu.ts`): clicking a card squash-flips it to a card-sized Frame01a with FrameList09a
   buttons (09c on hover) inside its rim, plus BACK. 11px buttons, 4 fit (3 actions + BACK); labels max 30px (SUMMON,
   SET, SP.SUM, USE, ATTACK, FLIP / TO ATK / TO DEF). The same squash flip turns set Spells/Traps face-up (`T.flip`).
+- Prompt dialogs (`Modal.dialog`): info-panel wood board, message as plain text, list-row buttons (`makeListButton`
+  in `widgets.ts`, shared with the card menu). With a card: card (2x) left, text top-right wrapped to the button
+  grid's width, buttons bottom-right; otherwise text over buttons. The board shrinks to fit its content.
 
 ## Engine facts worth knowing
 
@@ -120,8 +125,8 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ Animations for draws, moves, summons, flips, activations, attacks, LP and turn changes.
    ✅ 640x360 pixel-art duel screen from the layout sketch, custom frames, downscaled art, bitmap fonts.
    ✅ Animation review pass (#1-#12 reviewed with the user; `&anims` dropdown replays each).
-   Next: Runewood look for the remaining UI (action menu SUMMON/SET…, prompt dialogs, card pickers, turn
-   banner?) and a rework of the card action menus. Later: chain-link display, deck search UX, sound.
+   ✅ Runewood card action menu (on the card) and prompt dialogs.
+   Next: Runewood card pickers (and turn banner?). Later: chain-link display, deck search UX, sound.
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.

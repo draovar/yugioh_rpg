@@ -68,3 +68,29 @@ export function makeWoodButton(scene: Phaser.Scene, x: number, y: number, w: num
     setLabel: (s: string) => { t.setText(s).setX(Math.round(x + w / 2 - t.width / 2)); },
   };
 }
+
+/** Runewood list-row button textures (FrameList09a, 09c on hover), 64x11: 1px outline, 2px corners. */
+export const LIST_BUTTON_TEXTURES = ["menu-button", "menu-button-hover"];
+export const LIST_BUTTON_H = 11;
+const LIST_SLICE = 2;
+const LIST_INK = { normal: 0x2a1408, hover: 0xf2c096 };
+
+/**
+ * A list-row button, top-left at (x, y), 11px tall: darker on hover, fires on release. Returns its parts
+ * (frame, label, hit zone) for the caller to add to a container; the label needs w >= text width + 4.
+ */
+export function makeListButton(
+  scene: Phaser.Scene, x: number, y: number, w: number, label: string, onClick: () => void,
+): Phaser.GameObjects.GameObject[] {
+  const box = scene.add.nineslice(x, y, "ui-menu-button", undefined, w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE).setOrigin(0);
+  const t = text(scene, x + w / 2, y + 3, label.toUpperCase(), { color: LIST_INK.normal, originX: 0.5 });
+  const hover = (on: boolean) => {
+    box.setTexture(on ? "ui-menu-button-hover" : "ui-menu-button").setSlices(w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE);
+    t.setTint(on ? LIST_INK.hover : LIST_INK.normal);
+  };
+  const hit = scene.add.zone(x, y, w, LIST_BUTTON_H).setOrigin(0).setInteractive({ useHandCursor: true });
+  hit.on("pointerover", () => hover(true));
+  hit.on("pointerout", () => hover(false));
+  hit.on("pointerup", onClick);
+  return [box, t, hit];
+}
