@@ -35,7 +35,7 @@ picker dialog when a choice is in the Graveyard, Deck, etc. Try the board versio
 
 | # | Prompt | Shows | Style | How to see it | Tested |
 |---|---|---|---|---|---|
-| 8 | Chain (`SELECT_CHAIN`) | Cards you can chain (caption: effect name or location), "DON'T CHAIN" (unless forced) | Runewood | Have Mirror Force / Sakuretsu / Trap Hole / MST set when the opponent attacks or summons | [ ] |
+| 8 | Chain (`SELECT_CHAIN`) | Cards you can chain (caption: effect name, else location — none for S/T), "DON'T CHAIN" (unless forced) | Runewood | Have Mirror Force / Sakuretsu / Trap Hole / MST set when the opponent attacks or summons | [ ] |
 | 9 | Select card(s) (`SELECT_CARD`) | Cards with location captions, CONFIRM n/max (multi) / CANCEL | Runewood | Monster Reborn, MST, Change of Heart targets; Sangan search | [ ] |
 | 10 | Tribute (`SELECT_TRIBUTE`) | Your monsters (no captions), CONFIRM n/max / CANCEL | Runewood | Tribute Summon Summoned Skull / Dark Magician / Blue-Eyes | [ ] |
 | 11 | Select/unselect (`SELECT_UNSELECT_CARD`) | Cards in board order, picked ones raised + CHOSEN, FINISH n/max / CANCEL | Runewood | Some multi-target effects; none certain in this pool | [ ] |

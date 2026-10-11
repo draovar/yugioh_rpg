@@ -48,6 +48,9 @@ interface CardAction {
   response: OcgResponse;
 }
 
+/** Button plate on the Extra Deck slot: as wide as fits left of the Spell/Trap zones; light counter text. */
+const BUTTON_PLATE_W = 56;
+const PROMPT_COUNTER_INK = 0xf2c096;
 /** Free zones in a zone choice: yellow fill, more opaque on hover / once picked. */
 const ZONE_PICK = { color: 0xffd400, alpha: 0.3, hoverAlpha: 0.6 };
 const key = (controller: number, location: number, sequence: number) => `${controller}:${location}:${sequence}`;
@@ -133,6 +136,8 @@ export class DuelScene extends Phaser.Scene {
   private lpBars!: [LPBar, LPBar];
   private phaseGfx!: Phaser.GameObjects.Container;
   private promptBand!: Phaser.GameObjects.Container;
+  /** Counter line on the prompt's button plate ("1/2"), set by refreshFieldPick. */
+  private promptCounter: Phaser.GameObjects.BitmapText | null = null;
   /**
    * Card choice happening on the board (see `pickCards`): `keys[i]` is the sprite key of `opts.cards[i]`;
    * `confirm` is the strip's CONFIRM button in multi mode.
@@ -293,29 +298,37 @@ export class DuelScene extends Phaser.Scene {
   }
 
   /**
-   * The strip across the middle of the field: prompt text, and optional list-row buttons at its right end
-   * (returned in order, e.g. to update CONFIRM). A button is as wide as its label, min 44.
+   * The strip across the middle of the field with the prompt text, centred. Buttons (e.g. CONFIRM / CANCEL
+   * while choosing on the board) go on a small dark plate over your Extra Deck slot, stacked, under an
+   * optional counter line (`promptCounter`, e.g. "1/2"); they're returned in order, e.g. to update CONFIRM.
    */
-  private setPrompt(label: string | null, buttons: { label: string; onClick: () => void; enabled?: boolean }[] = []): ListButton[] {
+  private setPrompt(label: string | null, buttons: { label: string; onClick: () => void; enabled?: boolean }[] = [], counter = false): ListButton[] {
     this.promptBand.removeAll(true).setVisible(!!label);
+    this.promptCounter = null;
     if (!label) return [];
     const top = FIELD_CENTER.y - 6;
     this.promptBand.add(this.add.rectangle(FIELD.left, top, FIELD.right - FIELD.left, LIST_BUTTON_H, INK, 0.85).setOrigin(0));
-    const widths = buttons.map((b) => Math.max(44, measure(this, FONT_UI, b.label.toUpperCase()) + 10));
-    let x = FIELD.right - 2 - widths.reduce((n, w) => n + w + 2, -2);
-    const textRight = buttons.length ? x - 4 : FIELD.right;
-    const made = buttons.map((b, i) => {
-      const btn = makeListButton(this, x, top, widths[i], b.label, b.onClick);
+    this.promptBand.add(text(this, FIELD_CENTER.x, top + 3, label.toUpperCase(), { color: WHITE, originX: 0.5 }));
+    if (!buttons.length) return [];
+    // Plate: Frame01a (3px rim) + 2px padding around the buttons, 1px between them.
+    const { x: cx, y: cy } = slotXY(0, { kind: "extra" });
+    const rim = 3, pad = 2;
+    const w = BUTTON_PLATE_W, btnW = w - 2 * (rim + pad);
+    const counterH = counter ? 8 : 0; // 5px text + gap
+    const h = 2 * (rim + pad) + counterH + buttons.length * (LIST_BUTTON_H + 1) - 1;
+    const left = Math.round(cx - w / 2), plateTop = Math.round(cy - h / 2);
+    this.promptBand.add(this.add.nineslice(left, plateTop, "ui-menu-back", undefined, w, h, rim, rim, rim, rim).setOrigin(0));
+    if (counter) {
+      this.promptCounter = text(this, cx, plateTop + rim + pad + 1, "", { color: PROMPT_COUNTER_INK, originX: 0.5 });
+      this.promptBand.add(this.promptCounter);
+    }
+    const buttonsTop = plateTop + rim + pad + counterH;
+    return buttons.map((b, i) => {
+      const btn = makeListButton(this, left + rim + pad, buttonsTop + i * (LIST_BUTTON_H + 1), btnW, b.label, b.onClick);
       if (b.enabled === false) btn.setEnabled(false);
       this.promptBand.add(btn);
-      x += widths[i] + 2;
       return btn;
     });
-    // Centred on the field; only a text too long to clear the buttons is centred in the space left of them.
-    const t = text(this, FIELD_CENTER.x, top + 3, label.toUpperCase(), { color: WHITE, originX: 0.5 });
-    if (t.x + t.width > textRight) t.setX(Math.round((FIELD.left + textRight - t.width) / 2));
-    this.promptBand.add(t);
-    return made;
   }
 
   // ---------------------------------------------------------------- info panel, log, LP
@@ -728,11 +741,9 @@ export class DuelScene extends Phaser.Scene {
     const fp = (this.fieldPick = { keys, selected, opts, confirm: null as ListButton | null });
     const count = opts.counter ?? (opts.max ? { value: (sel: number[]) => sel.length, of: opts.max } : null);
     const buttons = [...(opts.buttons ?? [])];
-    // CONFIRM first, sized for its counter at the longest; refreshFieldPick sets the real label.
-    if (opts.mode === "multi") {
-      buttons.unshift({ label: count ? `Confirm ${count.of}/${count.of}` : "Confirm", onClick: () => opts.onConfirm([...selected].sort((a, b) => a - b)) });
-    }
-    const made = this.setPrompt(opts.title, buttons);
+    // CONFIRM first; its counter ("1/2") is a line above the buttons, kept up to date by refreshFieldPick.
+    if (opts.mode === "multi") buttons.unshift({ label: "Confirm", onClick: () => opts.onConfirm([...selected].sort((a, b) => a - b)) });
+    const made = this.setPrompt(opts.title, buttons, !!count && opts.mode === "multi");
     if (opts.mode === "multi") fp.confirm = made[0];
     this.refreshFieldPick();
   }
@@ -743,7 +754,11 @@ export class DuelScene extends Phaser.Scene {
     const sel = [...fp.selected].sort((a, b) => a - b);
     const count = fp.opts.counter ?? (fp.opts.max ? { value: (s: number[]) => s.length, of: fp.opts.max } : null);
     fp.confirm?.setEnabled(fp.opts.isValid ? fp.opts.isValid(sel) : true);
-    if (count) fp.confirm?.setLabel(`Confirm ${count.value(sel)}/${count.of}`);
+    const counter = this.promptCounter;
+    if (count && counter) {
+      counter.setText(`${count.value(sel)}/${count.of}`);
+      counter.setX(Math.round(slotXY(0, { kind: "extra" }).x - counter.width / 2)); // centred on the plate
+    }
     this.applyHighlights();
   }
 
@@ -805,10 +820,12 @@ export class DuelScene extends Phaser.Scene {
       case OcgMessageType.SELECT_CHAIN:
         this.modal.picker({
           title: m.forced ? "You must activate an effect" : "Chain an effect?",
-          // Caption: the effect's own name when it has one, else where the card is ("ACTIVATE" says nothing).
+          // Caption: the effect's own name when it has one, else where the card is (FIELD, HAND, GY...),
+          // except set Spells/Traps: S/T says nothing new. Never the generic "ACTIVATE".
           cards: m.selects.map((c) => {
             const effect = this.activateLabel(c.code, c.description);
-            return { code: c.code, caption: effect === "Activate" ? locationName(c.location, c.controller) : effect };
+            if (effect !== "Activate") return { code: c.code, caption: effect };
+            return { code: c.code, caption: c.location === OcgLocation.SZONE ? "" : locationName(c.location, c.controller) };
           }),
           mode: "single",
           onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: i }),
