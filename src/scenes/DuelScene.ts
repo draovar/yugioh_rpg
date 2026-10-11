@@ -109,6 +109,9 @@ export class DuelScene extends Phaser.Scene {
   /** "card": the panel keeps the last hovered card. "log": shows the log, cards only while hovered. */
   private panelMode: "card" | "log" = "card";
   private hoverTimer: Phaser.Time.TimerEvent | null = null;
+  /** Declared attack (sprite keys), outlined until the hit or until the attack ends. */
+  private attackMarks: [string | null, string | null] = [null, null];
+  private attackArrow: Phaser.GameObjects.Image | null = null;
   private nameScroll: { tween: Phaser.Tweens.Tween; mask: Phaser.GameObjects.Graphics } | null = null;
   private logText!: Phaser.GameObjects.BitmapText;
   private logLines: string[] = [];
@@ -136,6 +139,7 @@ export class DuelScene extends Phaser.Scene {
     this.infoCode = 0;
     this.lastCode = 0;
     this.panelMode = "card";
+    this.attackMarks = [null, null];
   }
 
   async create() {
@@ -154,6 +158,10 @@ export class DuelScene extends Phaser.Scene {
       setPhase: (phase) => { this.phase = phase; this.drawPhaseColumn(); },
       changeLP: (player, lp, delta) => this.changeLP(player, lp, delta),
       lp: (player) => this.lpValue[player === HUMAN ? 0 : 1],
+      markAttack: (attacker, target) => {
+        this.attackMarks = [attacker, target];
+        this.applyHighlights();
+      },
     });
     try {
       const saved = Number(localStorage.getItem("duel.animSpeed"));
@@ -591,12 +599,29 @@ export class DuelScene extends Phaser.Scene {
   }
 
   /**
+   * Red Runewood arrow (8x6) on the declared attacker's edge facing the opponent, pointing toward it:
+   * up on your monster's top edge, down on the opponent's bottom edge. It straddles the edge because the
+   * gap between the two monster rows (6px) can't fit it.
+   */
+  private drawAttackArrow(sp: CardSprite | undefined) {
+    this.attackArrow?.destroy();
+    this.attackArrow = null;
+    if (!sp) return;
+    const mine = sp.y > FIELD_CENTER.y;
+    const y = (mine ? sp.y - CARD.h / 2 : sp.y + CARD.h / 2) - 3;
+    this.attackArrow = this.add.image(sp.x - 4, y, mine ? "ui-attack-up" : "ui-attack-down").setOrigin(0).setDepth(50);
+    this.board.add(this.attackArrow);
+  }
+
+  /**
    * Playable cards aren't outlined; only the cursor tells them apart (hand cursor on cards with an
    * action, plain arrow elsewhere). `extra` can still mark cards explicitly.
    */
   private applyHighlights(extra?: Map<string, CardHighlight>) {
+    const [attacker, target] = this.attackMarks;
+    this.drawAttackArrow(attacker ? this.sprites.get(attacker) : undefined);
     for (const [k, sp] of this.sprites) {
-      sp.setHighlight(extra?.get(k) ?? "none");
+      sp.setHighlight(extra?.get(k) ?? (k === attacker ? "attacker" : k === target ? "attacked" : "none"));
       if (sp.input) sp.input.cursor = this.actions.has(k) ? "pointer" : "default";
     }
   }

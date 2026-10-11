@@ -26,6 +26,9 @@ const SPRITES = {
   // Info panel: light wood board with a thick rim, cream paper inset behind long text.
   "panel-frame": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame05b.png", false],
   "panel-paper": ["13_Runewood_Theme/Sprites/UI_Runewood_FrameBanner01a.png", false],
+  // Attack declaration arrows (red): up when you attack, down when the opponent attacks.
+  "attack-up": ["13_Runewood_Theme/SpritesColors/UI_Runewood_IconAlert03b.png", false],
+  "attack-down": ["13_Runewood_Theme/SpritesColors/UI_Runewood_IconAlert04b.png", false],
 };
 
 mkdirSync(OUT, { recursive: true });

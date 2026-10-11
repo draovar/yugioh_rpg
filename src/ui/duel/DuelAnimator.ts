@@ -25,6 +25,8 @@ export interface AnimHost {
   /** Animates the LP display of `player` to `lp`, with a floating `delta` label. */
   changeLP(player: number, lp: number, delta: number): Promise<void>;
   lp(player: number): number;
+  /** Marks the declared attack (1px outlines on attacker / target); keys or null to clear. */
+  markAttack(attacker: string | null, target: string | null): void;
 }
 
 interface Loc {
@@ -51,7 +53,9 @@ const T = {
   drawStagger: 150,
   /** Other hand cards sliding to make room. */
   relayout: 210,
-  /** Attack: lunge toward the target and back. */
+  /** Attack declaration: pause after marking attacker and target. */
+  declare: 300,
+  /** Attack hit (damage calculation): lunge toward the target and back. */
   lunge: 190,
   /** Position change: rotating between attack and defense. */
   rotate: 300,
@@ -72,6 +76,15 @@ export class DuelAnimator {
   /** True while messages are being animated (hover effects stay off meanwhile). */
   get busy(): boolean {
     return this.current !== null;
+  }
+
+  /** Sprite keys of the currently declared attack (attacker, target). */
+  private attackKeys: [string | null, string | null] = [null, null];
+
+  private clearAttack() {
+    if (!this.attackKeys[0] && !this.attackKeys[1]) return;
+    this.attackKeys = [null, null];
+    this.host.markAttack(null, null);
   }
 
   /** Message currently being animated (debugging aid). */
@@ -99,8 +112,10 @@ export class DuelAnimator {
     if (m.type !== OcgMessageType.POS_CHANGE && m.type !== OcgMessageType.FLIPSUMMONING) this.justFlipped = null;
     switch (m.type) {
       case OcgMessageType.NEW_TURN:
+        this.clearAttack();
         return this.banner(m.player === HUMAN ? "YOUR TURN" : "OPPONENT'S TURN", m.player === HUMAN ? 0x1d6da0 : 0xa02020);
       case OcgMessageType.NEW_PHASE:
+        if (!(m.phase & 0xf8)) this.clearAttack(); // left the battle phase
         h.setPhase(m.phase, PHASE_NAMES[m.phase] ?? "");
         return this.wait(120);
       case OcgMessageType.DRAW:
@@ -118,7 +133,20 @@ export class DuelAnimator {
       case OcgMessageType.CHAINING:
         return this.activate(m, m.code);
       case OcgMessageType.ATTACK:
-        return this.attack(m.card, m.target);
+        // Declaration: only mark attacker and target; the lunge plays at the hit (BATTLE).
+        this.attackKeys = [key(m.card), m.target ? key(m.target) : null];
+        h.markAttack(...this.attackKeys);
+        return this.wait(T.declare);
+      case OcgMessageType.BATTLE: {
+        // Damage calculation = the hit. Direct attacks carry a placeholder target with location 0.
+        const target = m.target && m.target.location ? m.target : null;
+        this.clearAttack(); // marks go as the attacker takes off
+        return this.attack(m.card, target);
+      }
+      case OcgMessageType.ATTACK_DISABLED:
+      case OcgMessageType.DAMAGE_STEP_END:
+        this.clearAttack();
+        break;
       case OcgMessageType.DAMAGE:
         if (m.amount >= 1000) h.scene.cameras.main.shake(180 / this.speed, 0.008);
         return h.changeLP(m.player, h.lp(m.player) - m.amount, -m.amount);
@@ -158,6 +186,7 @@ export class DuelAnimator {
     const h = this.host;
     const dest = this.locXY(to);
     if (!dest) return;
+    if (this.attackKeys.includes(key(from))) this.clearAttack();
     let sp = this.findSprite(from, code);
     if (sp) {
       h.sprites.delete(key(from));

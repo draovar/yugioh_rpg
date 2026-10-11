@@ -28,8 +28,12 @@ export const ATTRIBUTE_INDEX: Record<number, number> = { 0x20: 0, 0x01: 1, 0x04:
 /** Small 3x3 attribute swatch colours for the card's name bar (sampled from attributes.png). */
 const ATTRIBUTE_COLOR: Record<number, number> = { 0x20: 0x7d1f9e, 0x01: 0x2f4a19, 0x04: 0x7a1a14, 0x10: 0x9c8d55, 0x02: 0x1d2f7a, 0x08: 0x4c7a2a, 0x40: 0xc9b400 };
 
-export type CardHighlight = "none" | "action" | "selected" | "target";
-const HIGHLIGHT_COLOR: Record<CardHighlight, number> = { none: 0, action: 0xffd400, selected: 0x2ecc40, target: 0xff4136 };
+export type CardHighlight = "none" | "action" | "selected" | "target" | "attacker" | "attacked";
+const HIGHLIGHT_COLOR: Record<CardHighlight, number> = {
+  none: 0, action: 0xffd400, selected: 0x2ecc40, target: 0xff4136, attacker: 0xff4136, attacked: 0xff4136,
+};
+/** Attack declarations use a thin 1px outline; other highlights 2px. */
+const HIGHLIGHT_WIDTH: Partial<Record<CardHighlight, number>> = { attacker: 1, attacked: 1 };
 
 const LEFT = -CARD.w / 2, TOP = -CARD.h / 2;
 
@@ -112,7 +116,8 @@ export class CardSprite extends Phaser.GameObjects.Container {
 
   setHighlight(kind: CardHighlight): this {
     this.outline.clear();
-    if (kind !== "none") border(this.outline, LEFT - 2, TOP - 2, CARD.w + 4, CARD.h + 4, HIGHLIGHT_COLOR[kind], 2);
+    const t = HIGHLIGHT_WIDTH[kind] ?? 2;
+    if (kind !== "none") border(this.outline, LEFT - t, TOP - t, CARD.w + 2 * t, CARD.h + 2 * t, HIGHLIGHT_COLOR[kind], t);
     return this;
   }
 }

@@ -153,7 +153,44 @@ const PREVIEWS: Preview[] = [
       await host.animator.play([moveMsg(code, field, gy, REASON.DESTROY), chainMsg(code, gy)]);
     },
   },
+  attackPreview("#7 Attack: you attack a monster", "mine", true),
+  attackPreview("#7 Attack: direct attack", "mine", false),
+  attackPreview("#7 Attack: opponent attacks you", "theirs", true),
+  attackPreview("#7 Attack: attack stopped (attacker destroyed)", "mine", true, true),
 ];
+
+/** Puts a monster on each side (your first hand card, and a stand-in for the opponent), then one attacks. */
+function attackPreview(label: string, attacker: "mine" | "theirs", atMonster: boolean, negated = false): Preview {
+  return {
+    label,
+    async run(host, snap) {
+      const mine = { controller: 0, location: OcgLocation.MZONE, sequence: 2, position: OcgPosition.FACEUP_ATTACK };
+      const theirs = { controller: 1, location: OcgLocation.MZONE, sequence: 2, position: OcgPosition.FACEUP_ATTACK };
+      const myCode = snap.players[0].hand[0].code;
+      const theirCode = snap.players[0].hand[1]?.code ?? myCode;
+      const setup = [moveMsg(myCode, hand(0), mine)];
+      if (atMonster || attacker === "theirs") {
+        setup.push(moveMsg(theirCode, { controller: 1, location: OcgLocation.HAND, sequence: 0, position: OcgPosition.FACEDOWN_DEFENSE }, theirs));
+      }
+      await host.animator.play(setup);
+      await pause(host, 500);
+      const [from, to] = attacker === "mine" ? [mine, theirs] : [theirs, mine];
+      // Declaration (outlines), a moment for responses, then the hit (lunge) and the end of the damage step.
+      await host.animator.play([{ type: OcgMessageType.ATTACK, card: from, target: atMonster ? to : null } as unknown as OcgMessage]);
+      await pause(host, 1000);
+      if (negated) {
+        // e.g. Mirror Force: the attacker is destroyed, no hit.
+        await host.animator.play([moveMsg(attacker === "mine" ? myCode : theirCode, from, { ...from, location: OcgLocation.GRAVE, sequence: 0 }, REASON.DESTROY)]);
+        return;
+      }
+      const placeholder = { controller: 0, location: 0, sequence: 0, position: 0 };
+      await host.animator.play([
+        { type: OcgMessageType.BATTLE, card: from, target: atMonster ? to : placeholder } as unknown as OcgMessage,
+        { type: OcgMessageType.DAMAGE_STEP_END } as unknown as OcgMessage,
+      ]);
+    },
+  };
+}
 
 function chainMsg(code: number, at: { controller: number; location: number; sequence: number; position: number }): OcgMessage {
   return {
