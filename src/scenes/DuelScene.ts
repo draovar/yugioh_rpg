@@ -76,6 +76,8 @@ const LAYOUT = (() => {
 })();
 /** Level stars in the info panel: 7x7 sprite, 3px apart. */
 const STAR_SIZE = 7, STAR_GAP = 3;
+/** How long an LP change ("-1500") stays inside the LP bar. */
+const LP_DELTA_MS = 1200;
 /** Info-panel art: 128px art inside a 3px wooden frame. */
 const ART_FRAME = 128 + 6;
 /** The duel log text starts below its "DUEL LOG" header, inside the paper. */
@@ -456,7 +458,7 @@ export class DuelScene extends Phaser.Scene {
     const from = this.lpValue[i];
     const to = Math.max(0, lp);
     this.lpValue[i] = to;
-    if (delta) this.floatLP(i, delta > 0 ? `+${delta}` : `${delta}`, delta > 0 ? 0x2ecc40 : 0xd62020);
+    if (delta) this.lpBars[i].showDelta(delta, LP_DELTA_MS / this.animator.speed);
     return new Promise((resolve) => {
       this.tweens.addCounter({
         from, to, duration: 450 / this.animator.speed,
@@ -464,12 +466,6 @@ export class DuelScene extends Phaser.Scene {
         onComplete: () => resolve(),
       });
     });
-  }
-
-  private floatLP(i: 0 | 1, label: string, color: number) {
-    const y = i === 0 ? LAYOUT.lp.mine - 14 : LAYOUT.lp.opp + LP_BAR.h + 3;
-    const f = text(this, 110, y, label, { color, scale: 2, originX: 0.5 }).setDepth(500);
-    this.tweens.add({ targets: f, y: y + (i === 0 ? -24 : 24), alpha: 0, duration: 1200, onComplete: () => f.destroy() });
   }
 
   private onEnd(winner: number | null) {

@@ -63,6 +63,8 @@ const T = {
   flash: 240,
   /** Activated card shown at 2x in the middle of the field. */
   activateHold: 950,
+  /** Screen shake when damage takes a player's LP to 0. */
+  lethalShake: 300,
   /** Turn banner on screen. */
   banner: 1100,
 };
@@ -148,7 +150,8 @@ export class DuelAnimator {
         this.clearAttack();
         break;
       case OcgMessageType.DAMAGE:
-        if (m.amount >= 1000) h.scene.cameras.main.shake(180 / this.speed, 0.008);
+        // The finishing blow shakes the screen; other damage doesn't.
+        if (h.lp(m.player) - m.amount <= 0) h.scene.cameras.main.shake(T.lethalShake / this.speed, 0.01);
         return h.changeLP(m.player, h.lp(m.player) - m.amount, -m.amount);
       case OcgMessageType.PAY_LPCOST:
         return h.changeLP(m.player, h.lp(m.player) - m.amount, -m.amount);
@@ -238,11 +241,15 @@ export class DuelAnimator {
   private async posChange(l: Loc, code: number, prevPosition: number, position: number): Promise<void> {
     const sp = this.host.sprites.get(key(l));
     if (!sp) return;
-    const angle = position & DEFENSE ? 90 : 0;
+    // Only monsters have attack/defense orientation; Spell/Trap cards stay upright (their position bits
+    // still say "defense" while set, e.g. when a set card is flipped up to be activated).
+    const monster = l.location === OcgLocation.MZONE;
+    const angle = monster && position & DEFENSE ? 90 : 0;
     if (sp.angle !== angle) await this.tween({ targets: sp, angle, duration: T.rotate, ease: "Sine.easeInOut" });
     const showCode = this.visible(code, { ...l, position }) ? code : 0;
     if (showCode !== sp.code) this.reveal(sp, showCode);
-    if (prevPosition & FACEDOWN && !(position & FACEDOWN)) {
+    // A monster flipped face-up flashes like a summon; Spells/Traps flash when they activate instead.
+    if (monster && prevPosition & FACEDOWN && !(position & FACEDOWN)) {
       this.justFlipped = key(l);
       await this.flash(sp, 0xfff2a8);
     }

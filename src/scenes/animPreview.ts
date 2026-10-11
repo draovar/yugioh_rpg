@@ -129,7 +129,11 @@ const PREVIEWS: Preview[] = [
       const code = snap.players[0].hand[i].code;
       await host.animator.play([moveMsg(code, hand(i), zone(OcgLocation.SZONE, 2, OcgPosition.FACEDOWN_DEFENSE))]);
       await pause(host, 500);
-      await host.animator.play([chainMsg(code, zone(OcgLocation.SZONE, 2, OcgPosition.FACEUP_ATTACK))]);
+      // As in a real duel: the set card is turned face-up (POS_CHANGE), then activates.
+      await host.animator.play([
+        { type: OcgMessageType.POS_CHANGE, code, controller: 0, location: OcgLocation.SZONE, sequence: 2, prev_position: OcgPosition.FACEDOWN_DEFENSE, position: OcgPosition.FACEUP_ATTACK } as OcgMessage,
+        chainMsg(code, zone(OcgLocation.SZONE, 2, OcgPosition.FACEUP_ATTACK)),
+      ]);
     },
   },
   {
@@ -157,7 +161,19 @@ const PREVIEWS: Preview[] = [
   attackPreview("#7 Attack: direct attack", "mine", false),
   attackPreview("#7 Attack: opponent attacks you", "theirs", true),
   attackPreview("#7 Attack: attack stopped (attacker destroyed)", "mine", true, true),
+  damagePreview("#8 Damage: opponent takes 1500", 1, 1500),
+  damagePreview("#8 Damage: you take 450", 0, 450),
+  damagePreview("#8 Damage: lethal (opponent to 0)", 1, 8000),
 ];
+
+function damagePreview(label: string, player: number, amount: number): Preview {
+  return {
+    label,
+    async run(host) {
+      await host.animator.play([{ type: OcgMessageType.DAMAGE, player, amount } as unknown as OcgMessage]);
+    },
+  };
+}
 
 /** Puts a monster on each side (your first hand card, and a stand-in for the opponent), then one attacks. */
 function attackPreview(label: string, attacker: "mine" | "theirs", atMonster: boolean, negated = false): Preview {
