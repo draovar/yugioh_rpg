@@ -28,10 +28,13 @@ export const ATTRIBUTE_INDEX: Record<number, number> = { 0x20: 0, 0x01: 1, 0x04:
 /** Small 3x3 attribute swatch colours for the card's name bar (sampled from attributes.png). */
 const ATTRIBUTE_COLOR: Record<number, number> = { 0x20: 0x7d1f9e, 0x01: 0x2f4a19, 0x04: 0x7a1a14, 0x10: 0x9c8d55, 0x02: 0x1d2f7a, 0x08: 0x4c7a2a, 0x40: 0xc9b400 };
 
+/** Field targeting colours, shared with zone choices: can be picked (dark green), picked (bright green). */
+export const PICK_COLOR = { choice: 0x1e6e32, selected: 0x2ecc40 };
+
 /** Field targeting: "choice" = can be picked (dark green), "selected" = picked (bright green). */
 export type CardHighlight = "none" | "action" | "choice" | "selected" | "target" | "attacker" | "attacked";
 const HIGHLIGHT_COLOR: Record<CardHighlight, number> = {
-  none: 0, action: 0xffd400, choice: 0x1e6e32, selected: 0x2ecc40, target: 0xff4136, attacker: 0xff4136, attacked: 0xff4136,
+  none: 0, action: 0xffd400, choice: PICK_COLOR.choice, selected: PICK_COLOR.selected, target: 0xff4136, attacker: 0xff4136, attacked: 0xff4136,
 };
 /** Attack declarations and pickable cards use a thin 1px outline; other highlights 2px. */
 const HIGHLIGHT_WIDTH: Partial<Record<CardHighlight, number>> = { choice: 1, attacker: 1, attacked: 1 };

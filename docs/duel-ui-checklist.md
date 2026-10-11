@@ -46,7 +46,7 @@ picker dialog when a choice is in the Graveyard, Deck, etc. Try the board versio
 
 | # | Prompt | Shows | Style | How to see it | Tested |
 |---|---|---|---|---|---|
-| 14 | Zone choice (`SELECT_PLACE`, `SELECT_DISFIELD`) | Yellow free zones + text strip across the field | Old (strip) | Summon or set any card | [ ] |
+| 14 | Zone choice (`SELECT_PLACE`, `SELECT_DISFIELD`) | Free zones in semi-transparent yellow (more opaque on hover / picked) + prompt in the field strip | Yellow for now | Summon or set any card | [ ] |
 | 15 | Turn / phase banner | Coloured band with "YOUR TURN" etc. | Old | Every turn; `&anims` → #11 | [ ] |
 
 ## Auto-answered (no UI yet)

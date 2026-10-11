@@ -48,6 +48,8 @@ interface CardAction {
   response: OcgResponse;
 }
 
+/** Free zones in a zone choice: yellow fill, more opaque on hover / once picked. */
+const ZONE_PICK = { color: 0xffd400, alpha: 0.3, hoverAlpha: 0.6 };
 const key = (controller: number, location: number, sequence: number) => `${controller}:${location}:${sequence}`;
 const locKey = (c: OcgCardLoc) => key(c.controller, c.location, c.sequence);
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
@@ -984,7 +986,10 @@ export class DuelScene extends Phaser.Scene {
     this.menu = null;
   }
 
-  /** Highlights free zones on the field; collects `count` clicks, then responds. */
+  /**
+   * Zone choice: free zones get a semi-transparent yellow fill with a yellow 1px border, more opaque while
+   * hovered or once picked (when several are needed). Collects `count` clicks, then responds.
+   */
   private pickPlaces(type: OcgMessageType, player: number, fieldMask: number, count: number, label: string) {
     const free = freePlaces(player, fieldMask, 32);
     const chosen: SelectFieldPlace[] = [];
@@ -995,13 +1000,21 @@ export class DuelScene extends Phaser.Scene {
       const slot: Slot = place.location === OcgLocation.MZONE ? { kind: "mzone", seq: place.sequence } : { kind: "szone", seq: place.sequence };
       const { x, y } = slotXY(side, slot);
       const g = this.add.graphics().setDepth(790);
-      g.fillStyle(0xffd400, 0.3).fillRect(x - 19, y - 28, CARD.w, CARD.h);
-      border(g, x - 19, y - 28, CARD.w, CARD.h, 0xffd400);
+      const draw = (on: boolean) => {
+        g.clear();
+        g.fillStyle(ZONE_PICK.color, on ? ZONE_PICK.hoverAlpha : ZONE_PICK.alpha).fillRect(x - CARD.w / 2, y - CARD.h / 2, CARD.w, CARD.h);
+        border(g, x - CARD.w / 2, y - CARD.h / 2, CARD.w, CARD.h, ZONE_PICK.color);
+      };
+      draw(false);
+      let picked = false;
       const hit = this.add.zone(x, y, CARD.w, CARD.h).setInteractive({ useHandCursor: true }).setDepth(791);
+      hit.on("pointerover", () => draw(true));
+      hit.on("pointerout", () => draw(picked));
       hit.on("pointerup", () => {
+        picked = true;
+        draw(true);
+        hit.disableInteractive();
         chosen.push(place);
-        g.destroy();
-        hit.destroy();
         if (chosen.length >= count) {
           this.answer(type === OcgMessageType.SELECT_PLACE
             ? { type: OcgResponseType.SELECT_PLACE, places: chosen }
