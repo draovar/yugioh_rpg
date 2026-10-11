@@ -578,8 +578,15 @@ export class DuelScene extends Phaser.Scene {
     this.applyHighlights();
   }
 
+  /**
+   * Playable cards aren't outlined; only the cursor tells them apart (hand cursor on cards with an
+   * action, plain arrow elsewhere). `extra` can still mark cards explicitly.
+   */
   private applyHighlights(extra?: Map<string, CardHighlight>) {
-    for (const [k, sp] of this.sprites) sp.setHighlight(extra?.get(k) ?? (this.actions.has(k) ? "action" : "none"));
+    for (const [k, sp] of this.sprites) {
+      sp.setHighlight(extra?.get(k) ?? "none");
+      if (sp.input) sp.input.cursor = this.actions.has(k) ? "pointer" : "default";
+    }
   }
 
   private onPrompt(m: HumanPrompt, hint: bigint | null, reopen = false) {

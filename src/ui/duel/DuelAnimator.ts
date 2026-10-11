@@ -177,7 +177,6 @@ export class DuelAnimator {
     const src = h.sprites.get(key(l));
     if (src && src.code !== code) await this.flip(src, code); // face-down card being activated
     const big = new CardSprite(h.scene, from.x, from.y).show(code, h.cards.records.get(code)).setDepth(600);
-    big.setHighlight("action");
     await this.tween({ targets: big, x: FIELD_CENTER.x, y: FIELD_CENTER.y, scale: 2, duration: 260, ease: "Back.easeOut" });
     await this.wait(420);
     await this.tween({ targets: big, x: from.x, y: from.y, scale: 1, alpha: 0, duration: 220, ease: "Cubic.easeIn" });

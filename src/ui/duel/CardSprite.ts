@@ -85,13 +85,14 @@ export class CardSprite extends Phaser.GameObjects.Container {
   private drawText(r: CardRecord, opts: ShowOptions, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T) {
     const sc = this.scene;
     const monster = (r.type & TYPE_MONSTER) !== 0;
-    // Name bar: x 2..35, y 2..6. 3x3 glyphs at y 3; the attribute swatch takes x 31..33.
-    const nameWidth = monster ? 27 : 31;
+    // Name bar: x 2..35, y 2..6, 1px padding inside. 3x3 glyphs at y 3; the attribute swatch takes x 32..34,
+    // so a monster name may use x 3..30 (1px gap before the swatch), other names x 3..34.
+    const nameWidth = monster ? 28 : 32;
     add(text(sc, LEFT + 3, TOP + 3, fit(sc, FONT_CARD, r.name.toUpperCase(), nameWidth), { font: FONT_CARD }));
     const g = add(sc.add.graphics());
     if (monster) {
       const attr = ATTRIBUTE_COLOR[r.attribute];
-      if (attr !== undefined) g.fillStyle(attr).fillRect(LEFT + 31, TOP + 3, 3, 3);
+      if (attr !== undefined) g.fillStyle(attr).fillRect(LEFT + 32, TOP + 3, 3, 3);
       // Level stars, right-aligned in the y 7..10 band: 2x2 red with a yellow glint.
       const level = r.level & 0xff;
       for (let i = 0; i < Math.min(level, 11); i++) {
@@ -99,10 +100,11 @@ export class CardSprite extends Phaser.GameObjects.Container {
         g.fillStyle(0xd62020).fillRect(sx, sy, 2, 2);
         g.fillStyle(0xffd23f).fillRect(sx + 1, sy + 1, 1, 1);
       }
-      // ATK (black) and DEF (grey) in the bottom bar, y 46..53.
+      // ATK (black) and DEF (grey) in the bottom bar, y 46..53, 1px padding each side (x 3 .. x 34).
+      // Right-aligning on x 36: BitmapText width includes the font's 1px trailing spacing.
       const stat = (v: number) => (v < 0 ? "?" : String(v));
       add(text(sc, LEFT + 3, TOP + 48, stat(opts.atk ?? r.atk), { font: FONT_UI, color: INK }));
-      add(text(sc, LEFT + 35, TOP + 48, stat(opts.def ?? r.def), { font: FONT_UI, color: INK_SOFT, originX: 1 }));
+      add(text(sc, LEFT + 36, TOP + 48, stat(opts.def ?? r.def), { font: FONT_UI, color: INK_SOFT, originX: 1 }));
     } else {
       add(text(sc, 0, TOP + 48, r.type & TYPE_SPELL ? "SPELL" : "TRAP", { font: FONT_UI, color: INK, originX: 0.5 }));
     }

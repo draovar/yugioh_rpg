@@ -12,6 +12,8 @@ const LEFT = INFO.x + INFO.w;
 const WIDTH = 640 - LEFT;
 const MID_X = LEFT + Math.floor(WIDTH / 2);
 const PANEL = 0x1b2147;
+/** How far a selected card is raised in a picker. */
+const SELECTED_LIFT = 5;
 
 export interface PickerCard {
   code: number;
@@ -98,8 +100,10 @@ export class Modal {
 
       let confirm: ReturnType<typeof makeButton> | null = null;
       const sprites = new Map<number, CardSprite>();
+      const baseY = new Map<number, number>();
+      // No outlines: selected cards are lifted a few pixels instead.
       const refresh = () => {
-        for (const [i, sp] of sprites) sp.setHighlight(selected.has(i) ? "selected" : opts.cards[i].locked ? "none" : "action");
+        for (const [i, sp] of sprites) sp.y = baseY.get(i)! - (selected.has(i) ? SELECTED_LIFT : 0);
         confirm?.setEnabled(opts.isValid ? opts.isValid([...selected].sort((a, b) => a - b)) : true);
       };
       shown.forEach((c, j) => {
@@ -119,6 +123,7 @@ export class Modal {
           refresh();
         });
         sprites.set(i, sp);
+        baseY.set(i, y);
         const caption = fit(s, FONT_CARD, (c.caption ?? this.cards.name(c.code)).toUpperCase(), pitchX - 2);
         root.add([sp, text(s, x, y + CARD.h / 2 + 4, caption, { font: FONT_CARD, color: WHITE, originX: 0.5 })]);
       });
