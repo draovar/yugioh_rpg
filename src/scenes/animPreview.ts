@@ -167,8 +167,8 @@ const PREVIEWS: Preview[] = [
   lpPreview("#9 LP: you gain 1000 (recover)", { type: OcgMessageType.RECOVER, player: 0, amount: 1000 }),
   lpPreview("#9 LP: you pay 1000 (cost)", { type: OcgMessageType.PAY_LPCOST, player: 0, amount: 1000 }),
   lpPreview("#9 LP: opponent's LP set to 4000", { type: OcgMessageType.LPUPDATE, player: 1, lp: 4000 }),
-  lpPreview("#10 Turn banner: your turn", { type: OcgMessageType.NEW_TURN, player: 0 }),
-  lpPreview("#10 Turn banner: opponent's turn", { type: OcgMessageType.NEW_TURN, player: 1 }),
+  lpPreview("#10 Turn banner: your turn", { type: OcgMessageType.NEW_TURN, player: 0, turn: 3 }),
+  lpPreview("#10 Turn banner: opponent's turn", { type: OcgMessageType.NEW_TURN, player: 1, turn: 4 }),
   {
     label: "#11 Phase change: whole turn (no actions)",
     async run(host) {

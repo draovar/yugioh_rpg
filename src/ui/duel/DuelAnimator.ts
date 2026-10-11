@@ -5,7 +5,7 @@ import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgMessage } from "ocgcore-wasm";
 import type { CardDb } from "../../duel/cardData.ts";
 import { HUMAN } from "../../duel/DuelController.ts";
-import { REASON, type MoveMessage } from "../../duel/DuelSession.ts";
+import { REASON, type MoveMessage, type NewTurnMessage } from "../../duel/DuelSession.ts";
 import { PHASE_NAMES } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
 import { CardSprite } from "./CardSprite.ts";
@@ -73,6 +73,12 @@ const T = {
 };
 const EASE = "Quad.easeOut";
 
+/** Turn banner colours: band fill, its 1px top (and turn-number) / bottom (and text shadow) lines. */
+const BANNER = {
+  mine: { fill: 0x1d6da0, light: 0x7cc4f0, dark: 0x0b2f47 },
+  theirs: { fill: 0xa02020, light: 0xf08a7c, dark: 0x470b0b },
+};
+
 const sideOf = (controller: number) => (controller === HUMAN ? 0 : 1) as 0 | 1;
 
 export class DuelAnimator {
@@ -118,7 +124,7 @@ export class DuelAnimator {
     switch (m.type) {
       case OcgMessageType.NEW_TURN:
         this.clearAttack();
-        return this.banner(m.player === HUMAN ? "YOUR TURN" : "OPPONENT'S TURN", m.player === HUMAN ? 0x1d6da0 : 0xa02020);
+        return this.banner(m.player === HUMAN ? "YOUR TURN" : "OPPONENT'S TURN", (m as NewTurnMessage).turn, m.player === HUMAN ? BANNER.mine : BANNER.theirs);
       case OcgMessageType.NEW_PHASE:
         if (!(m.phase & 0xf8)) this.clearAttack(); // left the battle phase
         h.setPhase(m.phase, PHASE_NAMES[m.phase] ?? "");
@@ -290,14 +296,27 @@ export class DuelAnimator {
     await this.tween({ targets: sp, x: sx, y: sy, duration: T.lunge, ease: EASE });
   }
 
-  /** Turn banner: a coloured band with the text, on and off without transitions. */
-  private async banner(label: string, color: number): Promise<void> {
+  /**
+   * Turn banner: a coloured band across the field, on and off without transitions. A pixel plate: 1px
+   * lighter line on top, darker at the bottom; the big text has a 1px dark drop shadow, the turn number
+   * sits small under it.
+   */
+  private async banner(label: string, turn: number | undefined, look: { fill: number; light: number; dark: number }): Promise<void> {
     const s = this.host.scene;
-    const band = s.add.rectangle(FIELD.left, FIELD_CENTER.y - 9, FIELD.right - FIELD.left, 18, color, 0.9).setOrigin(0).setDepth(700);
-    const t = text(s, FIELD_CENTER.x, FIELD_CENTER.y - 5, label, { color: 0xffffff, scale: 2, originX: 0.5 }).setDepth(701);
+    const h = turn ? 26 : 18;
+    const top = FIELD_CENTER.y - Math.floor(h / 2), w = FIELD.right - FIELD.left;
+    const g = s.add.graphics().setDepth(700);
+    g.fillStyle(look.fill, 0.9).fillRect(FIELD.left, top, w, h);
+    g.fillStyle(look.light).fillRect(FIELD.left, top, w, 1);
+    g.fillStyle(look.dark).fillRect(FIELD.left, top + h - 1, w, 1);
+    const parts: Phaser.GameObjects.GameObject[] = [g];
+    const big = (dx: number, dy: number, color: number) =>
+      parts.push(text(s, FIELD_CENTER.x + dx, top + 4 + dy, label, { color, scale: 2, originX: 0.5 }).setDepth(701));
+    big(1, 1, look.dark);
+    big(0, 0, 0xffffff);
+    if (turn) parts.push(text(s, FIELD_CENTER.x, top + 17, `TURN ${turn}`, { color: look.light, originX: 0.5 }).setDepth(701));
     await this.wait(T.banner);
-    band.destroy();
-    t.destroy();
+    for (const p of parts) p.destroy();
   }
 
   // ---------------------------------------------------------------- helpers

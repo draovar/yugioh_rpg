@@ -76,6 +76,9 @@ export interface FieldSnapshot {
 
 const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE) as OcgQueryFlags;
 
+/** A NEW_TURN message with the duel's turn number (1, 2, ...) added by DuelSession. */
+export type NewTurnMessage = Extract<OcgMessage, { type: OcgMessageType.NEW_TURN }> & { turn?: number };
+
 /** A MOVE message with the move reason added by DuelSession (see annotateMoveReasons). */
 export type MoveMessage = Extract<OcgMessage, { type: OcgMessageType.MOVE }> & { reason?: number };
 
@@ -96,6 +99,8 @@ export class DuelSession {
   private readonly core: OcgCoreSync;
   private readonly handle: OcgDuelHandle;
   private ended = false;
+  /** Turns started so far (numbers NEW_TURN messages). */
+  private turn = 0;
 
   constructor(cfg: DuelConfig) {
     this.core = cfg.core;
@@ -150,6 +155,7 @@ export class DuelSession {
       this.annotateMoveReasons(batch);
       messages.push(...batch);
       for (const m of batch) {
+        if (m.type === OcgMessageType.NEW_TURN) (m as NewTurnMessage).turn = ++this.turn;
         if (m.type === OcgMessageType.RETRY) throw new Error("ocgcore rejected the last response (RETRY)");
         if (m.type === OcgMessageType.WIN) { winner = m.player; this.ended = true; }
       }
