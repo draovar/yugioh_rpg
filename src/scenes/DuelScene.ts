@@ -20,8 +20,9 @@ import { Modal, type PickerOptions } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
 import { CardMenu } from "../ui/duel/CardMenu.ts";
-import { CARD, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, pileCenters, slotXY, zoneCenters, type Slot } from "../ui/duel/layout.ts";
-import { FONT_UI, INK, INK_SOFT, PAPER, WHITE, border, measure, text } from "../ui/pixel.ts";
+import { drawField } from "../ui/duel/field.ts";
+import { CARD, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
+import { FONT_UI, INK, INK_SOFT, WHITE, border, measure, text } from "../ui/pixel.ts";
 import { LIST_BUTTON_H, makeButton, makeListButton, makeWoodButton, type ListButton, type WoodButton } from "../ui/widgets.ts";
 import { installAnimPreview } from "./animPreview.ts";
 import { installDialogPreview } from "./dialogPreview.ts";
@@ -69,7 +70,6 @@ const PHASES = [
 type PhaseAction = "bp" | "m2" | "ep";
 const PHASE_ACTION: Partial<Record<number, PhaseAction>> = { 3: "bp", 4: "m2", 5: "ep" };
 
-const ZONE_CENTER = 0xa29e9e, ZONE_ARM = 0xb7b5b5;
 /** Info panel geometry: everything sits inside the frame's rim. */
 const LAYOUT = (() => {
   const r = PANEL.rim;
@@ -248,18 +248,9 @@ export class DuelScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- static layout
 
+  /** Table, playmat and zones (field.ts). */
   private drawStaticBoard() {
-    const g = this.add.graphics();
-    g.fillStyle(PAPER).fillRect(0, 0, 640, 360);
-    for (const side of [0, 1] as const) {
-      for (const { x, y } of zoneCenters(side)) {
-        // A cross: room for an upright card and a sideways (defense) card.
-        g.fillStyle(ZONE_CENTER).fillRect(x - 19, y - 19, 38, 38);
-        g.fillStyle(ZONE_ARM).fillRect(x - 19, y - 28, 38, 9).fillRect(x - 19, y + 19, 38, 9);
-        g.fillRect(x - 28, y - 19, 9, 38).fillRect(x + 19, y - 19, 9, 38);
-      }
-      for (const { x, y } of pileCenters(side)) g.fillStyle(ZONE_CENTER).fillRect(x - 19, y - 28, CARD.w, CARD.h);
-    }
+    drawField(this, this.add.container(0, 0));
   }
 
   private drawPhaseColumn() {

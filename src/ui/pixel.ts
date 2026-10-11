@@ -8,7 +8,6 @@ export const FONT_CARD = "nerds3";
 
 export const INK = 0x171715;
 export const INK_SOFT = 0x555555;
-export const PAPER = 0xeeeeee;
 export const WHITE = 0xffffff;
 
 export interface TextOptions {

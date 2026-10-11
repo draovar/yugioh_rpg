@@ -45,12 +45,3 @@ export function handXY(side: 0 | 1, i: number, n: number): { x: number; y: numbe
   const pitch = n > 1 ? Math.min(40, Math.floor(span / (n - 1))) : 0;
   return { x: Math.round(FIELD_CENTER.x + (i - (n - 1) / 2) * pitch), y: side === 0 ? ROWS.myHand : ROWS.oppHand };
 }
-
-/** Every zone centre on one side, for drawing the empty board. */
-export function zoneCenters(side: 0 | 1): { x: number; y: number }[] {
-  return [0, 1, 2, 3, 4].flatMap((seq) => [slotXY(side, { kind: "mzone", seq }), slotXY(side, { kind: "szone", seq })]);
-}
-
-export function pileCenters(side: 0 | 1): { x: number; y: number }[] {
-  return [slotXY(side, { kind: "szone", seq: 5 }), slotXY(side, { kind: "extra" }), slotXY(side, { kind: "grave" }), slotXY(side, { kind: "deck" })];
-}

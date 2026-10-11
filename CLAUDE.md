@@ -75,11 +75,14 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   name bar (2,2) 34x5, stars y 7-10, art window 32x32 at (3,12), bottom bar (2,46) 34x8. Back: `back.png`.
   `attributes.png` = 7 16x16 icons: DARK EARTH FIRE LIGHT WATER WIND DIVINE.
 - Duel layout (`src/ui/duel/layout.ts`): info panel 0-219, divider 220-223, phase column x230 (6 boxes 16x56,
-  clickable BATTLE / MAIN 2 / END P.), zones are 58px-pitch crosses, piles in the side columns. Banished cards
+  clickable BATTLE / MAIN 2 / END P.), zones are card-sized slots at 58px pitch, piles in the side columns. Banished cards
   have no zone: a `B<n>` badge under the Graveyard, listed when browsing it.
 - Info panel modes (LOG/CARD button under the 1X speed button, field top-right): **card mode** (default) keeps
   the last hovered card (starts with the first card you draw); **log mode** shows the log and previews cards
   only while hovered. Long names scroll (marquee) after a short hover.
+- Field (`src/ui/duel/field.ts`): cream plank table (the info panel's paper colour) with a dark green felt
+  playmat in a Frame01a rim around the four zone rows; zones outlined light green, monster zones tinted, empty
+  piles labelled FIELD / EXTRA / GY / DECK. Dialogs shade the field (and the info panel's cut corners).
 - Duel UI chrome is Runewood (Crusenho pack): phase buttons (`phaseThemes.ts`), LP bars (`LPBar.ts`), info
   panel = light wood board + cream paper inset for description/log (`panelStyles.ts`). Sprites are nine-sliced;
   insets come from the sprites' pixel rows (see comments). Info panel positions derive from `LAYOUT` in DuelScene.

@@ -9,6 +9,8 @@ import { CARD, INFO } from "./layout.ts";
 import { PANEL as WOOD } from "./panelStyles.ts";
 
 const DEPTH = 1000;
+/** Darkening over the field while a dialog or picker is open. */
+const SHADE_ALPHA = 0.5;
 const LEFT = INFO.x + INFO.w;
 const WIDTH = 640 - LEFT;
 const MID_X = LEFT + Math.floor(WIDTH / 2);
@@ -234,8 +236,17 @@ export class Modal {
 
   private open(): Phaser.GameObjects.Container {
     this.close();
-    const shade = this.scene.add.rectangle(LEFT, 0, WIDTH, 360, 0x000000, 0.5).setOrigin(0).setInteractive();
-    this.root = this.scene.add.container(0, 0, [shade]).setDepth(DEPTH);
+    const shade = this.scene.add.rectangle(LEFT, 0, WIDTH, 360, 0x000000, SHADE_ALPHA).setOrigin(0).setInteractive();
+    // The info panel stays unshaded (hovered cards show there), but its frame's cut corners let the table
+    // show through: shade those pixels too (a 5-step staircase in each corner, Frame05b).
+    const corners = this.scene.add.graphics().fillStyle(0x000000, SHADE_ALPHA);
+    const right = INFO.x + INFO.w, bottom = 360;
+    for (let r = 0; r < 5; r++) {
+      const n = 5 - r;
+      corners.fillRect(INFO.x, r, n, 1).fillRect(right - n, r, n, 1);
+      corners.fillRect(INFO.x, bottom - 1 - r, n, 1).fillRect(right - n, bottom - 1 - r, n, 1);
+    }
+    this.root = this.scene.add.container(0, 0, [shade, corners]).setDepth(DEPTH);
     return this.root;
   }
 }
