@@ -19,10 +19,11 @@ import { ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, type CardHighlight } from
 import { Modal, type PickerCard } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
-import { CARD, DIVIDER, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, pileCenters, slotXY, zoneCenters, type Slot } from "../ui/duel/layout.ts";
+import { CARD, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, pileCenters, slotXY, zoneCenters, type Slot } from "../ui/duel/layout.ts";
 import { INK, INK_SOFT, PAPER, WHITE, border, text } from "../ui/pixel.ts";
-import { makeButton } from "../ui/widgets.ts";
+import { makeButton, makeWoodButton, type WoodButton } from "../ui/widgets.ts";
 import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
+import { PANEL } from "../ui/duel/panelStyles.ts";
 import { PHASE_LOOK, TURN_TEXT, type PhaseState } from "../ui/duel/phaseThemes.ts";
 
 export interface DuelSceneData {
@@ -58,8 +59,26 @@ type PhaseAction = "bp" | "m2" | "ep";
 const PHASE_ACTION: Partial<Record<number, PhaseAction>> = { 3: "bp", 4: "m2", 5: "ep" };
 
 const ZONE_CENTER = 0xa29e9e, ZONE_ARM = 0xb7b5b5;
-/** Info panel geometry: LP bars hug the top/bottom edges, panel content fits between them. */
-const LP_Y = { opp: 3, mine: 360 - 3 - LP_BAR.h };
+/** Info panel geometry: everything sits inside the frame's rim. */
+const LAYOUT = (() => {
+  const r = PANEL.rim;
+  const x = r + 2, w = INFO.w - 2 * (r + 2);
+  const lpOpp = r, lpMine = 360 - r - LP_BAR.h;
+  return {
+    x, w,
+    bar: { x: r + 1, w: INFO.w - 2 * (r + 1) },
+    lp: { opp: lpOpp, mine: lpMine },
+    /** Content area between the two LP bars. */
+    top: lpOpp + LP_BAR.h + 5,
+    bottom: lpMine - 4,
+  };
+})();
+/** Level stars in the info panel: 7x7 sprite, 3px apart. */
+const STAR_SIZE = 7, STAR_GAP = 3;
+/** Info-panel art: 128px art inside a 3px wooden frame. */
+const ART_FRAME = 128 + 6;
+/** The duel log text starts below its "DUEL LOG" header, inside the paper. */
+const LOG_Y = LAYOUT.top + 13;
 
 export class DuelScene extends Phaser.Scene {
   private engine!: Engine;
@@ -83,7 +102,13 @@ export class DuelScene extends Phaser.Scene {
 
   private infoPanel!: Phaser.GameObjects.Container;
   private infoCode = 0;
-  private infoTimer: Phaser.Time.TimerEvent | null = null;
+  /** Last card shown in the info panel (the LOG/CARD toggle returns to it). */
+  private lastCode = 0;
+  private panelToggle!: WoodButton;
+  /** "card": the panel keeps the last hovered card. "log": shows the log, cards only while hovered. */
+  private panelMode: "card" | "log" = "card";
+  private hoverTimer: Phaser.Time.TimerEvent | null = null;
+  private nameScroll: { tween: Phaser.Tweens.Tween; mask: Phaser.GameObjects.Graphics } | null = null;
   private logText!: Phaser.GameObjects.BitmapText;
   private logLines: string[] = [];
   private lpBars!: [LPBar, LPBar];
@@ -108,6 +133,8 @@ export class DuelScene extends Phaser.Scene {
     this.snapshot = null;
     this.phase = 0;
     this.infoCode = 0;
+    this.lastCode = 0;
+    this.panelMode = "card";
   }
 
   async create() {
@@ -172,7 +199,6 @@ export class DuelScene extends Phaser.Scene {
   private drawStaticBoard() {
     const g = this.add.graphics();
     g.fillStyle(PAPER).fillRect(0, 0, 640, 360);
-    g.fillStyle(INK).fillRect(DIVIDER.x, 0, DIVIDER.w, 360);
     for (const side of [0, 1] as const) {
       for (const { x, y } of zoneCenters(side)) {
         // A cross: room for an upright card and a sideways (defense) card.
@@ -230,49 +256,88 @@ export class DuelScene extends Phaser.Scene {
   // ---------------------------------------------------------------- info panel, log, LP
 
   private createInfoPanel() {
+    const L = LAYOUT;
+    this.add.nineslice(0, 0, PANEL.frame, undefined, INFO.w, 360, PANEL.rim, PANEL.rim, PANEL.rim, PANEL.rim).setOrigin(0);
     this.lpBars = [
-      new LPBar(this, 6, LP_Y.mine, "You", this.startLP).set(this.startLP),
-      new LPBar(this, 6, LP_Y.opp, this.sceneData.opponentName ?? "Opponent", this.startLP).set(this.startLP),
+      new LPBar(this, L.bar.x, L.lp.mine, L.bar.w, "You", this.startLP).set(this.startLP),
+      new LPBar(this, L.bar.x, L.lp.opp, L.bar.w, this.sceneData.opponentName ?? "Opponent", this.startLP).set(this.startLP),
     ];
     this.infoPanel = this.add.container(0, 0);
-    this.logText = text(this, 8, 32, "", { color: INK, maxWidth: INFO.w - 14 });
-    const speeds = [1, 2, 4];
-    const toggle = makeButton(this, 194, LP_Y.mine - 8, 40, 9, `ANIM ${this.animator.speed}X`, () => {
-      this.animator.speed = speeds[(speeds.indexOf(this.animator.speed) + 1) % speeds.length];
-      toggle.setLabel(`ANIM ${this.animator.speed}X`);
-      try { localStorage.setItem("duel.animSpeed", String(this.animator.speed)); } catch { /* storage unavailable */ }
-    }, 0x55607a);
-    this.showLog();
+    this.logText = text(this, L.x + PANEL.paperRim, LOG_Y, "", { color: PANEL.paperInk, maxWidth: L.w - PANEL.paperRim * 2 }).setDepth(1);
+    this.createCornerButtons();
+    this.showEmpty();
   }
 
-  /** Shows a card's details (hover) — replaces the log until the pointer leaves the card. */
+  /**
+   * Top-right corner of the field: animation speed (1x/2x/4x), with the info panel's LOG/CARD toggle
+   * below it. Right edges line up with the right pile column (card centre 614).
+   */
+  private createCornerButtons() {
+    const y = 4, speedW = 24, toggleW = speedW;
+    const speedX = 614 + CARD.w / 2 - speedW;
+    const speeds = [1, 2, 4];
+    const speed = makeWoodButton(this, speedX, y, speedW, `${this.animator.speed}X`, () => {
+      this.animator.speed = speeds[(speeds.indexOf(this.animator.speed) + 1) % speeds.length];
+      speed.setLabel(`${this.animator.speed}X`);
+      try { localStorage.setItem("duel.animSpeed", String(this.animator.speed)); } catch { /* storage unavailable */ }
+    });
+    // Below it, right-aligned: switch the info panel between card mode and log mode.
+    this.panelToggle = makeWoodButton(this, speedX + speedW - toggleW, y + 18 + 2, toggleW, "LOG", () => {
+      this.panelMode = this.panelMode === "card" ? "log" : "card";
+      this.panelToggle.setLabel(this.panelMode === "card" ? "LOG" : "CARD");
+      if (this.panelMode === "card" && this.lastCode) this.showCard(this.lastCode);
+      else this.showLog();
+    });
+  }
+
+  /** Cream paper inset whose outer edge is the box (x, y, w, h); text goes inside, padded by its rim. */
+  private paper(x: number, y: number, w: number, h: number) {
+    const r = PANEL.paperRim;
+    this.infoPanel.add(this.add.nineslice(x, y, PANEL.paper, undefined, w, h, r, r, r, r).setOrigin(0));
+  }
+
+  /**
+   * Pointer entered a card. Card mode: show it and keep it (until another card is hovered).
+   * Log mode: show it only while hovered (`hoverEnd` returns to the log).
+   */
   private showInfo(code: number) {
+    if (!code || !this.engine.cards.records.has(code)) return;
+    this.hoverTimer?.remove();
+    this.lastCode = code;
+    this.showCard(code);
+  }
+
+  /** Pointer left a card: in log mode, go back to the log (slightly delayed so moving between cards doesn't flicker). */
+  private hoverEnd() {
+    if (this.panelMode !== "log") return;
+    this.hoverTimer?.remove();
+    this.hoverTimer = this.time.delayedCall(120, () => this.showLog());
+  }
+
+  /** Renders a card's details in the info panel. */
+  private showCard(code: number) {
     const r = this.engine.cards.records.get(code);
-    if (!code || !r) return;
-    this.infoTimer?.remove();
+    if (!r) return;
     this.infoCode = code;
     this.logText.setVisible(false);
+    this.stopNameScroll();
     const p = this.infoPanel.removeAll(true);
+    const L = LAYOUT, ink = PANEL.ink;
     const monster = (r.type & 0x1) !== 0;
 
-    const title = r.name.toUpperCase();
-    const big = text(this, 8, 30, title, { scale: 2 });
-    if (big.width > 156) { big.destroy(); p.add(text(this, 8, 30, title, { maxWidth: 156 })); } else p.add(big);
+    // Name at 2x; names wider than the space before the attribute icon scroll (see scrollName).
+    const nameW = L.w - 20;
+    const name = text(this, L.x, L.top, r.name.toUpperCase(), { scale: 2, color: ink });
+    p.add(name);
+    if (name.width > nameW) this.scrollName(name, nameW);
     const attr = ATTRIBUTE_INDEX[r.attribute];
-    if (monster && attr !== undefined) p.add(this.add.image(168, 30, ATTRIBUTE_SHEET, attr).setOrigin(0));
-    if (monster) {
-      const g = this.add.graphics();
-      for (let i = 0; i < (r.level & 0xff); i++) {
-        g.fillStyle(0xd62020).fillRect(8 + i * 7, 46, 5, 5);
-        g.fillStyle(0xffd23f).fillRect(10 + i * 7, 48, 1, 1);
-      }
-      p.add(g);
-    }
-    // 128x128 art, loaded on first view.
+    if (monster && attr !== undefined) p.add(this.add.image(L.x + L.w - 16, L.top - 1, ATTRIBUTE_SHEET, attr).setOrigin(0));
+    if (monster) for (let i = 0; i < (r.level & 0xff); i++) p.add(this.add.image(L.x + i * (STAR_SIZE + STAR_GAP), L.top + 14, "ui-star").setOrigin(0));
+    // 128x128 art in a wooden frame (the LP bar's frame, nine-sliced), loaded on first view.
+    const artY = L.top + 24;
     const artKey = `art128-${code}`;
-    const frame = this.add.rectangle(8, 56, 128, 128, INK_SOFT).setOrigin(0);
-    p.add(frame);
-    const placeArt = () => { if (this.infoCode === code && p.active) p.add(this.add.image(8, 56, artKey).setOrigin(0)); };
+    p.add(this.add.nineslice(L.x, artY, "ui-lp-frame", undefined, ART_FRAME, ART_FRAME, 3, 3, 3, 3).setOrigin(0));
+    const placeArt = () => { if (this.infoCode === code && p.active) p.add(this.add.image(L.x + 3, artY + 3, artKey).setOrigin(0)); };
     if (this.textures.exists(artKey)) placeArt();
     else {
       this.load.image(artKey, `cards/art128/${code}.png`);
@@ -282,21 +347,55 @@ export class DuelScene extends Phaser.Scene {
     const stats = monster
       ? [`ATK ${r.atk < 0 ? "?" : r.atk}`, `DEF ${r.def < 0 ? "?" : r.def}`, `LV ${r.level & 0xff}`, raceName(BigInt(r.race))]
       : [r.type & 0x2 ? "SPELL" : "TRAP", spellTrapKind(r.type)];
-    stats.forEach((s, i) => p.add(text(this, 142, 60 + i * 16, s, { scale: s.length > 9 ? 1 : 2 })));
-    p.add(text(this, 8, 192, r.desc, { maxWidth: INFO.w - 14 }));
+    const statX = L.x + ART_FRAME + 4;
+    stats.forEach((s, i) => p.add(text(this, statX, artY + 4 + i * 16, s, { scale: s.length * 8 > L.x + L.w - statX ? 1 : 2, color: ink })));
+    const descY = artY + ART_FRAME + 5;
+    this.paper(L.x, descY, L.w, L.bottom - descY);
+    const pad = PANEL.paperRim + 1;
+    p.add(text(this, L.x + pad, descY + pad, r.desc, { maxWidth: L.w - pad * 2, color: PANEL.paperInk }));
   }
 
-  /** Back to the log shortly after the pointer leaves a card (so moving across cards doesn't flicker). */
-  private hideInfoSoon() {
-    this.infoTimer?.remove();
-    this.infoTimer = this.time.delayedCall(150, () => this.showLog());
+  /**
+   * Marquee for long card names: wait, scroll left until the end is visible, pause, jump back to the
+   * start, pause, repeat. The name is clipped to `width` by a geometry mask.
+   */
+  private scrollName(name: Phaser.GameObjects.BitmapText, width: number) {
+    const mask = this.make.graphics({}, false);
+    mask.fillStyle(0xffffff).fillRect(name.x, name.y - 1, width, name.height + 2);
+    name.setMask(mask.createGeometryMask());
+    const overflow = name.width - width;
+    this.nameScroll = {
+      mask,
+      tween: this.tweens.add({
+        targets: name, x: name.x - overflow,
+        delay: 900, duration: overflow * 40, hold: 1000, repeat: -1, repeatDelay: 900,
+      }),
+    };
   }
 
+  private stopNameScroll() {
+    this.nameScroll?.tween.remove();
+    this.nameScroll?.mask.destroy();
+    this.nameScroll = null;
+  }
+
+  /** Nothing to show yet (before the opening hand is drawn): just the wooden board. */
+  private showEmpty() {
+    this.infoCode = 0;
+    this.stopNameScroll();
+    this.infoPanel.removeAll(true);
+    this.logText.setVisible(false);
+  }
+
+  /** Renders the duel log in the info panel. */
   private showLog() {
     this.infoCode = 0;
+    this.stopNameScroll();
     this.infoPanel.removeAll(true);
+    const L = LAYOUT;
     this.logText.setVisible(true);
-    this.infoPanel.add(text(this, 8, 23, "DUEL LOG", { color: INK_SOFT }));
+    this.infoPanel.add(text(this, L.x + 1, L.top, "DUEL LOG", { color: PANEL.inkSoft }));
+    this.paper(L.x, LOG_Y - PANEL.paperRim - 1, L.w, L.bottom - LOG_Y + PANEL.paperRim + 1);
     this.renderLog();
   }
 
@@ -308,9 +407,10 @@ export class DuelScene extends Phaser.Scene {
 
   private renderLog() {
     // Show as many recent lines as fit above the speed button.
+    const room = LAYOUT.bottom - PANEL.paperRim - this.logText.y;
     for (let n = Math.min(this.logLines.length, 45); n >= 0; n--) {
       this.logText.setText(this.logLines.slice(this.logLines.length - n).join("\n"));
-      if (this.logText.height <= LP_Y.mine - 14 - this.logText.y) break;
+      if (this.logText.height <= room) break;
     }
   }
 
@@ -325,6 +425,11 @@ export class DuelScene extends Phaser.Scene {
     }
     await this.animator.play(messages, (m) => {
       if (m.type === OcgMessageType.NEW_TURN) this.turnPlayer = m.player;
+      // Card mode starts empty; the first card you draw fills it.
+      if (m.type === OcgMessageType.DRAW && m.player === HUMAN && !this.lastCode && m.drawn[0]?.code) {
+        this.lastCode = m.drawn[0].code;
+        if (this.panelMode === "card") this.showCard(this.lastCode);
+      }
       const line = describeMessage(m, this.engine.text);
       if (line) this.log(line);
     });
@@ -349,7 +454,7 @@ export class DuelScene extends Phaser.Scene {
   }
 
   private floatLP(i: 0 | 1, label: string, color: number) {
-    const y = i === 0 ? LP_Y.mine - 14 : LP_Y.opp + LP_BAR.h + 3;
+    const y = i === 0 ? LAYOUT.lp.mine - 14 : LAYOUT.lp.opp + LP_BAR.h + 3;
     const f = text(this, 110, y, label, { color, scale: 2, originX: 0.5 }).setDepth(500);
     this.tweens.add({ targets: f, y: y + (i === 0 ? -24 : 24), alpha: 0, duration: 1200, onComplete: () => f.destroy() });
   }
@@ -394,7 +499,7 @@ export class DuelScene extends Phaser.Scene {
       sp.setInteractive({ useHandCursor: !!contents });
       if (top) {
         sp.on("pointerover", () => this.showInfo(top.code));
-        sp.on("pointerout", () => this.hideInfoSoon());
+        sp.on("pointerout", () => this.hoverEnd());
       }
       if (contents) sp.on("pointerup", () => this.browsePile(contents, banished));
       this.board.add([sp, this.badge(x + 19, y - 28, String(count), 1)]);
@@ -433,7 +538,7 @@ export class DuelScene extends Phaser.Scene {
     sp.setInteractive({ useHandCursor: true });
     const k = key(c.controller, c.location, c.sequence);
     sp.on("pointerover", () => c.code && this.showInfo(c.code));
-    sp.on("pointerout", () => this.hideInfoSoon());
+    sp.on("pointerout", () => this.hoverEnd());
     sp.on("pointerup", (p: Phaser.Input.Pointer) => this.onCardClick(k, p));
     this.sprites.set(k, sp);
     this.board.add(sp);
@@ -450,6 +555,7 @@ export class DuelScene extends Phaser.Scene {
       onConfirm: () => {},
       buttons: [{ label: "Close", onClick: () => pending && this.onPrompt(pending, null, true) }],
       onHover: (code) => this.showInfo(code),
+      onHoverEnd: () => this.hoverEnd(),
     });
   }
 
@@ -519,6 +625,7 @@ export class DuelScene extends Phaser.Scene {
           onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: i }),
           buttons: m.forced ? [] : [{ label: "Don't chain", onClick: () => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: null }) }],
           onHover: (code) => this.showInfo(code),
+          onHoverEnd: () => this.hoverEnd(),
         });
         return;
       case OcgMessageType.SELECT_EFFECTYN: {
@@ -553,6 +660,7 @@ export class DuelScene extends Phaser.Scene {
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_CARD, indicies: sel }),
           buttons: m.can_cancel ? [{ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_CARD, indicies: null }) }] : [],
           onHover: (code) => this.showInfo(code),
+          onHoverEnd: () => this.hoverEnd(),
         });
         return;
       case OcgMessageType.SELECT_TRIBUTE:
@@ -568,6 +676,7 @@ export class DuelScene extends Phaser.Scene {
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_TRIBUTE, indicies: sel }),
           buttons: m.can_cancel ? [{ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_TRIBUTE, indicies: null }) }] : [],
           onHover: (code) => this.showInfo(code),
+          onHoverEnd: () => this.hoverEnd(),
         });
         return;
       case OcgMessageType.SELECT_UNSELECT_CARD: {
@@ -582,6 +691,7 @@ export class DuelScene extends Phaser.Scene {
           title: title(`Select ${range(m.min, m.max)} card(s)`), cards, mode: "single", buttons,
           onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_UNSELECT_CARD, index: i }),
           onHover: (code) => this.showInfo(code),
+          onHoverEnd: () => this.hoverEnd(),
         });
         return;
       }
@@ -600,6 +710,7 @@ export class DuelScene extends Phaser.Scene {
           },
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_SUM, indicies: sel.filter((i) => i >= must.length).map((i) => i - must.length) }),
           onHover: (code) => this.showInfo(code),
+          onHoverEnd: () => this.hoverEnd(),
         });
         return;
       }

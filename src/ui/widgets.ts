@@ -39,3 +39,32 @@ export function makeButton(
   };
   return c;
 }
+
+export interface WoodButton {
+  setLabel(label: string): void;
+}
+
+/**
+ * Small raised Runewood button (the phase-column sprites), top-left at (x, y). Shows the pressed frame
+ * while held and fires on release. Height 18 leaves a 6px face for one line of tiny5 text.
+ */
+export function makeWoodButton(scene: Phaser.Scene, x: number, y: number, w: number, label: string, onClick: () => void): WoodButton {
+  const h = 18;
+  // Raised: 5 rows of rim above the face, 7 of side below. Pressed: face 3px lower.
+  const raised = { key: "ui-phase-clickable", slice: [4, 4, 5, 7] as const, textY: 5 };
+  const pressed = { key: "ui-phase-idle", slice: [4, 4, 8, 4] as const, textY: 8 };
+  const box = scene.add.nineslice(x, y, raised.key, undefined, w, h, ...raised.slice).setOrigin(0);
+  const t = text(scene, x + w / 2, y + raised.textY, label, { color: 0x3b2414, originX: 0.5 });
+  const press = (down: boolean) => {
+    const look = down ? pressed : raised;
+    box.setTexture(look.key).setSlices(w, h, ...look.slice);
+    t.setY(y + look.textY);
+  };
+  const hit = scene.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true });
+  hit.on("pointerdown", () => press(true));
+  hit.on("pointerout", () => press(false));
+  hit.on("pointerup", () => { press(false); onClick(); });
+  return {
+    setLabel: (s: string) => { t.setText(s).setX(Math.round(x + w / 2 - t.width / 2)); },
+  };
+}

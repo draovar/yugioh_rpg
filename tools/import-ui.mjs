@@ -23,6 +23,9 @@ const SPRITES = {
   "lp-fill-green": ["13_Runewood_Theme/Sprites/UI_Runewood_BarFiller02b.png", false],
   "lp-fill-orange": ["13_Runewood_Theme/Sprites/UI_Runewood_BarFiller01a.png", false],
   "lp-fill-red": ["13_Runewood_Theme/Sprites/UI_Runewood_BarFiller02a.png", false],
+  // Info panel: light wood board with a thick rim, cream paper inset behind long text.
+  "panel-frame": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame05b.png", false],
+  "panel-paper": ["13_Runewood_Theme/Sprites/UI_Runewood_FrameBanner01a.png", false],
 };
 
 mkdirSync(OUT, { recursive: true });

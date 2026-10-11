@@ -70,8 +70,13 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   `attributes.png` = 7 16x16 icons: DARK EARTH FIRE LIGHT WATER WIND DIVINE.
 - Duel layout (`src/ui/duel/layout.ts`): info panel 0-219, divider 220-223, phase column x230 (6 boxes 16x56,
   clickable BATTLE / MAIN 2 / END P.), zones are 58px-pitch crosses, piles in the side columns. Banished cards
-  have no zone: a `B<n>` badge under the Graveyard, listed when browsing it. The info panel shows the duel log
-  unless a card is hovered.
+  have no zone: a `B<n>` badge under the Graveyard, listed when browsing it.
+- Info panel modes (LOG/CARD button under the 1X speed button, field top-right): **card mode** (default) keeps
+  the last hovered card (starts with the first card you draw); **log mode** shows the log and previews cards
+  only while hovered. Long names scroll (marquee) after a short hover.
+- Duel UI chrome is Runewood (Crusenho pack): phase buttons (`phaseThemes.ts`), LP bars (`LPBar.ts`), info
+  panel = light wood board + cream paper inset for description/log (`panelStyles.ts`). Sprites are nine-sliced;
+  insets come from the sprites' pixel rows (see comments). Info panel positions derive from `LAYOUT` in DuelScene.
 
 ## Engine facts worth knowing
 

@@ -1,12 +1,11 @@
 // Duel screen geometry at the native 640x360 resolution, taken from docs/layout-sketch.png.
-//   [info panel 0-219] [divider 220-223] [phase column 230-245] [field 250-640]
+//   [info panel 0-223] [phase column 230-245] [field 250-640]
 // The human is at the bottom; the opponent's side is mirrored.
 
 /** Every card (hand, field, piles) is 38x56 including its 1px outline. */
 export const CARD = { w: 38, h: 56 };
 
-export const INFO = { x: 0, w: 220 };
-export const DIVIDER = { x: 220, w: 4 };
+export const INFO = { x: 0, w: 224 };
 export const PHASE_COL = { x: 230, w: 16, h: 56, top: 2, pitch: 60 };
 export const FIELD = { left: 250, right: 640 };
 /** Centre of the playing field (activation zoom, banners). */

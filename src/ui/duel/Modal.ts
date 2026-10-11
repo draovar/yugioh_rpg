@@ -5,10 +5,10 @@ import type { CardDb } from "../../duel/cardData.ts";
 import { FONT_CARD, INK, WHITE, border, fit, text } from "../pixel.ts";
 import { makeButton } from "../widgets.ts";
 import { CardSprite } from "./CardSprite.ts";
-import { CARD, DIVIDER } from "./layout.ts";
+import { CARD, INFO } from "./layout.ts";
 
 const DEPTH = 1000;
-const LEFT = DIVIDER.x + DIVIDER.w;
+const LEFT = INFO.x + INFO.w;
 const WIDTH = 640 - LEFT;
 const MID_X = LEFT + Math.floor(WIDTH / 2);
 const PANEL = 0x1b2147;
@@ -32,6 +32,7 @@ export interface PickerOptions {
   onConfirm: (selected: number[]) => void;
   buttons?: { label: string; onClick: () => void }[];
   onHover?: (code: number) => void;
+  onHoverEnd?: () => void;
 }
 
 export class Modal {
@@ -110,6 +111,7 @@ export class Modal {
         const sp = new CardSprite(s, x, y).show(c.code, this.cards.records.get(c.code));
         sp.setInteractive({ useHandCursor: !c.locked });
         sp.on("pointerover", () => opts.onHover?.(c.code));
+        sp.on("pointerout", () => opts.onHoverEnd?.());
         sp.on("pointerup", () => {
           if (c.locked) return;
           if (opts.mode === "single") { this.close(); opts.onConfirm([i]); return; }
