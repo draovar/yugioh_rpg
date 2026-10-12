@@ -74,7 +74,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   live in `tools/lib/art-style.mjs`; quantisation is our own k-means/Oklab code in `tools/lib/palette.mjs`
   (sharp's `palette`/`colours` PNG option silently does nothing in this build — don't rely on it).
 - Fonts: `tiny5` (our own 3x5, UI + ATK/DEF) and `nerds3` (3x3 Font for Nerds by Norwegian Ink, card names —
-  **check its license before release**). TTFs are converted to BMFont by sampling glyph outlines.
+  no license found; kept by the owner's choice (non-commercial), don't re-raise). TTFs are converted to BMFont by sampling glyph outlines.
 - Card = 38x56 incl. 1px outline. Frames per type in `public/assets/cards/frames/` (drawn by the user); regions:
   name bar (2,2) 34x5, stars y 7-10, art window 32x32 at (3,12), bottom bar (2,46) 34x8. Back: `back.png`.
   `attributes.png` = 7 16x16 icons: DARK EARTH FIRE LIGHT WATER WIND DIVINE.

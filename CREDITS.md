@@ -10,7 +10,7 @@
 - **Complete UI Essential Pack** by **Crusenho Agus Hennihuno** — https://crusenho.itch.io —
   licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Used: Runewood theme sprites
   (phase buttons, LP bars, panel frames, card action menu) and Hologram theme sprites, trimmed/nine-sliced; see `tools/import-ui.mjs`.
-- **3x3 Font for Nerds** — Norwegian Ink (www.noink.no). *License terms to be confirmed before release.*
+- **3x3 Font for Nerds** — Norwegian Ink (www.noink.no). *No license found (checked 2026-10: none in the font file, noink.no is gone); kept by the project owner's choice for this non-commercial project.*
 - Card frames, card back, attribute icons, Spell/Trap kind icons and level star — made for this project.
 - **tiny5** pixel font — made for this project.
 
