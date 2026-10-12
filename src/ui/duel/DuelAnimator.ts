@@ -70,8 +70,10 @@ const T = {
   flash: 240,
   /** Activated card shown at 2x in the middle of the field. */
   activateHold: 950,
-  /** Cards revealed to a player (e.g. a searched card) shown at 2x in the middle of the field. */
+  /** Cards revealed to a player (e.g. a searched card): flipped face-up in place (or yours lifted) this long. */
   confirmHold: 900,
+  /** How far your own cards rise while revealed to the opponent. */
+  confirmLift: 8,
   /** Hand shuffle: cards slide into a stack, rest there, then spread out in their new order. */
   shuffleGather: 180,
   shuffleHold: 140,
@@ -107,6 +109,13 @@ export class DuelAnimator {
   current: OcgMessage | null = null;
   /** Card just flipped face-up (it already flashed, so a following FLIPSUMMONING doesn't flash again). */
   private justFlipped: string | null = null;
+  /**
+   * Hidden cards revealed to you (CONFIRM_CARDS) that are still face-up, by position: the scene's redraw
+   * shows them face-up too, so e.g. Confiscation's prompt picks from the opponent's open hand.
+   */
+  readonly revealed = new Map<string, number>();
+  /** The same cards' sprites while animating (sprites survive hand re-keying, positions don't). */
+  private revealedSprites = new Set<CardSprite>();
   private readonly host: AnimHost;
 
   constructor(host: AnimHost) {
@@ -120,12 +129,40 @@ export class DuelAnimator {
 
   /** Animates `messages` in order; `onMessage` runs as each one starts (e.g. to log it). */
   async play(messages: OcgMessage[], onMessage?: (m: OcgMessage) => void): Promise<void> {
+    const h = this.host;
+    this.revealedSprites = new Set([...this.revealed.keys()].map((k) => h.sprites.get(k)).filter((sp): sp is CardSprite => !!sp));
     for (const m of messages) {
       onMessage?.(m);
       this.current = m;
+      if (this.revealedSprites.size) await this.beforeRevealed(m);
       await this.playOne(m);
     }
     this.current = null;
+    // Still face-up (only hints followed: a prompt about them comes next): remember where they are now.
+    this.revealed.clear();
+    for (const [k, sp] of h.sprites) if (this.revealedSprites.has(sp)) this.revealed.set(k, sp.code);
+  }
+
+  /**
+   * Revealed cards stay face-up through hints and flip face-down again before anything else happens,
+   * except a revealed card that is moving away (e.g. the one Confiscation discards): it leaves face-up.
+   */
+  private async beforeRevealed(m: OcgMessage): Promise<void> {
+    if (m.type === OcgMessageType.HINT || m.type === OcgMessageType.CARD_HINT || m.type === OcgMessageType.CONFIRM_CARDS) return;
+    // The prompt ending the batch (e.g. Confiscation's card choice) is asked with them face-up.
+    if (/^(SELECT|ANNOUNCE|SORT)_/.test(OcgMessageType[m.type] ?? "")) return;
+    if (m.type === OcgMessageType.MOVE) {
+      const sp = this.host.sprites.get(key(m.from));
+      if (sp && this.revealedSprites.delete(sp)) return;
+    }
+    await this.hideRevealed();
+  }
+
+  private async hideRevealed(): Promise<void> {
+    const sprites = [...this.revealedSprites];
+    this.revealedSprites.clear();
+    this.revealed.clear();
+    await Promise.all(sprites.map((sp) => this.flipReveal(sp, 0)));
   }
 
   private async playOne(m: OcgMessage): Promise<void> {
@@ -159,7 +196,7 @@ export class DuelAnimator {
       case OcgMessageType.POS_CHANGE:
         return this.posChange(m, m.code, m.prev_position, m.position);
       case OcgMessageType.CONFIRM_CARDS:
-        return this.confirm(m.cards.map((c) => c.code));
+        return this.confirm(m.player, m.cards);
       case OcgMessageType.SHUFFLE_HAND:
         return this.shuffleHand(m.player, m.cards);
       case OcgMessageType.CHAINING:
@@ -302,10 +339,37 @@ export class DuelAnimator {
   }
 
   /**
-   * Cards revealed to a player (CONFIRM_CARDS, e.g. after a search the added card is shown to the
-   * opponent): shown side by side at 2x in the middle of the field for a moment (1x if more than four).
+   * Cards revealed to `viewer` (CONFIRM_CARDS: a searched card, Confiscation's look at the hand...), in
+   * place: hidden cards revealed to you flip face-up and stay up (see `beforeRevealed`); your own cards
+   * revealed to the opponent rise a little for a moment. Cards not on the board (e.g. in the Deck) are
+   * shown side by side in the middle of the field.
    */
-  private async confirm(codes: number[]): Promise<void> {
+  private async confirm(viewer: number, cards: (Loc & { code: number })[]): Promise<void> {
+    const h = this.host;
+    const anims: Promise<void>[] = [], lifted: CardSprite[] = [], offBoard: number[] = [];
+    for (const c of cards) {
+      // Only what this screen's player may see: cards revealed to you, or your own.
+      if (viewer !== h.me && c.controller !== h.me) continue;
+      const sp = h.sprites.get(key(c));
+      if (!sp) offBoard.push(c.code);
+      else if (viewer === h.me && sp.code === 0 && c.code) {
+        this.revealedSprites.add(sp);
+        anims.push(this.flipReveal(sp, c.code));
+      } else if (viewer !== h.me) {
+        lifted.push(sp);
+        anims.push(this.tween({ targets: sp, y: sp.y - T.confirmLift, duration: T.relayout, ease: EASE }));
+      }
+    }
+    if (anims.length) {
+      await Promise.all(anims);
+      await this.wait(T.confirmHold);
+      await Promise.all(lifted.map((sp) => this.tween({ targets: sp, y: sp.y + T.confirmLift, duration: T.relayout, ease: EASE })));
+    }
+    await this.confirmOffBoard(offBoard);
+  }
+
+  /** Revealed cards with no sprite: shown side by side at 2x in the middle of the field (1x if more than four). */
+  private async confirmOffBoard(codes: number[]): Promise<void> {
     const h = this.host;
     const shown = codes.filter((c) => c && h.cards.records.has(c));
     if (!shown.length) return;

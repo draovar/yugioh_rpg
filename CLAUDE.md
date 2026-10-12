@@ -41,7 +41,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
 `&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`; default Yugi vs Kaiba),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
-(`&deck=kaiba`), `equip`; cards placed in hand/on the field first),
+(`&deck=kaiba`), `equip`, `confiscation`; cards placed in hand/on the field first),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
 choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
@@ -87,7 +87,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
   squash/overshoot; faces swap instantly). Hover effects are suppressed while `animator.busy`.
   `DuelAnimator.play(messages)` tweens the displayed sprites per message (draw, move, summon, flip, activate,
-  attack, LP, turn banner); `DuelController` awaits it before the next prompt/AI move, then the scene redraws
+  attack, LP, turn banner, reveals: hidden cards revealed to you (CONFIRM_CARDS) flip face-up in place and stay up through
+  the prompt that follows, e.g. Confiscation's pick (`animator.revealed`, honoured by the redraw), then flip back before the
+  next action; your own revealed cards just rise); `DuelController` awaits it before the next prompt/AI move, then the scene redraws
   from the snapshot, so animations only need to *look* right. Speed toggle (1×/2×/4×) and the AUTO/ALL/OFF chain-mode
   button under LOG are saved in localStorage.
 - `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx).

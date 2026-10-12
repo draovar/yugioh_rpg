@@ -170,13 +170,42 @@ const PREVIEWS: Preview[] = [
   lpPreview("#10 Turn banner: your turn", { type: OcgMessageType.NEW_TURN, player: 0, turn: 3 }),
   lpPreview("#10 Turn banner: opponent's turn", { type: OcgMessageType.NEW_TURN, player: 1, turn: 4 }),
   {
-    label: "#12 Search: card revealed, then hand shuffled (you)",
+    label: "#12 Search: card revealed (lifts), then hand shuffled (you)",
     async run(host, snap) {
       // As after Sangan's search: CONFIRM_CARDS to the opponent, then SHUFFLE_HAND with the new order.
       const hand = snap.players[0].hand.map((c) => c.code);
       await host.animator.play([
         { type: OcgMessageType.CONFIRM_CARDS, player: 1, cards: [{ code: hand[0], controller: 0, location: OcgLocation.HAND, sequence: 0 }] } as OcgMessage,
         { type: OcgMessageType.SHUFFLE_HAND, player: 0, cards: [...hand].reverse() } as OcgMessage,
+      ]);
+    },
+  },
+  {
+    label: "#12 Search: opponent's card flips up, back down, hand shuffled",
+    async run(host, snap) {
+      // As after the opponent's Sangan: the added card (last in hand) is revealed to you, then their hand shuffles.
+      const n = snap.players[1].hand.length, code = snap.players[0].hand[0].code;
+      await host.animator.play([
+        { type: OcgMessageType.CONFIRM_CARDS, player: 0, cards: [{ code, controller: 1, location: OcgLocation.HAND, sequence: n - 1 }] } as OcgMessage,
+        { type: OcgMessageType.SHUFFLE_HAND, player: 1, cards: Array(n).fill(0) } as OcgMessage,
+      ]);
+    },
+  },
+  {
+    label: "#12 Confiscation: opponent's hand flips up, one discarded, rest flip down + shuffle",
+    async run(host, snap) {
+      // CONFIRM_CARDS of their whole hand, (your pick: here a pause), the pick goes to the GY, then SHUFFLE_HAND.
+      const n = snap.players[1].hand.length, mine = snap.players[0].hand.map((c) => c.code);
+      const codes = Array.from({ length: n }, (_, i) => mine[i % mine.length]);
+      await host.animator.play([{
+        type: OcgMessageType.CONFIRM_CARDS, player: 0,
+        cards: codes.map((code, sequence) => ({ code, controller: 1, location: OcgLocation.HAND, sequence })),
+      } as OcgMessage]);
+      await pause(host, 1500);
+      await host.animator.play([
+        moveMsg(codes[0], { controller: 1, location: OcgLocation.HAND, sequence: 0, position: OcgPosition.FACEDOWN_DEFENSE },
+          { controller: 1, location: OcgLocation.GRAVE, sequence: 0, position: OcgPosition.FACEUP_ATTACK }, REASON.DISCARD),
+        { type: OcgMessageType.SHUFFLE_HAND, player: 1, cards: Array(n - 1).fill(0) } as OcgMessage,
       ]);
     },
   },

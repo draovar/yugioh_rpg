@@ -746,14 +746,17 @@ export class DuelScene extends Phaser.Scene {
 
   private cardSprite(c: CardView, x: number, y: number): CardSprite {
     const onField = c.location === OcgLocation.MZONE;
-    const sp = new CardSprite(this, x, y).show(c.code, this.engine.cards.records.get(c.code), {
+    const k = key(c.controller, c.location, c.sequence);
+    // A hidden card revealed to you (e.g. by Confiscation) stays face-up until the animator flips it back.
+    const revealed = this.animator.revealed.get(k);
+    const code = revealed ?? c.code;
+    const sp = new CardSprite(this, x, y).show(code, this.engine.cards.records.get(code), {
       // Face-down cards show the back, yours too; hovering your own still shows it in the info panel.
-      back: c.code === 0 || c.faceDown,
+      back: !revealed && (c.code === 0 || c.faceDown),
       atk: onField ? c.attack : undefined, def: onField ? c.defense : undefined,
     });
     sp.setInteractive({ useHandCursor: true });
-    const k = key(c.controller, c.location, c.sequence);
-    sp.on("pointerover", () => c.code && this.showInfo(c.code));
+    sp.on("pointerover", () => code && this.showInfo(code));
     sp.on("pointerout", () => this.hoverEnd());
     sp.on("pointerup", () => this.onCardClick(k));
     this.sprites.set(k, sp);
