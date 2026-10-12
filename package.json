@@ -21,7 +21,7 @@
   "dependencies": {
     "ocgcore-wasm": "^0.1.2",
     "peerjs": "^1.5.4",
-    "phaser": "^3.88.2"
+    "phaser": "^4.2.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

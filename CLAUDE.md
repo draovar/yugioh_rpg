@@ -1,6 +1,6 @@
 # Yu-Gi-Oh RPG
 
-A Pokémon-style overworld RPG (Phaser 3) in which every battle is a real Yu-Gi-Oh duel.
+A Pokémon-style overworld RPG (Phaser 4.2) in which every battle is a real Yu-Gi-Oh duel.
 Rendered natively at **640x360** pixel art (`pixelArt: true`), scaled up by whole numbers (2x/3x); the duel
 screen follows `docs/layout-sketch.png` exactly.
 Duel rules are **not** hand-written: they run on **ocgcore** (Project Ignis / EDOPro core),
@@ -100,6 +100,13 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 
 - Everything is laid out in native 640x360 pixels; keep coordinates integer (odd sizes → round). Text is
   `BitmapText` only (`text()` in `src/ui/pixel.ts`); TTF text blurs at this size.
+- Phaser 4 pixel snapping: `roundPixels: true` is set explicitly (v4 defaults to false) but only snaps objects whose
+  transform is a pure translation (`vertexRoundMode` "safeAuto"); scaled/rotated ones (2x cards, squash flips, defense
+  rotation) stay crisp through `pixelArt` nearest sampling, so keep their resting positions integer. BitmapText glyphs
+  are never rounded by v4: `text()` gives each one a `GlyphSnapSubmitter` render node that snaps glyphs like v3 did
+  (otherwise half-pixel glyphs, e.g. a centred wrapped line, break up). Create text only through `text()`.
+- Phaser 4 masks are filters: `obj.enableFilters().filters!.internal.addMask(graphics)` (GeometryMask is Canvas-only),
+  see `DuelScene.scrollName`.
 - Card art uses ONE shared 48-colour palette, `data/palette.gpl` (GIMP palette; editable in GIMP, reusable for other
   art; preview `docs/palette.png`). It is frozen: adding cards never changes it. Style knobs (boost, dither, sizes)
   live in `tools/lib/art-style.mjs`; quantisation is our own k-means/Oklab code in `tools/lib/palette.mjs`
@@ -181,7 +188,7 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 
 ## Roadmap
 
-1. ✅ Environment: Vite + TS + Phaser 3.88, ocgcore-wasm, data pipeline, headless smoke test, engine runs in the browser.
+1. ✅ Environment: Vite + TS + Phaser 3.88 (migrated to Phaser 4.2), ocgcore-wasm, data pipeline, headless smoke test, engine runs in the browser.
 2. ✅ **Duel screen v1**: playable human-vs-bot duel with all common prompts, card art, info panel, log, LP, end screen.
    ✅ Animations for draws, moves, summons, flips, activations, attacks, LP and turn changes, revealed cards
    (CONFIRM_CARDS, e.g. a searched card) and hand shuffles (stack, then spread in the new order).
