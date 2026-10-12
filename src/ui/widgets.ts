@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { INK, WHITE, border, text } from "./pixel.ts";
 import { THEME, ui } from "./theme.ts";
+import { LIST_BUTTON } from "./duel/layout.ts";
 
 export interface Button extends Phaser.GameObjects.Container {
   setEnabled(on: boolean): this;
@@ -70,8 +71,8 @@ export function makeWoodButton(scene: Phaser.Scene, x: number, y: number, w: num
   };
 }
 
-/** List-row buttons ("menu-button", "menu-button-hover" sprites of the theme). */
-export const LIST_BUTTON_H = THEME.listButton.h;
+/** List-row buttons ("menu-button", "menu-button-hover" sprites of the theme); size is global. */
+export const LIST_BUTTON_H = LIST_BUTTON.h;
 const LIST_SLICE = THEME.listButton.slice;
 const LIST_INK = { normal: THEME.listButton.ink, hover: THEME.listButton.inkHover };
 
@@ -86,7 +87,7 @@ export function makeListButton(
   scene: Phaser.Scene, x: number, y: number, w: number, label: string, onClick: () => void,
 ): ListButton {
   const box = scene.add.nineslice(x, y, ui("menu-button"), undefined, w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE).setOrigin(0);
-  const t = text(scene, x + w / 2, y + THEME.listButton.textY, label.toUpperCase(), { color: LIST_INK.normal, originX: 0.5 });
+  const t = text(scene, x + w / 2, y + LIST_BUTTON.textY, label.toUpperCase(), { color: LIST_INK.normal, originX: 0.5 });
   let enabled = true;
   const hover = (on: boolean) => {
     box.setTexture(ui(on ? "menu-button-hover" : "menu-button")).setSlices(w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE);

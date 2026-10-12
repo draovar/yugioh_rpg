@@ -1,4 +1,4 @@
-// The duel field, drawn once under everything else, in the theme's layout:
+// The duel field, drawn once under everything else, in the theme's template:
 //   mat  – a felt playmat in a thin frame (the theme's plate sprite) on the table (Runewood: dark green felt
 //          on planks the info panel's cream paper colour); zones are card-sized slots outlined in the line
 //          colour, monster zones faintly tinted
@@ -8,7 +8,7 @@
 import Phaser from "phaser";
 import { FONT_CARD, text } from "../pixel.ts";
 import { THEME, ui } from "../theme.ts";
-import { CARD, FIELD, ROWS, slotXY, type Slot } from "./layout.ts";
+import { CARD, FIELD, INSET, ROWS, slotXY, type Slot } from "./layout.ts";
 
 const TABLE = { wood: THEME.field.table, seam: THEME.field.seam };
 /** Felt, zone outlines, faint tint inside monster zones, pile labels. */
@@ -16,8 +16,8 @@ const MAT = { felt: THEME.field.felt, line: THEME.field.line, monster: THEME.fie
 /** The mat's frame / each open zone: nine-slice border of the plate sprite. */
 const RIM = THEME.plate.slice;
 
-/** From the frame's outer edge to the outermost zones, on every side (the rim + 1px of felt). */
-const MAT_EDGE = RIM + 1;
+/** From the mat frame's outer edge to the outermost zones, on every side (global). */
+const MAT_EDGE = INSET.matEdge;
 
 const MAIN = [0, 1, 2, 3, 4];
 const PILES: [Slot, string][] = [
@@ -26,7 +26,7 @@ const PILES: [Slot, string][] = [
 
 export function drawField(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
   drawTable(scene, layer);
-  if (THEME.field.layout === "open") drawOpenZones(scene, layer);
+  if (THEME.template === "open") drawOpenZones(scene, layer);
   else drawMat(scene, layer);
   for (const side of [0, 1] as const) {
     for (const [slot, str] of PILES) {

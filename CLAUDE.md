@@ -82,12 +82,16 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   only while hovered. Long names scroll (marquee) after a short hover.
 - Field (`src/ui/duel/field.ts`): cream plank table (the info panel's paper colour) with a dark green felt
   playmat in a Frame01a rim around the four zone rows; zones outlined light green, monster zones tinted, empty
-  piles labelled FIELD / EXTRA / GY / DECK. Dialogs shade the field (and the info panel's cut corners).
-- Duel UI chrome is themed (`src/ui/theme.ts`: `runewood` (default), `hologram`; `&theme=NAME` or localStorage "theme",
-  reload to switch). A theme = sprites for the 15 `UI_ROLES` (`public/assets/ui/<theme>/<role>.png`, loaded as
-  `ui-<role>`, file mapping in `tools/import-ui.mjs`) + their nine-slice insets / text offsets (measured from the
-  sprites' pixel rows) + every UI colour (inks, plates, LP bar, field table/mat, targeting, banners). Code reads
-  `THEME.*` and `ui(role)`; never hard-code UI colours or `ui-` keys. Cards and gameplay feedback (attack red,
+  piles labelled FIELD / EXTRA / GY / DECK. Dialogs shade the whole screen; the info panel is drawn above the
+  shade (`INFO_DEPTH`) so it stays bright. Theme insets: `*Slice` = sprite border kept when stretching, `rim` /
+  `paperRim` = layout insets, equal across themes so the info panel and dialogs lay out identically.
+- Duel UI chrome is themed (`src/ui/theme.ts`: `runewood` (default), `hologram`; `&theme=NAME` or localStorage
+  "theme", reload to switch). **Positions and sizes are global** (`INSET`, `LIST_BUTTON` in `layout.ts`); a theme
+  only changes the look: its template (`mat` = framed playmat like Runewood, `open` = zones straight on the table
+  like Hologram), sprites for the `UI_ROLES` (`public/assets/ui/<theme>/<role>.png`, loaded as `ui-<role>`, file
+  mapping + trim/flatten/recolor/replace in `tools/import-ui.mjs`) described by their nine-slice insets and
+  button-face text offsets, the table pattern, and every UI colour. Code reads `THEME.*`, `ui(role)`, `INSET`;
+  never hard-code UI colours, `ui-` keys or per-theme positions. Cards and gameplay feedback (attack red,
   summon flashes) are not themed. Info panel positions derive from `LAYOUT` in DuelScene.
 - Card action menu (`CardMenu.ts`): clicking a card squash-flips it to a card-sized Frame01a with FrameList09a
   buttons (09c on hover) inside its rim, plus BACK. 11px buttons, 4 fit (3 actions + BACK); labels max 30px (SUMMON,

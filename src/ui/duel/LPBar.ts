@@ -3,10 +3,13 @@
 import Phaser from "phaser";
 import { text } from "../pixel.ts";
 import { THEME, ui } from "../theme.ts";
+import { INSET } from "./layout.ts";
 
 export const LP_BAR = { h: 15 };
-/** The frame's rim on every side; the fill lives in the track inside it. */
-const RIM = THEME.lpBar.rim;
+/** The track (where the fill lives) sits this far inside the frame on every side (global). */
+const RIM = INSET.lpTrack;
+/** The frame sprite's nine-slice inset (theme). */
+const FRAME_SLICE = THEME.lpBar.slice;
 const TRACK_H = LP_BAR.h - RIM * 2;
 
 /** Filler sprite per LP band, with its nine-slice insets (top highlight / bottom shade rows). */
@@ -27,7 +30,7 @@ export class LPBar extends Phaser.GameObjects.Container {
     super(scene, x, y);
     this.max = max;
     this.trackW = width - RIM * 2;
-    this.add(scene.add.nineslice(0, 0, ui("lp-frame"), undefined, width, LP_BAR.h, RIM, RIM, RIM, RIM).setOrigin(0));
+    this.add(scene.add.nineslice(0, 0, ui("lp-frame"), undefined, width, LP_BAR.h, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE).setOrigin(0));
     this.fill = scene.add.container(RIM, RIM);
     this.add(this.fill);
     const ty = (this.textY = RIM + Math.floor((TRACK_H - 5) / 2));

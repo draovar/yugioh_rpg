@@ -31,7 +31,8 @@ const THEMES = {
     "lp-fill-green": ["13_Runewood_Theme/Sprites/UI_Runewood_BarFiller02b.png"],
     "lp-fill-orange": ["13_Runewood_Theme/Sprites/UI_Runewood_BarFiller01a.png"],
     "lp-fill-red": ["13_Runewood_Theme/Sprites/UI_Runewood_BarFiller02a.png"],
-    // Info panel: light wood board with a thick rim, cream paper inset behind long text.
+    // Info panel and dialogs: light wood board with a thick rim, cream paper inset behind long text.
+    "info-frame": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame05b.png"],
     "panel-frame": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame05b.png"],
     "panel-paper": ["13_Runewood_Theme/Sprites/UI_Runewood_FrameBanner01a.png"],
     // Attack declaration arrows (red): up when you attack, down when the opponent attacks.
@@ -43,6 +44,8 @@ const THEMES = {
     "menu-button-hover": ["13_Runewood_Theme/Sprites/UI_Runewood_FrameList09c.png"],
     // Unused by the mat layout; the plate sprite stands in.
     "zone-monster": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame01a.png"],
+    // Card action menu: the dark wood frame (as the plates).
+    "card-menu": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame01a.png"],
   },
   hologram: {
     // Phase column: small bevelled buttons (32x19 trimmed). Release = clickable, Lock = idle (plain),
@@ -56,8 +59,9 @@ const THEMES = {
     "lp-fill-green": ["06_Hologram_Theme/Sprites/UI_Hologram_Fillbar_Filler_04a.png", { trim: true }],
     "lp-fill-orange": ["06_Hologram_Theme/Sprites/UI_Hologram_Fillbar_Filler_04a.png", { trim: true, recolor: "#2f8fe0" }],
     "lp-fill-red": ["06_Hologram_Theme/Sprites/UI_Hologram_Fillbar_Filler_04a.png", { trim: true, recolor: "#ff4050" }],
-    // Info panel and dialogs: plain navy frame with a 2px cyan rim (inner grid flattened); the paper
-    // inset is the square outline bar (navy, 1px cyan line inside).
+    // Info panel: the notched frame. Dialogs: the plain navy frame with a 2px cyan rim. Inner grids
+    // flattened. The paper inset is the square outline bar (navy, 1px cyan line inside).
+    "info-frame": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Standard_02a.png", { flatten: ["#2b3961", "#2d3b63", "#2b3b68", "#29375f"] }],
     "panel-frame": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Standard_01a.png", { flatten: ["#2b3961", "#2d3b63", "#2b3b68", "#29375f"] }],
     "panel-paper": ["06_Hologram_Theme/Sprites/UI_Hologram_Fillbar_03a.png", { trim: true }],
     // Plates: the "available" slot (28x28, rounded, cyan line). List rows: the square outline bar,
@@ -68,6 +72,8 @@ const THEMES = {
     // Open field: monster zones are the cyan slot ("menu-back") with its centre in the lighter blue of the
     // paper inset (the info panel's description box); the other zones use the plain slot.
     "zone-monster": ["06_Hologram_Theme/Sprites/UI_Hologram_Slot_Available_01a.png", { trim: true, replace: { "#1d2d51": "#2c416d" } }],
+    // Card action menu: the small square frame (straight edges, 2px cyan rim, inner grid flattened).
+    "card-menu": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Lite_01a.png", { flatten: ["#2b3961", "#2d3b63", "#2b3b68", "#29375f"] }],
     // No hologram versions: Runewood's red attack arrows and the level star.
     "attack-up": ["@runewood/attack-up.png"],
     "attack-down": ["@runewood/attack-down.png"],

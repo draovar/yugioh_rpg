@@ -5,13 +5,15 @@ import type { CardDb } from "../../duel/cardData.ts";
 import { FONT_CARD, FONT_UI, fit, measure, text } from "../pixel.ts";
 import { LIST_BUTTON_H, makeListButton, type ListButton } from "../widgets.ts";
 import { CardSprite } from "./CardSprite.ts";
-import { CARD, INFO } from "./layout.ts";
+import { CARD, INFO, INSET } from "./layout.ts";
 import { THEME, ui } from "../theme.ts";
 
 /** The board and its text (theme). */
-const WOOD = { ...THEME.panel, frame: ui("panel-frame") };
+const WOOD = { ...THEME.panel, rim: INSET.board, frame: ui("panel-frame") };
 
 const DEPTH = 1000;
+/** The info panel is drawn above dialogs' shade (they never overlap it). */
+export const INFO_DEPTH = DEPTH + 1;
 /** Darkening over the field while a dialog or picker is open. */
 const SHADE_ALPHA = THEME.shadeAlpha;
 const LEFT = INFO.x + INFO.w;
@@ -103,7 +105,7 @@ export class Modal {
     const contentH = Math.max(cardH, textH + grid.h);
     const h = rim + CARD_GAP + contentH + CARD_GAP + rim;
     const top = Math.round(180 - h / 2);
-    root.add(s.add.nineslice(left, top, WOOD.frame, undefined, w, h, rim, rim, rim, rim).setOrigin(0));
+    root.add(s.add.nineslice(left, top, WOOD.frame, undefined, w, h, WOOD.slice, WOOD.slice, WOOD.slice, WOOD.slice).setOrigin(0));
     const contentTop = top + rim + CARD_GAP;
     // The card sits against the left padding; the text and buttons stay where centring put them.
     if (code) root.add(new CardSprite(s, left + rim + CARD_GAP + CARD.w, contentTop + CARD.h).show(code, this.cards.records.get(code)).setScale(2));
@@ -167,7 +169,7 @@ export class Modal {
       const h = rim + pad + title.height + 3 + SELECTED_LIFT + cardsH + (buttons.length ? 5 + LIST_BUTTON_H : 0) + pad + rim;
       const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
       const innerX = left + rim + pad;
-      root.add(s.add.nineslice(left, top, WOOD.frame, undefined, w, h, rim, rim, rim, rim).setOrigin(0));
+      root.add(s.add.nineslice(left, top, WOOD.frame, undefined, w, h, WOOD.slice, WOOD.slice, WOOD.slice, WOOD.slice).setOrigin(0));
       title.setPosition(Math.round(innerX + (innerW - title.width) / 2), top + rim + pad);
       root.add(title);
 
@@ -236,17 +238,10 @@ export class Modal {
 
   private open(): Phaser.GameObjects.Container {
     this.close();
-    const shade = this.scene.add.rectangle(LEFT, 0, WIDTH, 360, 0x000000, SHADE_ALPHA).setOrigin(0).setInteractive();
-    // The info panel stays unshaded (hovered cards show there), but its frame's cut corners let the table
-    // show through: shade those pixels too (a staircase in each corner, see THEME.panel.cornerCut).
-    const corners = this.scene.add.graphics().fillStyle(0x000000, SHADE_ALPHA);
-    const right = INFO.x + INFO.w, bottom = 360, cut = WOOD.cornerCut;
-    for (let r = 0; r < cut; r++) {
-      const n = cut - r;
-      corners.fillRect(INFO.x, r, n, 1).fillRect(right - n, r, n, 1);
-      corners.fillRect(INFO.x, bottom - 1 - r, n, 1).fillRect(right - n, bottom - 1 - r, n, 1);
-    }
-    this.root = this.scene.add.container(0, 0, [shade, corners]).setDepth(DEPTH);
+    // The whole screen, table behind the info panel's frame included; the info panel itself is drawn above
+    // the shade (INFO_DEPTH) so it stays bright and hovered cards still show there.
+    const shade = this.scene.add.rectangle(0, 0, 640, 360, 0x000000, SHADE_ALPHA).setOrigin(0).setInteractive();
+    this.root = this.scene.add.container(0, 0, [shade]).setDepth(DEPTH);
     return this.root;
   }
 }

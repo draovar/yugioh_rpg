@@ -5,6 +5,16 @@
 /** Every card (hand, field, piles) is 38x56 including its 1px outline. */
 export const CARD = { w: 38, h: 56 };
 
+/**
+ * Insets and sizes of the UI chrome, the same in every theme (themes only swap sprites and colours; their
+ * sprites are nine-sliced to fit these): content inside a board (info panel, dialogs), text inside the
+ * paper inset, content inside a plate (card menu, button plate), the LP bar's track inside its frame (also
+ * the frame around the info-panel art), and the gap from the mat's outer edge to the outermost zones.
+ */
+export const INSET = { board: 9, paper: 4, plate: 3, lpTrack: 3, matEdge: 4 };
+/** List-row buttons (card menu, dialogs, prompt plate): height and label top. */
+export const LIST_BUTTON = { h: 11, textY: 3 };
+
 export const INFO = { x: 0, w: 224 };
 export const PHASE_COL = { x: 230, w: 16, h: 56, top: 2, pitch: 60 };
 export const FIELD = { left: 250, right: 640 };

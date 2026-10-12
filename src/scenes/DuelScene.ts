@@ -19,12 +19,12 @@ import {
   ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, SPELL_ATTRIBUTE, SPELL_KIND_ICON, SPELL_NORMAL_ICON, SPELL_SHEET, TRAP_ATTRIBUTE,
   type CardHighlight,
 } from "../ui/duel/CardSprite.ts";
-import { Modal, type PickerOptions } from "../ui/duel/Modal.ts";
+import { INFO_DEPTH, Modal, type PickerOptions } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
 import { CardMenu } from "../ui/duel/CardMenu.ts";
 import { drawField } from "../ui/duel/field.ts";
-import { CARD, FIELD, FIELD_CENTER, INFO, PHASE_COL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
+import { CARD, FIELD, FIELD_CENTER, INFO, INSET, PHASE_COL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
 import { FONT_UI, INK, INK_SOFT, WHITE, border, measure, text } from "../ui/pixel.ts";
 import { LIST_BUTTON_H, makeButton, makeListButton, makeWoodButton, type ListButton, type WoodButton } from "../ui/widgets.ts";
 import { installAnimPreview } from "./animPreview.ts";
@@ -32,7 +32,7 @@ import { installDialogPreview } from "./dialogPreview.ts";
 import { withDevSetup } from "./devSetups.ts";
 import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
 /** Info panel board and text (theme). */
-const PANEL = { ...THEME.panel, frame: ui("panel-frame"), paper: ui("panel-paper") };
+const PANEL = { ...THEME.panel, rim: INSET.board, paperRim: INSET.paper, frame: ui("panel-frame"), paper: ui("panel-paper") };
 import { THEME, ui, type PhaseState } from "../ui/theme.ts";
 
 export interface DuelSceneData {
@@ -114,7 +114,7 @@ const STAT_ICON: Record<"sword" | "shield", PixelIcon> = {
 };
 
 /** Info-panel art: 128px art inside the LP bar's frame (theme rim). */
-const ART_FRAME = 128 + 2 * THEME.lpBar.rim;
+const ART_FRAME = 128 + 2 * INSET.lpTrack;
 /** The duel log text starts below its "DUEL LOG" header, inside the paper. */
 const LOG_Y = LAYOUT.top + 13;
 
@@ -328,7 +328,7 @@ export class DuelScene extends Phaser.Scene {
     if (!buttons.length) return [];
     // Plate: Frame01a (3px rim) + 2px padding around the buttons, 1px between them.
     const { x: cx, y: cy } = slotXY(0, { kind: "extra" });
-    const rim = THEME.plate.rim, pad = 2, ps = THEME.plate.slice;
+    const rim = INSET.plate, pad = 2, ps = THEME.plate.slice;
     const w = BUTTON_PLATE_W, btnW = w - 2 * (rim + pad);
     const counterH = counter ? 8 : 0; // 5px text + gap
     const h = 2 * (rim + pad) + counterH + buttons.length * (LIST_BUTTON_H + 1) - 1;
@@ -351,13 +351,14 @@ export class DuelScene extends Phaser.Scene {
 
   private createInfoPanel() {
     const L = LAYOUT;
-    this.add.nineslice(0, 0, PANEL.frame, undefined, INFO.w, 360, PANEL.rim, PANEL.rim, PANEL.rim, PANEL.rim).setOrigin(0);
+    // Everything in the panel sits above dialogs' shade (INFO_DEPTH), so it stays bright and shows hovered cards.
+    this.add.nineslice(0, 0, ui("info-frame"), undefined, INFO.w, 360, ...PANEL.infoSlice).setOrigin(0).setDepth(INFO_DEPTH);
     this.lpBars = [
-      new LPBar(this, L.bar.x, L.lp.mine, L.bar.w, "You", this.startLP).set(this.startLP),
-      new LPBar(this, L.bar.x, L.lp.opp, L.bar.w, this.sceneData.opponentName ?? "Opponent", this.startLP).set(this.startLP),
+      new LPBar(this, L.bar.x, L.lp.mine, L.bar.w, "You", this.startLP).set(this.startLP).setDepth(INFO_DEPTH),
+      new LPBar(this, L.bar.x, L.lp.opp, L.bar.w, this.sceneData.opponentName ?? "Opponent", this.startLP).set(this.startLP).setDepth(INFO_DEPTH),
     ];
-    this.infoPanel = this.add.container(0, 0);
-    this.logText = text(this, L.x + PANEL.paperRim, LOG_Y, "", { color: PANEL.paperInk, maxWidth: L.w - PANEL.paperRim * 2 }).setDepth(1);
+    this.infoPanel = this.add.container(0, 0).setDepth(INFO_DEPTH);
+    this.logText = text(this, L.x + PANEL.paperRim, LOG_Y, "", { color: PANEL.paperInk, maxWidth: L.w - PANEL.paperRim * 2 }).setDepth(INFO_DEPTH + 1);
     this.createCornerButtons();
     this.showEmpty();
   }
@@ -386,7 +387,7 @@ export class DuelScene extends Phaser.Scene {
 
   /** Cream paper inset whose outer edge is the box (x, y, w, h); text goes inside, padded by its rim. */
   private paper(x: number, y: number, w: number, h: number) {
-    const r = PANEL.paperRim;
+    const r = PANEL.paperSlice;
     this.infoPanel.add(this.add.nineslice(x, y, PANEL.paper, undefined, w, h, r, r, r, r).setOrigin(0));
   }
 
@@ -433,8 +434,8 @@ export class DuelScene extends Phaser.Scene {
     // 128x128 art in a wooden frame (the LP bar's frame, nine-sliced), loaded on first view.
     const artY = L.top + 24;
     const artKey = `art128-${code}`;
-    const lpRim = THEME.lpBar.rim;
-    p.add(this.add.nineslice(L.x, artY, ui("lp-frame"), undefined, ART_FRAME, ART_FRAME, lpRim, lpRim, lpRim, lpRim).setOrigin(0));
+    const lpRim = INSET.lpTrack, fs = THEME.lpBar.slice;
+    p.add(this.add.nineslice(L.x, artY, ui("lp-frame"), undefined, ART_FRAME, ART_FRAME, fs, fs, fs, fs).setOrigin(0));
     const placeArt = () => { if (this.infoCode === code && p.active) p.add(this.add.image(L.x + lpRim, artY + lpRim, artKey).setOrigin(0)); };
     if (this.textures.exists(artKey)) placeArt();
     else {
