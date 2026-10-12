@@ -4,7 +4,7 @@
 //
 // Handshake: guest -> "hello" (protocol + data fingerprint), host -> "start" (duel seed + which seat the
 // host plays) or "reject". After that both sides send "answer" packets (see DuelController), a "ping"
-// every few seconds, and "bye" when leaving. WebRTC itself takes very long (or forever) to notice a closed
+// every few seconds, "surrender" when a player forfeits, and "bye" when leaving. WebRTC itself takes very long (or forever) to notice a closed
 // tab, so silence for HEARTBEAT.timeoutMs also counts as the other player leaving.
 import { Peer, type DataConnection, type PeerError } from "peerjs";
 import type { OcgResponse } from "ocgcore-wasm";
@@ -31,6 +31,7 @@ type Packet =
   | { t: "reject"; reason: string }
   | { t: "answer"; response: string; checksum: number }
   | { t: "ping" }
+  | { t: "surrender" }
   | { t: "bye" };
 
 /** A connected peer-to-peer duel, ready to hand to the Duel scene. */
@@ -41,6 +42,10 @@ export interface NetDuel {
   remote: RemotePeer;
   /** Called once when the connection drops (the other player left or the network failed). */
   onClose(handler: () => void): void;
+  /** Tells the other player we forfeit the duel. */
+  surrender(): void;
+  /** Called when the other player forfeits. */
+  onSurrender(handler: () => void): void;
   /** Leaves the duel and closes the connection. */
   close(): void;
 }
@@ -113,6 +118,8 @@ function link(peer: Peer, conn: DataConnection, me: 0 | 1, seed: Seed): NetDuel 
   let onAnswer: ((response: OcgResponse, checksum: number) => void) | null = null;
   const early: [OcgResponse, number][] = [];
   let onClose: (() => void) | null = null;
+  let onSurrender: (() => void) | null = null;
+  let surrendered = false;
   let closed = false;
   let lastHeard = Date.now();
   const heartbeat = setInterval(() => {
@@ -136,6 +143,10 @@ function link(peer: Peer, conn: DataConnection, me: 0 | 1, seed: Seed): NetDuel 
     lastHeard = Date.now();
     const p = parse(raw);
     if (p?.t === "bye") return gone();
+    if (p?.t === "surrender") {
+      surrendered = true;
+      return onSurrender?.();
+    }
     if (p?.t !== "answer") return;
     const response = decodeResponse(p.response);
     if (onAnswer) onAnswer(response, p.checksum);
@@ -156,6 +167,11 @@ function link(peer: Peer, conn: DataConnection, me: 0 | 1, seed: Seed): NetDuel 
     onClose: (handler) => {
       onClose = handler;
       if (closed) handler();
+    },
+    surrender: () => send(conn, { t: "surrender" }),
+    onSurrender: (handler) => {
+      onSurrender = handler;
+      if (surrendered) handler();
     },
     close: () => {
       if (!closed) leaving();

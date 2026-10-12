@@ -111,7 +111,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   summon flashes) are not themed. Info panel positions derive from `LAYOUT` in DuelScene.
 - Card action menu (`CardMenu.ts`): clicking a card squash-flips it to a card-sized Frame01a with FrameList09a
   buttons (09c on hover) inside its rim, plus BACK. 11px buttons, 4 fit (3 actions + BACK); labels max 30px (SUMMON,
-  SET, SP.SUM, USE, ATTACK, FLIP / TO ATK / TO DEF). The same squash flip turns set Spells/Traps face-up (`T.flip`).
+  SET, SP.SUM, USE, ATTACK, FLIP / TO ATK / TO DEF). Your own Deck opens the same menu with FORFEIT (ends the duel as
+  a loss outside the engine; in a peer-to-peer duel a "surrender" packet makes the opponent win). The same squash flip turns set Spells/Traps face-up (`T.flip`).
 - Prompt dialogs (`Modal.dialog`): info-panel wood board, message as plain text, list-row buttons (`makeListButton`
   in `widgets.ts`, shared with the card menu). With a card: card (2x) left, text top-right wrapped to the button
   grid's width, buttons bottom-right; otherwise text over buttons. Boards are 240px wide (408 for 6+ cards).

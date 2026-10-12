@@ -255,10 +255,11 @@ export class DuelScene extends Phaser.Scene {
           this.onPrompt(prompt, hint);
         },
         onEnd: (winner) => this.onEnd(winner),
-        onError: (message) => this.abort(`${message} The duel can't continue.`),
+        onError: (message) => this.stopDuel(`${message} The duel can't continue.`),
       },
     });
-    net?.onClose(() => this.abort("Your opponent left the duel."));
+    net?.onClose(() => this.stopDuel("Your opponent left the duel."));
+    net?.onSurrender(() => this.stopDuel("Your opponent forfeited. You win the duel!", true));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.controller.stop();
       session.destroy();
@@ -607,16 +608,34 @@ export class DuelScene extends Phaser.Scene {
     this.endDialog(winner, () => this.scene.start(this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === this.me } }));
   }
 
-  /** The duel stopped early (peer-to-peer: opponent gone, or the duels went out of sync). */
-  private abort(message: string) {
+  /**
+   * The duel stopped outside the engine: a forfeit (`won` = who it counts for), or in a peer-to-peer duel the
+   * opponent left or the duels went out of sync (`won` undefined: no result).
+   */
+  private stopDuel(message: string, won?: boolean) {
     if (this.ended) return;
     this.ended = true;
     this.controller.stop();
     this.modal.close();
     this.clearInteraction();
+    const duelResult = won === undefined ? undefined : { won };
     this.modal.dialog(message.toUpperCase(), [
-      { label: "CONTINUE", onClick: () => this.scene.start(this.sceneData.returnScene ?? "Overworld") },
+      { label: "CONTINUE", onClick: () => this.scene.start(this.sceneData.returnScene ?? "Overworld", duelResult && { duelResult }) },
     ]);
+  }
+
+  /** Your Deck's menu: FORFEIT ends the duel as a loss (and tells the other player in a peer-to-peer duel). */
+  private openDeckMenu(sp: CardSprite) {
+    if (this.ended || this.modal.isOpen || this.fieldPick) return;
+    this.closeMenu(true);
+    this.menu = new CardMenu(this, sp, [{
+      label: "Forfeit",
+      onClick: () => {
+        this.closeMenu();
+        this.sceneData.net?.surrender();
+        this.stopDuel("You forfeited the duel.", false);
+      },
+    }]);
   }
 
   /** Screen side of a player: 0 = you (bottom), 1 = opponent (top). */
@@ -660,7 +679,10 @@ export class DuelScene extends Phaser.Scene {
     const { x, y } = slotXY(side, slot);
     if (count) {
       const sp = new CardSprite(this, x, y).show(top?.code ?? 0, this.engine.cards.records.get(top?.code ?? 0), { back: !top });
-      sp.setInteractive({ useHandCursor: !!contents });
+      // Your own Deck opens a menu with FORFEIT.
+      const ownDeck = side === 0 && slot.kind === "deck";
+      sp.setInteractive({ useHandCursor: !!contents || ownDeck });
+      if (ownDeck) sp.on("pointerup", () => this.openDeckMenu(sp));
       if (top) {
         sp.on("pointerover", () => this.showInfo(top.code));
         sp.on("pointerout", () => this.hoverEnd());
