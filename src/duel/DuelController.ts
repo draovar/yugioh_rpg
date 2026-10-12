@@ -16,6 +16,13 @@ import { autoRespond } from "./autoBot.ts";
 
 const HINT_SELECTMSG = 3;
 
+/**
+ * Which optional chain prompts the human sees: "auto" only when a usable card's script marks this moment
+ * as a good time (the engine's `spe_count`, like YGOPro/EDOPro by default), "all" whenever a card is
+ * usable, "off" never. Forced chains and trigger selections always ask.
+ */
+export type ChainMode = "auto" | "all" | "off";
+
 /** A selection the human has to make. */
 export type HumanPrompt = OcgMessage & { player: number };
 
@@ -51,6 +58,8 @@ export interface DuelControllerOptions {
   me?: 0 | 1;
   /** The other seat is a player on another machine; without it, the built-in AI plays it. */
   remote?: RemotePeer;
+  /** The human's chain mode, read at every chain prompt (it can change mid-duel). Default "auto". */
+  chainMode?: () => ChainMode;
 }
 
 export class DuelController {
@@ -60,6 +69,7 @@ export class DuelController {
   private readonly aiDelayMs: number;
   readonly me: 0 | 1;
   private readonly remote: RemotePeer | null;
+  private readonly chainMode: () => ChainMode;
   /** Peer answers that arrived before our duel reached their prompt. */
   private inbox: { response: OcgResponse; checksum: number }[] = [];
   private awaitingRemote = false;
@@ -77,6 +87,7 @@ export class DuelController {
     this.aiDelayMs = opts.aiDelayMs ?? 450;
     this.me = opts.me ?? 0;
     this.remote = opts.remote ?? null;
+    this.chainMode = opts.chainMode ?? (() => "auto");
     this.remote?.onResponse((response, checksum) => {
       this.inbox.push({ response, checksum });
       if (this.awaitingRemote) this.takeRemote();
@@ -149,6 +160,8 @@ export class DuelController {
     this.pending = prompt;
     const hint = this.hint;
     this.hint = null;
+    // A chain prompt our chain mode hides: answered like any human answer (so a peer gets it too).
+    if (this.skipsChain(prompt)) return this.answer({ type: OcgResponseType.SELECT_CHAIN, index: null });
     this.events.onPrompt(prompt, hint);
   }
 
@@ -172,6 +185,14 @@ export class DuelController {
     if (m.type === OcgMessageType.SELECT_CHAIN && m.selects.length === 0 && !m.forced)
       return { type: OcgResponseType.SELECT_CHAIN, index: null };
     return null;
+  }
+
+  /** Our own optional chain prompts the chain mode hides (one player's preference, unlike `trivialAnswer`). */
+  private skipsChain(m: HumanPrompt): boolean {
+    // spe_count 0x7f marks a trigger-effect selection; YGOPro never auto-skips those.
+    if (m.type !== OcgMessageType.SELECT_CHAIN || m.forced || m.spe_count === 0x7f) return false;
+    const mode = this.chainMode();
+    return mode === "off" || (mode === "auto" && m.spe_count === 0);
   }
 
   private track(m: OcgMessage): void {

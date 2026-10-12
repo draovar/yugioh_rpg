@@ -53,7 +53,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   - `DuelSession.ts` — wraps one duel: `advance()` runs until a prompt/end, `respond()` answers it,
     `snapshot(viewer)` reads the board from the engine with hidden info masked.
   - `DuelController.ts` — the local player (`me`, either seat) vs the AI or a `RemotePeer`; emits `onUpdate`/`onPrompt`/
-    `onEnd`/`onError`, auto-passes empty chain prompts. Peer-to-peer duels run in **lockstep**: both machines run the
+    `onEnd`/`onError`, auto-passes empty chain prompts (both seats, unsent) and, per the local
+    player's chain mode (`ChainMode`: auto = only when `spe_count` > 0 like YGOPro, all, off), hides their optional
+    chain prompts (answered "no" and sent like any answer). Peer-to-peer duels run in **lockstep**: both machines run the
     same duel (same seed, same two decks) and send only the answers to their own prompts, each
     with `DuelSession.checksum()` from before it was applied; a mismatch stops the duel ("out of sync"). Anything that
     differs between the two machines (non-seeded randomness in the engine layer, deck order, data) splits the duel.
@@ -68,7 +70,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   seed and its random seat. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; bottom bar: deck choice
-  saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; MULTIPLAYER button / M key) → `Duel` (`DuelScene`,
+  saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; THEME buttons (save + reload);
+  MULTIPLAYER button / M key) → `Duel` (`DuelScene`,
   takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
@@ -85,7 +88,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   squash/overshoot; faces swap instantly). Hover effects are suppressed while `animator.busy`.
   `DuelAnimator.play(messages)` tweens the displayed sprites per message (draw, move, summon, flip, activate,
   attack, LP, turn banner); `DuelController` awaits it before the next prompt/AI move, then the scene redraws
-  from the snapshot, so animations only need to *look* right. Speed toggle (1×/2×/4×) is saved in localStorage.
+  from the snapshot, so animations only need to *look* right. Speed toggle (1×/2×/4×) and the AUTO/ALL/OFF chain-mode
+  button under LOG are saved in localStorage.
 - `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx).
 - `data/pool.json` — the card passcodes the game uses. Source of truth for the card pool.
 - `vendor/` — Project Ignis repos (gitignored, ~130 MB).
@@ -117,8 +121,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   piles labelled FIELD / EXTRA / GY / DECK. Dialogs shade the whole screen; the info panel is drawn above the
   shade (`INFO_DEPTH`) so it stays bright. Theme insets: `*Slice` = sprite border kept when stretching, `rim` /
   `paperRim` = layout insets, equal across themes so the info panel and dialogs lay out identically.
-- Duel UI chrome is themed (`src/ui/theme.ts`: `runewood` (default), `hologram`; `&theme=NAME` or localStorage
-  "theme", reload to switch). **Positions and sizes are global** (`INSET`, `LIST_BUTTON` in `layout.ts`); a theme
+- Duel UI chrome is themed (`src/ui/theme.ts`: `runewood` (default), `hologram`; `&theme=NAME`, or the world
+  menu's THEME buttons (localStorage "theme"; switching reloads the page)). **Positions and sizes are global** (`INSET`, `LIST_BUTTON` in `layout.ts`); a theme
   only changes the look: its template (`mat` = framed playmat like Runewood, `open` = zones straight on the table
   like Hologram), sprites for the `UI_ROLES` (`public/assets/ui/<theme>/<role>.png`, loaded as `ui-<role>`, file
   mapping + trim/flatten/recolor/replace in `tools/import-ui.mjs`) described by their nine-slice insets and

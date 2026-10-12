@@ -15,6 +15,7 @@ import { loadEngine, type Engine } from "../duel/loadEngine.ts";
 import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { DECKS } from "../duel/decks.ts";
+import { CHAIN_MODES, chainMode, setChainMode } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
 import { autoRespond, declarableCards, freePlaces } from "../duel/autoBot.ts";
 import { ATTRIBUTES, RACES, raceNames } from "../duel/text.ts";
@@ -254,6 +255,7 @@ export class DuelScene extends Phaser.Scene {
       session,
       me: this.me,
       remote: net?.remote,
+      chainMode,
       schedule: (ms, fn) => this.time.delayedCall(ms, fn),
       events: {
         onUpdate: (messages, snapshot) => this.onUpdate(messages, snapshot),
@@ -385,24 +387,35 @@ export class DuelScene extends Phaser.Scene {
   }
 
   /**
-   * Top-right corner of the field: animation speed (1x/2x/4x), with the info panel's LOG/CARD toggle
-   * below it. Right edges line up with the right pile column (card centre 614).
+   * Top-right corner of the field, stacked in the space above the mat (top 59): animation speed
+   * (1x/2x/4x), the info panel's LOG/CARD toggle and the chain mode (AUTO/ALL/OFF: when you're asked to
+   * chain). All the same width; right edges line up with the right pile column (card centre 614).
    */
   private createCornerButtons() {
-    const y = 4, speedW = 24, toggleW = speedW;
-    const speedX = 614 + CARD.w / 2 - speedW;
+    const top = 1, pitch = 18 + 1, w = 24;
+    const x = 614 + CARD.w / 2 - w;
     const speeds = [1, 2, 4];
-    const speed = makeWoodButton(this, speedX, y, speedW, `${this.animator.speed}X`, () => {
+    const speed = makeWoodButton(this, x, top, w, `${this.animator.speed}X`, () => {
       this.animator.speed = speeds[(speeds.indexOf(this.animator.speed) + 1) % speeds.length];
       speed.setLabel(`${this.animator.speed}X`);
       try { localStorage.setItem("duel.animSpeed", String(this.animator.speed)); } catch { /* storage unavailable */ }
     });
-    // Below it, right-aligned: switch the info panel between card mode and log mode.
-    this.panelToggle = makeWoodButton(this, speedX + speedW - toggleW, y + 18 + 2, toggleW, "LOG", () => {
+    // Switch the info panel between card mode and log mode.
+    this.panelToggle = makeWoodButton(this, x, top + pitch, w, "LOG", () => {
       this.panelMode = this.panelMode === "card" ? "log" : "card";
       this.panelToggle.setLabel(this.panelMode === "card" ? "LOG" : "CARD");
       if (this.panelMode === "card" && this.lastCode) this.showCard(this.lastCode);
       else this.showLog();
+    });
+    const chainLabel = () => chainMode().toUpperCase();
+    const chain = makeWoodButton(this, x, top + 2 * pitch, w, chainLabel(), () => {
+      setChainMode(CHAIN_MODES[(CHAIN_MODES.indexOf(chainMode()) + 1) % CHAIN_MODES.length]);
+      chain.setLabel(chainLabel());
+      this.log({
+        auto: "Chain prompts: only when a card fits the moment",
+        all: "Chain prompts: whenever a card can be used",
+        off: "Chain prompts: off (forced effects still ask)",
+      }[chainMode()]);
     });
   }
 

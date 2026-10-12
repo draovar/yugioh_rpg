@@ -1,12 +1,13 @@
 import Phaser from "phaser";
 import { DECKS, type DeckName } from "../duel/decks.ts";
 import { WHITE, text } from "../ui/pixel.ts";
-import { chosenDeck, setChosenDeck } from "../ui/prefs.ts";
+import { chosenDeck, setChosenDeck, switchTheme } from "../ui/prefs.ts";
+import { THEME, THEMES } from "../ui/theme.ts";
 import { makeButton, type Button } from "../ui/widgets.ts";
 
 const TILE = 16;
 /** Bottom menu bar (testing aids until the real menus exist). */
-const BAR = { top: 330, h: 30, deckW: 64, mpW: 84 };
+const BAR = { top: 330, h: 30, deckW: 64, themeX: 286, themeW: 64, mpW: 84 };
 const BUTTON_COLOR = 0x2d4a7a, PICKED_COLOR = 0x3f7a3a;
 
 /** Placeholder overworld: grid movement, and an "NPC" that starts a duel when you bump into it. */
@@ -31,7 +32,7 @@ export class Overworld extends Phaser.Scene {
     this.createMenu();
   }
 
-  /** Bottom bar: your deck (used against the Rival and in multiplayer) and the multiplayer lobby (also M). */
+  /** Bottom bar: your deck (used against the Rival and in multiplayer), the duel UI theme and the multiplayer lobby (also M). */
   private createMenu() {
     const y = BAR.top + BAR.h / 2;
     this.add.rectangle(0, BAR.top, 640, BAR.h, 0x000000, 0.65).setOrigin(0);
@@ -44,6 +45,10 @@ export class Overworld extends Phaser.Scene {
         () => { setChosenDeck(name); drawDecks(); }, name === picked ? PICKED_COLOR : BUTTON_COLOR));
     };
     drawDecks();
+    // Duel UI theme: switching reloads the page (Boot loads the theme's sprites once).
+    text(this, BAR.themeX, y, "THEME:", { color: WHITE, originY: 0.5 });
+    Object.keys(THEMES).forEach((name, i) => makeButton(this, BAR.themeX + 60 + i * (BAR.themeW + 6), y, BAR.themeW, 14,
+      name.toUpperCase(), () => { if (name !== THEME.name) switchTheme(name); }, name === THEME.name ? PICKED_COLOR : BUTTON_COLOR));
     makeButton(this, 640 - 8 - BAR.mpW / 2, y, BAR.mpW, 14, "MULTIPLAYER (M)", () => this.scene.start("Lobby"));
   }
 
