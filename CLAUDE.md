@@ -26,6 +26,10 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
 After changing `data/pool.json`, rerun `build-data`, `fetch-art`, `build-art`, then `smoke`.
 
+Deploy: every push to `main` runs `.github/workflows/deploy.yml` (the fresh-clone pipeline + `smoke -- 3` + `build`)
+and publishes `dist/` to GitHub Pages: https://draovar.github.io/yugioh_rpg/ . Never upload a local `dist/`: Vite
+copies all of `public/`, including the gitignored paid tilesets.
+
 Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations (`src/scenes/animPreview.ts`);
 `&dialogs` adds one that opens every prompt UI with sample cards (`src/scenes/dialogPreview.ts`; answers are only
 logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`);
