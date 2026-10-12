@@ -46,9 +46,9 @@ const ATTRIBUTE_COLOR: Record<number, number> = { 0x20: 0x7d1f9e, 0x01: 0x2f4a19
 
 /** Field targeting: "choice" = can be picked (yellow, 1px), "selected" = picked (orange, 2px). */
 export type CardHighlight = "none" | "action" | "choice" | "selected" | "target" | "attacker" | "attacked";
-const HIGHLIGHT_COLOR: Record<CardHighlight, number> = {
+const highlightColor = (kind: CardHighlight): number => ({
   none: 0, action: 0xffd400, choice: THEME.pick.choice, selected: THEME.pick.selected, target: 0xff4136, attacker: 0xff4136, attacked: 0xff4136,
-};
+} satisfies Record<CardHighlight, number>)[kind];
 /** Attack declarations and pickable cards use a thin 1px outline; other highlights 2px. */
 const HIGHLIGHT_WIDTH: Partial<Record<CardHighlight, number>> = { choice: 1, attacker: 1, attacked: 1 };
 
@@ -134,7 +134,7 @@ export class CardSprite extends Phaser.GameObjects.Container {
   setHighlight(kind: CardHighlight): this {
     this.outline.clear();
     const t = HIGHLIGHT_WIDTH[kind] ?? 2;
-    if (kind !== "none") border(this.outline, LEFT - t, TOP - t, CARD.w + 2 * t, CARD.h + 2 * t, HIGHLIGHT_COLOR[kind], t);
+    if (kind !== "none") border(this.outline, LEFT - t, TOP - t, CARD.w + 2 * t, CARD.h + 2 * t, highlightColor(kind), t);
     return this;
   }
 }

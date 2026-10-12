@@ -18,15 +18,6 @@ export function setChosenDeck(name: DeckName): void {
   try { localStorage.setItem(DECK_KEY, name); } catch { /* storage unavailable */ }
 }
 
-/** Saves the duel UI theme (read by theme.ts at startup) and reloads the page, since the theme is fixed per page. */
-export function switchTheme(name: string): void {
-  try { localStorage.setItem("theme", name); } catch { /* storage unavailable */ }
-  const url = new URL(location.href);
-  if (!url.searchParams.has("theme")) return location.reload();
-  url.searchParams.delete("theme"); // the dev URL option would override the saved choice
-  location.replace(url);
-}
-
 const CHAIN_KEY = "duel.chainMode";
 export const CHAIN_MODES: ChainMode[] = ["auto", "all", "off"];
 

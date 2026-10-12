@@ -70,7 +70,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   seed and its random seat. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; bottom bar: deck choice
-  saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; THEME buttons (save + reload);
+  saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; THEME buttons (switch in place);
   MULTIPLAYER button / M key) → `Duel` (`DuelScene`,
   takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
@@ -122,11 +122,12 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   shade (`INFO_DEPTH`) so it stays bright. Theme insets: `*Slice` = sprite border kept when stretching, `rim` /
   `paperRim` = layout insets, equal across themes so the info panel and dialogs lay out identically.
 - Duel UI chrome is themed (`src/ui/theme.ts`: `runewood` (default), `hologram`; `&theme=NAME`, or the world
-  menu's THEME buttons (localStorage "theme"; switching reloads the page)). **Positions and sizes are global** (`INSET`, `LIST_BUTTON` in `layout.ts`); a theme
+  menu's THEME buttons (localStorage "theme"; `setTheme` swaps `THEME`'s contents and reloads the `ui-*` textures, no page reload)). **Positions and sizes are global** (`INSET`, `LIST_BUTTON` in `layout.ts`); a theme
   only changes the look: its template (`mat` = framed playmat like Runewood, `open` = zones straight on the table
   like Hologram), sprites for the `UI_ROLES` (`public/assets/ui/<theme>/<role>.png`, loaded as `ui-<role>`, file
   mapping + trim/flatten/recolor/replace in `tools/import-ui.mjs`) described by their nine-slice insets and
-  button-face text offsets, the table pattern, and every UI colour. Code reads `THEME.*`, `ui(role)`, `INSET`;
+  button-face text offsets, the table pattern, and every UI colour. Code reads `THEME.*` when drawing (never copy theme
+  values into module-level constants: they'd go stale after a switch), `ui(role)`, `INSET`;
   never hard-code UI colours, `ui-` keys or per-theme positions. Cards and gameplay feedback (attack red,
   summon flashes) are not themed. Info panel positions derive from `LAYOUT` in DuelScene.
 - Card action menu (`CardMenu.ts`): clicking a card squash-flips it to a card-sized Frame01a with FrameList09a

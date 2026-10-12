@@ -35,8 +35,6 @@ import { installAnimPreview } from "./animPreview.ts";
 import { installDialogPreview } from "./dialogPreview.ts";
 import { withDevSetup } from "./devSetups.ts";
 import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
-/** Info panel board and text (theme). */
-const PANEL = { ...THEME.panel, rim: INSET.board, paperRim: INSET.paper, frame: ui("panel-frame"), paper: ui("panel-paper") };
 import { THEME, ui, type PhaseState } from "../ui/theme.ts";
 
 export interface DuelSceneData {
@@ -63,9 +61,6 @@ interface CardAction {
 
 /** Button plate on the Extra Deck slot: as wide as fits left of the Spell/Trap zones; light counter text. */
 const BUTTON_PLATE_W = 56;
-const PROMPT_COUNTER_INK = THEME.plate.ink;
-/** Free zones in a zone choice: yellow fill, more opaque on hover / once picked. */
-const ZONE_PICK = { color: THEME.pick.zone, alpha: THEME.pick.zoneAlpha, hoverAlpha: THEME.pick.zoneHoverAlpha };
 const key = (controller: number, location: number, sequence: number) => `${controller}:${location}:${sequence}`;
 const locKey = (c: OcgCardLoc) => key(c.controller, c.location, c.sequence);
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
@@ -84,7 +79,7 @@ const PHASE_ACTION: Partial<Record<number, PhaseAction>> = { 3: "bp", 4: "m2", 5
 
 /** Info panel geometry: everything sits inside the frame's rim. */
 const LAYOUT = (() => {
-  const r = PANEL.rim;
+  const r = INSET.board;
   const x = r + 2, w = INFO.w - 2 * (r + 2);
   const lpOpp = r, lpMine = 360 - r - LP_BAR.h;
   return {
@@ -100,11 +95,8 @@ const LAYOUT = (() => {
 const STAR_SIZE = 7, STAR_GAP = 3;
 /** How long an LP change ("-1500") stays inside the LP bar. */
 const LP_DELTA_MS = 1200;
-/** Info-panel ATK / DEF plates: height, label (small) and value (2x) colours on the dark wood. */
+/** Info-panel ATK / DEF plates: height (label: plate.inkSoft, value: plate.ink at 2x). */
 const STAT_PLATE_H = 26;
-const STAT_LABEL = THEME.plate.inkSoft, STAT_VALUE = THEME.plate.ink;
-/** Info-panel card name: light text with a 1px dark drop shadow. */
-const NAME_INK = THEME.cardName.ink, NAME_SHADOW = THEME.cardName.shadow;
 
 /** Tiny pixel icons: one string per row, each character a colour key ("." = empty). */
 interface PixelIcon { rows: string[]; colors: Record<string, number> }
@@ -358,7 +350,7 @@ export class DuelScene extends Phaser.Scene {
     const left = Math.round(cx - w / 2), plateTop = Math.round(cy - h / 2);
     this.promptBand.add(this.add.nineslice(left, plateTop, ui("menu-back"), undefined, w, h, ps, ps, ps, ps).setOrigin(0));
     if (counter) {
-      this.promptCounter = text(this, cx, plateTop + rim + pad + 1, "", { color: PROMPT_COUNTER_INK, originX: 0.5 });
+      this.promptCounter = text(this, cx, plateTop + rim + pad + 1, "", { color: THEME.plate.ink, originX: 0.5 });
       this.promptBand.add(this.promptCounter);
     }
     const buttonsTop = plateTop + rim + pad + counterH;
@@ -375,13 +367,13 @@ export class DuelScene extends Phaser.Scene {
   private createInfoPanel() {
     const L = LAYOUT;
     // Everything in the panel sits above dialogs' shade (INFO_DEPTH), so it stays bright and shows hovered cards.
-    this.add.nineslice(0, 0, ui("info-frame"), undefined, INFO.w, 360, ...PANEL.infoSlice).setOrigin(0).setDepth(INFO_DEPTH);
+    this.add.nineslice(0, 0, ui("info-frame"), undefined, INFO.w, 360, ...THEME.panel.infoSlice).setOrigin(0).setDepth(INFO_DEPTH);
     this.lpBars = [
       new LPBar(this, L.bar.x, L.lp.mine, L.bar.w, "You", this.startLP).set(this.startLP).setDepth(INFO_DEPTH),
       new LPBar(this, L.bar.x, L.lp.opp, L.bar.w, this.sceneData.opponentName ?? "Opponent", this.startLP).set(this.startLP).setDepth(INFO_DEPTH),
     ];
     this.infoPanel = this.add.container(0, 0).setDepth(INFO_DEPTH);
-    this.logText = text(this, L.x + PANEL.paperRim, LOG_Y, "", { color: PANEL.paperInk, maxWidth: L.w - PANEL.paperRim * 2 }).setDepth(INFO_DEPTH + 1);
+    this.logText = text(this, L.x + INSET.paper, LOG_Y, "", { color: THEME.panel.paperInk, maxWidth: L.w - INSET.paper * 2 }).setDepth(INFO_DEPTH + 1);
     this.createCornerButtons();
     this.showEmpty();
   }
@@ -421,8 +413,8 @@ export class DuelScene extends Phaser.Scene {
 
   /** Cream paper inset whose outer edge is the box (x, y, w, h); text goes inside, padded by its rim. */
   private paper(x: number, y: number, w: number, h: number) {
-    const r = PANEL.paperSlice;
-    this.infoPanel.add(this.add.nineslice(x, y, PANEL.paper, undefined, w, h, r, r, r, r).setOrigin(0));
+    const r = THEME.panel.paperSlice;
+    this.infoPanel.add(this.add.nineslice(x, y, ui("panel-paper"), undefined, w, h, r, r, r, r).setOrigin(0));
   }
 
   /**
@@ -451,15 +443,15 @@ export class DuelScene extends Phaser.Scene {
     this.logText.setVisible(false);
     this.stopNameScroll();
     const p = this.infoPanel.removeAll(true);
-    const L = LAYOUT, ink = PANEL.ink;
+    const L = LAYOUT, ink = THEME.panel.ink;
     const monster = (r.type & 0x1) !== 0;
 
     // Name at 2x, light with a 1px dark drop shadow, left-aligned; names wider than their space scroll (see
     // scrollName). Monsters stop before the attribute icon; Spells/Traps (icons sit by the art) get the full width.
     const nameW = monster ? L.w - 20 : L.w;
     const nameStr = r.name.toUpperCase();
-    const nameText = text(this, 0, 0, nameStr, { scale: 2, color: NAME_INK });
-    const name = this.add.container(L.x, L.top, [text(this, 1, 1, nameStr, { scale: 2, color: NAME_SHADOW }), nameText]);
+    const nameText = text(this, 0, 0, nameStr, { scale: 2, color: THEME.cardName.ink });
+    const name = this.add.container(L.x, L.top, [text(this, 1, 1, nameStr, { scale: 2, color: THEME.cardName.shadow }), nameText]);
     p.add(name);
     if (nameText.width > nameW) this.scrollName(name, nameText.width, nameW);
     const attr = ATTRIBUTE_INDEX[r.attribute];
@@ -499,11 +491,11 @@ export class DuelScene extends Phaser.Scene {
     }
     const pr = THEME.plate.slice;
     p.add(this.add.nineslice(statX, typesY, ui("menu-back"), undefined, statW, artY + ART_FRAME - typesY, pr, pr, pr, pr).setOrigin(0));
-    types.forEach((str, i) => p.add(text(this, statX + 5, typesY + 5 + i * 8, str, { color: STAT_VALUE })));
+    types.forEach((str, i) => p.add(text(this, statX + 5, typesY + 5 + i * 8, str, { color: THEME.plate.ink })));
     const descY = artY + ART_FRAME + 5;
     this.paper(L.x, descY, L.w, L.bottom - descY);
-    const pad = PANEL.paperRim + 1;
-    p.add(text(this, L.x + pad, descY + pad, r.desc, { maxWidth: L.w - pad * 2, color: PANEL.paperInk }));
+    const pad = INSET.paper + 1;
+    p.add(text(this, L.x + pad, descY + pad, r.desc, { maxWidth: L.w - pad * 2, color: THEME.panel.paperInk }));
   }
 
   /**
@@ -521,8 +513,8 @@ export class DuelScene extends Phaser.Scene {
     }));
     p.add(g);
     const tx = x + 5 + icon.rows[0].length + 4;
-    p.add(text(this, tx, y + 5, label, { color: STAT_LABEL }));
-    p.add(text(this, tx, y + 12, value, { scale: 2, color: STAT_VALUE }));
+    p.add(text(this, tx, y + 5, label, { color: THEME.plate.inkSoft }));
+    p.add(text(this, tx, y + 12, value, { scale: 2, color: THEME.plate.ink }));
   }
 
   /**
@@ -564,8 +556,8 @@ export class DuelScene extends Phaser.Scene {
     this.infoPanel.removeAll(true);
     const L = LAYOUT;
     this.logText.setVisible(true);
-    this.infoPanel.add(text(this, L.x + 1, L.top, "DUEL LOG", { color: PANEL.inkSoft }));
-    this.paper(L.x, LOG_Y - PANEL.paperRim - 1, L.w, L.bottom - LOG_Y + PANEL.paperRim + 1);
+    this.infoPanel.add(text(this, L.x + 1, L.top, "DUEL LOG", { color: THEME.panel.inkSoft }));
+    this.paper(L.x, LOG_Y - INSET.paper - 1, L.w, L.bottom - LOG_Y + INSET.paper + 1);
     this.renderLog();
   }
 
@@ -577,7 +569,7 @@ export class DuelScene extends Phaser.Scene {
 
   private renderLog() {
     // Show as many recent lines as fit above the speed button.
-    const room = LAYOUT.bottom - PANEL.paperRim - this.logText.y;
+    const room = LAYOUT.bottom - INSET.paper - this.logText.y;
     for (let n = Math.min(this.logLines.length, 45); n >= 0; n--) {
       this.logText.setText(this.logLines.slice(this.logLines.length - n).join("\n"));
       if (this.logText.height <= room) break;
@@ -1206,8 +1198,8 @@ export class DuelScene extends Phaser.Scene {
       const g = this.add.graphics().setDepth(790);
       const draw = (on: boolean) => {
         g.clear();
-        g.fillStyle(ZONE_PICK.color, on ? ZONE_PICK.hoverAlpha : ZONE_PICK.alpha).fillRect(x - CARD.w / 2, y - CARD.h / 2, CARD.w, CARD.h);
-        border(g, x - CARD.w / 2, y - CARD.h / 2, CARD.w, CARD.h, ZONE_PICK.color);
+        g.fillStyle(THEME.pick.zone, on ? THEME.pick.zoneHoverAlpha : THEME.pick.zoneAlpha).fillRect(x - CARD.w / 2, y - CARD.h / 2, CARD.w, CARD.h);
+        border(g, x - CARD.w / 2, y - CARD.h / 2, CARD.w, CARD.h, THEME.pick.zone);
       };
       draw(false);
       let picked = false;

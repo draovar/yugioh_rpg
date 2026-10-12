@@ -10,8 +10,6 @@ import { CARD, INFO, INSET } from "./layout.ts";
 import { THEME, ui } from "../theme.ts";
 import { createTextInput } from "../textInput.ts";
 
-/** The board and its text (theme). */
-const WOOD = { ...THEME.panel, rim: INSET.board, frame: ui("panel-frame"), paper: ui("panel-paper") };
 /** Card-name search: rows of matches shown at once, and the text field's height. */
 const SEARCH_ROWS = 8;
 const FIELD_H = 15;
@@ -19,8 +17,11 @@ const FIELD_H = 15;
 const DEPTH = 1000;
 /** The info panel is drawn above dialogs' shade (they never overlap it). */
 export const INFO_DEPTH = DEPTH + 1;
-/** Darkening over the field while a dialog or picker is open. */
-const SHADE_ALPHA = THEME.shadeAlpha;
+/** The board sprite (the theme's "panel-frame"), top-left at (x, y). */
+function board(s: Phaser.Scene, x: number, y: number, w: number, h: number) {
+  const slice = THEME.panel.slice;
+  return s.add.nineslice(x, y, ui("panel-frame"), undefined, w, h, slice, slice, slice, slice).setOrigin(0);
+}
 const LEFT = INFO.x + INFO.w;
 const WIDTH = 640 - LEFT;
 const MID_X = LEFT + Math.floor(WIDTH / 2);
@@ -105,7 +106,7 @@ export class Modal {
   dialog(message: string, buttons: { label: string; onClick: () => void }[], code?: number): void {
     const s = this.scene;
     const root = this.open();
-    const rim = WOOD.rim;
+    const rim = INSET.board;
     const cardW = code ? CARD.w * 2 : 0, cardH = code ? CARD.h * 2 : 0;
     const side = code ? cardW + CARD_GAP : 0; // the card and the gap after it
     const labels = buttons.map((b) => b.label);
@@ -120,12 +121,12 @@ export class Modal {
     const left = Math.round(MID_X - w / 2);
     const contentX = left + Math.round((w - side - colW) / 2);
     const colX = contentX + side;
-    const body = text(s, 0, 0, message, { color: WOOD.ink, maxWidth: colW });
+    const body = text(s, 0, 0, message, { color: THEME.panel.ink, maxWidth: colW });
     const textH = 2 + body.height + 6;
     const contentH = Math.max(cardH, textH + grid.h);
     const h = rim + CARD_GAP + contentH + CARD_GAP + rim;
     const top = Math.round(180 - h / 2);
-    root.add(s.add.nineslice(left, top, WOOD.frame, undefined, w, h, WOOD.slice, WOOD.slice, WOOD.slice, WOOD.slice).setOrigin(0));
+    root.add(board(s, left, top, w, h));
     const contentTop = top + rim + CARD_GAP;
     // The card sits against the left padding; the text and buttons stay where centring put them.
     if (code) root.add(new CardSprite(s, left + rim + CARD_GAP + CARD.w, contentTop + CARD.h).show(code, this.cards.records.get(code)).setScale(2));
@@ -159,7 +160,7 @@ export class Modal {
     const render = (page: number) => {
       const s = this.scene;
       const root = this.open();
-      const rim = WOOD.rim, pad = CARD_GAP;
+      const rim = INSET.board, pad = CARD_GAP;
       const shown = opts.cards.slice(page * perPage, (page + 1) * perPage);
       // Sized for the first (fullest) page, with room under the cards for captions unless no card has one.
       const cols = Math.max(1, Math.min(perPage, opts.cards.length));
@@ -185,11 +186,11 @@ export class Modal {
       const needed = Math.max(cardsW, titleW, buttonsW + (pages > 1 ? 24 : 0));
       const w = needed <= innerWidth(STANDARD_W) ? STANDARD_W : WIDE_W;
       const innerW = innerWidth(w);
-      const title = text(s, 0, 0, opts.title.toUpperCase(), { color: WOOD.ink, maxWidth: innerW }).setCenterAlign();
+      const title = text(s, 0, 0, opts.title.toUpperCase(), { color: THEME.panel.ink, maxWidth: innerW }).setCenterAlign();
       const h = rim + pad + title.height + 3 + SELECTED_LIFT + cardsH + (buttons.length ? 5 + LIST_BUTTON_H : 0) + pad + rim;
       const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
       const innerX = left + rim + pad;
-      root.add(s.add.nineslice(left, top, WOOD.frame, undefined, w, h, WOOD.slice, WOOD.slice, WOOD.slice, WOOD.slice).setOrigin(0));
+      root.add(board(s, left, top, w, h));
       title.setPosition(Math.round(innerX + (innerW - title.width) / 2), top + rim + pad);
       root.add(title);
 
@@ -236,7 +237,7 @@ export class Modal {
         baseY.set(i, y);
         root.add(sp);
         const caption = fit(s, FONT_CARD, (c.caption ?? this.cards.name(c.code)).toUpperCase(), PICK_PITCH_X - 2);
-        if (caption) root.add(text(s, x, y + CARD.h / 2 + 2, caption, { font: FONT_CARD, color: WOOD.ink, originX: 0.5 }));
+        if (caption) root.add(text(s, x, y + CARD.h / 2 + 2, caption, { font: FONT_CARD, color: THEME.panel.ink, originX: 0.5 }));
       });
 
       if (buttons.length) {
@@ -249,7 +250,7 @@ export class Modal {
           root.add(btn);
           bx += btnW(b) + BTN_GAP;
         }
-        if (pages > 1) root.add(text(s, innerX, by + 3, `${page + 1}/${pages}`, { color: WOOD.ink }));
+        if (pages > 1) root.add(text(s, innerX, by + 3, `${page + 1}/${pages}`, { color: THEME.panel.ink }));
       }
       refresh();
     };
@@ -265,25 +266,25 @@ export class Modal {
   search(opts: SearchOptions): void {
     const s = this.scene;
     const root = this.open();
-    const rim = WOOD.rim, pad = CARD_GAP;
+    const rim = INSET.board, pad = CARD_GAP;
     const finder = new CardSearch(opts.codes.map((code) => ({ code, name: this.cards.name(code) })));
     const w = WIDE_W, innerW = innerWidth(w);
     const rowPitch = LIST_BUTTON_H + 2;
-    const title = text(s, 0, 0, opts.title.toUpperCase(), { color: WOOD.ink, maxWidth: innerW }).setCenterAlign();
+    const title = text(s, 0, 0, opts.title.toUpperCase(), { color: THEME.panel.ink, maxWidth: innerW }).setCenterAlign();
     const h = rim + pad + title.height + 4 + FIELD_H + 4 + SEARCH_ROWS * rowPitch - 2 + 5 + 5 + pad + rim;
     const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
     const innerX = left + rim + pad;
-    root.add(s.add.nineslice(left, top, WOOD.frame, undefined, w, h, WOOD.slice, WOOD.slice, WOOD.slice, WOOD.slice).setOrigin(0));
+    root.add(board(s, left, top, w, h));
     title.setPosition(Math.round(innerX + (innerW - title.width) / 2), top + rim + pad);
     root.add(title);
 
     // Text field: paper inset, typed text + blinking caret on the left, match count on the right.
     const fieldY = title.y + title.height + 4;
-    const ps = WOOD.paperSlice;
-    root.add(s.add.nineslice(innerX, fieldY, WOOD.paper, undefined, innerW, FIELD_H, ps, ps, ps, ps).setOrigin(0));
-    const typed = text(s, innerX + 5, fieldY + 5, "", { color: WOOD.paperInk });
-    const caret = text(s, innerX + 5, fieldY + 5, "_", { color: WOOD.paperInk });
-    const count = text(s, 0, fieldY + 5, "", { color: WOOD.inkSoft });
+    const ps = THEME.panel.paperSlice;
+    root.add(s.add.nineslice(innerX, fieldY, ui("panel-paper"), undefined, innerW, FIELD_H, ps, ps, ps, ps).setOrigin(0));
+    const typed = text(s, innerX + 5, fieldY + 5, "", { color: THEME.panel.paperInk });
+    const caret = text(s, innerX + 5, fieldY + 5, "_", { color: THEME.panel.paperInk });
+    const count = text(s, 0, fieldY + 5, "", { color: THEME.panel.inkSoft });
     root.add([typed, caret, count]);
     const blink = s.time.addEvent({ delay: 450, loop: true, callback: () => caret.setVisible(!caret.visible) });
 
@@ -297,7 +298,7 @@ export class Modal {
       return btn;
     });
     const hint = text(s, innerX + innerW / 2, rowsY + SEARCH_ROWS * rowPitch - 2 + 5, "TYPE A NAME (TAP THE BOX ON A PHONE) - UP / DOWN, ENTER TO PICK",
-      { color: WOOD.inkSoft, originX: 0.5 });
+      { color: THEME.panel.inkSoft, originX: 0.5 });
     root.add(hint);
 
     const pick = (code: number) => { this.close(); opts.onPick(code); };
@@ -341,7 +342,7 @@ export class Modal {
     this.close();
     // The whole screen, table behind the info panel's frame included; the info panel itself is drawn above
     // the shade (INFO_DEPTH) so it stays bright and hovered cards still show there.
-    const shade = this.scene.add.rectangle(0, 0, 640, 360, 0x000000, SHADE_ALPHA).setOrigin(0).setInteractive();
+    const shade = this.scene.add.rectangle(0, 0, 640, 360, 0x000000, THEME.shadeAlpha).setOrigin(0).setInteractive();
     this.root = this.scene.add.container(0, 0, [shade]).setDepth(DEPTH);
     return this.root;
   }
@@ -362,5 +363,5 @@ function buttonGrid(scene: Phaser.Scene, labels: string[], width: number): { w: 
 
 /** Content width inside a board of width `w`: the rim plus CARD_GAP padding on each side. */
 function innerWidth(w: number): number {
-  return w - 2 * (WOOD.rim + CARD_GAP);
+  return w - 2 * (INSET.board + CARD_GAP);
 }

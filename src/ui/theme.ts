@@ -7,7 +7,9 @@
 //   - the UI colours and the table pattern
 // Cards (frames, backs, attribute icons) and gameplay feedback (attack red, summon flashes) are not themed.
 //
-// Pick one with `&theme=NAME` (dev) or the "theme" localStorage key; switching needs a reload.
+// Pick one with `&theme=NAME` (dev) or the world menu's THEME buttons (`setTheme`, saved in localStorage).
+
+import type Phaser from "phaser";
 
 /** Every sprite role a theme provides (file `<role>.png`, texture key `ui-<role>`). */
 export const UI_ROLES = [
@@ -174,13 +176,38 @@ export const THEMES: Record<string, Theme> = { runewood: RUNEWOOD, hologram: HOL
 function chooseTheme(): Theme {
   let name: string | null = null;
   try {
-    name = (import.meta.env.DEV ? new URLSearchParams(location.search).get("theme") : null) ?? localStorage.getItem("theme");
+    name = (import.meta.env.DEV ? new URLSearchParams(location.search).get("theme") : null) ?? localStorage.getItem(THEME_KEY);
   } catch { /* no storage */ }
   return (name && THEMES[name]) || RUNEWOOD;
 }
 
-/** The theme in use (fixed for the page's lifetime). */
-export const THEME: Theme = chooseTheme();
+const THEME_KEY = "theme";
+
+/**
+ * The theme in use. Always this one object: `setTheme` swaps its contents, so read it when drawing and
+ * never copy its values into module-level constants.
+ */
+export const THEME: Theme = { ...chooseTheme() };
+
+/** Queues the current theme's UI sprites (public/assets/ui/<theme>/, from tools/import-ui.mjs). */
+export function loadThemeSprites(load: Phaser.Loader.LoaderPlugin): void {
+  for (const role of UI_ROLES) load.image(ui(role), `assets/ui/${THEME.name}/${role}.png`);
+}
+
+/**
+ * Switches theme without a reload: saves the choice, swaps THEME's contents and reloads the `ui-*`
+ * textures; resolves once they're loaded. Only while nothing themed is on screen (the world map).
+ */
+export function setTheme(scene: Phaser.Scene, name: string): Promise<void> {
+  try { localStorage.setItem(THEME_KEY, name); } catch { /* storage unavailable */ }
+  Object.assign(THEME, THEMES[name]);
+  for (const role of UI_ROLES) scene.textures.remove(ui(role));
+  return new Promise((resolve) => {
+    scene.load.once("complete", () => resolve());
+    loadThemeSprites(scene.load);
+    scene.load.start();
+  });
+}
 
 /** Texture key of a role's sprite. */
 export const ui = (role: UiRole) => `ui-${role}`;

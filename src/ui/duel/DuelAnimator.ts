@@ -83,8 +83,6 @@ const T = {
 };
 const EASE = "Quad.easeOut";
 
-/** Turn banner colours: band fill, its 1px top (and turn-number) / bottom (and text shadow) lines. */
-const BANNER = THEME.banner;
 
 const turnLine = (turn: number | undefined) => (turn ? `TURN ${turn}` : undefined);
 
@@ -136,7 +134,7 @@ export class DuelAnimator {
     switch (m.type) {
       case OcgMessageType.NEW_TURN:
         this.clearAttack();
-        return this.banner(m.player === h.me ? "YOUR TURN" : "OPPONENT'S TURN", turnLine((m as NewTurnMessage).turn), m.player === h.me ? BANNER.mine : BANNER.theirs);
+        return this.banner(m.player === h.me ? "YOUR TURN" : "OPPONENT'S TURN", turnLine((m as NewTurnMessage).turn), m.player === h.me ? THEME.banner.mine : THEME.banner.theirs);
       case OcgMessageType.HINT: {
         // After a declaration the engine hints what was declared (player = who declared). The opponent's
         // declaration waits for an OK (text only, also for card names); your own is only logged.

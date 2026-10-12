@@ -6,8 +6,6 @@ import { LIST_BUTTON_H, makeListButton } from "../widgets.ts";
 import type { CardSprite } from "./CardSprite.ts";
 import { CARD, INSET } from "./layout.ts";
 
-/** The frame's nine-slice inset (theme). */
-const BACK_SLICE = THEME.cardMenu.slice;
 /** Buttons sit this far inside the frame's edge. */
 const BACK_RIM = INSET.plate;
 /**
@@ -32,7 +30,8 @@ export class CardMenu extends Phaser.GameObjects.Container {
     super(scene, card.x, card.y);
     this.card = card;
     // Clicking the frame (between the buttons) flips the card face-up again.
-    const back = scene.add.nineslice(0, 0, ui("card-menu"), undefined, CARD.w, CARD.h, BACK_SLICE, BACK_SLICE, BACK_SLICE, BACK_SLICE)
+    const slice = THEME.cardMenu.slice;
+    const back = scene.add.nineslice(0, 0, ui("card-menu"), undefined, CARD.w, CARD.h, slice, slice, slice, slice)
       .setInteractive();
     back.on("pointerup", () => this.close());
     this.add(back);

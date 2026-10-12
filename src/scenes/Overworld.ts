@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import { DECKS, type DeckName } from "../duel/decks.ts";
 import { WHITE, text } from "../ui/pixel.ts";
-import { chosenDeck, setChosenDeck, switchTheme } from "../ui/prefs.ts";
-import { THEME, THEMES } from "../ui/theme.ts";
+import { chosenDeck, setChosenDeck } from "../ui/prefs.ts";
+import { THEME, THEMES, setTheme } from "../ui/theme.ts";
 import { makeButton, type Button } from "../ui/widgets.ts";
 
 const TILE = 16;
@@ -17,6 +17,9 @@ export class Overworld extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private moving = false;
   private deckButtons: Button[] = [];
+  private themeButtons: Button[] = [];
+  /** The new theme's sprites are loading: no duel or lobby until they're in. */
+  private loadingTheme = false;
 
   constructor() {
     super("Overworld");
@@ -28,7 +31,7 @@ export class Overworld extends Phaser.Scene {
     this.npc = this.add.rectangle(TILE * 20 + 8, TILE * 10 + 8, TILE - 2, TILE - 2, 0xff5555);
     text(this, 8, 8, "ARROW KEYS TO MOVE. WALK INTO THE RED DUELIST TO CHALLENGE THEM.", { color: WHITE });
     this.cursors = this.input.keyboard!.createCursorKeys();
-    this.input.keyboard!.once("keydown-M", () => this.scene.start("Lobby"));
+    this.input.keyboard!.on("keydown-M", () => this.openLobby());
     this.createMenu();
   }
 
@@ -45,15 +48,28 @@ export class Overworld extends Phaser.Scene {
         () => { setChosenDeck(name); drawDecks(); }, name === picked ? PICKED_COLOR : BUTTON_COLOR));
     };
     drawDecks();
-    // Duel UI theme: switching reloads the page (Boot loads the theme's sprites once).
+    // Duel UI theme: switched in place (nothing themed is on screen here).
     text(this, BAR.themeX, y, "THEME:", { color: WHITE, originY: 0.5 });
-    Object.keys(THEMES).forEach((name, i) => makeButton(this, BAR.themeX + 60 + i * (BAR.themeW + 6), y, BAR.themeW, 14,
-      name.toUpperCase(), () => { if (name !== THEME.name) switchTheme(name); }, name === THEME.name ? PICKED_COLOR : BUTTON_COLOR));
-    makeButton(this, 640 - 8 - BAR.mpW / 2, y, BAR.mpW, 14, "MULTIPLAYER (M)", () => this.scene.start("Lobby"));
+    const drawThemes = () => {
+      for (const b of this.themeButtons) b.destroy();
+      this.themeButtons = Object.keys(THEMES).map((name, i) => makeButton(this, BAR.themeX + 60 + i * (BAR.themeW + 6), y, BAR.themeW, 14,
+        name.toUpperCase(), () => {
+          if (name === THEME.name || this.loadingTheme) return;
+          this.loadingTheme = true;
+          void setTheme(this, name).then(() => (this.loadingTheme = false));
+          drawThemes();
+        }, name === THEME.name ? PICKED_COLOR : BUTTON_COLOR));
+    };
+    drawThemes();
+    makeButton(this, 640 - 8 - BAR.mpW / 2, y, BAR.mpW, 14, "MULTIPLAYER (M)", () => this.openLobby());
+  }
+
+  private openLobby() {
+    if (!this.loadingTheme) this.scene.start("Lobby");
   }
 
   update() {
-    if (this.moving) return;
+    if (this.moving || this.loadingTheme) return;
     const dir = this.cursors.left.isDown ? [-1, 0] : this.cursors.right.isDown ? [1, 0]
       : this.cursors.up.isDown ? [0, -1] : this.cursors.down.isDown ? [0, 1] : null;
     if (!dir) return;

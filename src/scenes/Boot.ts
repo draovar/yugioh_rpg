@@ -3,7 +3,7 @@ import { deckByName } from "../duel/decks.ts";
 import { loadEngine } from "../duel/loadEngine.ts";
 import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, FRAMES, SPELL_SHEET, frameKey } from "../ui/duel/CardSprite.ts";
 import { FONT_CARD, FONT_UI, WHITE, text } from "../ui/pixel.ts";
-import { THEME, UI_ROLES, ui } from "../ui/theme.ts";
+import { loadThemeSprites } from "../ui/theme.ts";
 
 export class Boot extends Phaser.Scene {
   constructor() {
@@ -17,8 +17,7 @@ export class Boot extends Phaser.Scene {
     this.load.image(CARD_BACK, "assets/cards/back.png");
     this.load.spritesheet(ATTRIBUTE_SHEET, "assets/cards/attributes.png", { frameWidth: 16, frameHeight: 16 });
     this.load.spritesheet(SPELL_SHEET, "assets/cards/spells.png", { frameWidth: 16, frameHeight: 16 });
-    // The theme's UI sprites (public/assets/ui/<theme>/, from tools/import-ui.mjs).
-    for (const role of UI_ROLES) this.load.image(ui(role), `assets/ui/${THEME.name}/${role}.png`);
+    loadThemeSprites(this.load);
     // Built by `npm run build-art`; cards without art fall back to a grey box.
     this.load.atlas(ART_ATLAS, "cards/art32.png", "cards/art32.json");
   }

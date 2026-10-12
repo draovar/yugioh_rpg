@@ -8,14 +8,7 @@ import { INSET } from "./layout.ts";
 export const LP_BAR = { h: 15 };
 /** The track (where the fill lives) sits this far inside the frame on every side (global). */
 const RIM = INSET.lpTrack;
-/** The frame sprite's nine-slice inset (theme). */
-const FRAME_SLICE = THEME.lpBar.slice;
 const TRACK_H = LP_BAR.h - RIM * 2;
-
-/** Filler sprite per LP band, with its nine-slice insets (top highlight / bottom shade rows). */
-const FILLS = THEME.lpBar.fills.map((f) => ({ ...f, key: ui(f.role) }));
-
-const { label: LABEL, shadow: SHADOW, loss: LOSS, gain: GAIN } = THEME.lpBar;
 
 export class LPBar extends Phaser.GameObjects.Container {
   private readonly max: number;
@@ -30,7 +23,8 @@ export class LPBar extends Phaser.GameObjects.Container {
     super(scene, x, y);
     this.max = max;
     this.trackW = width - RIM * 2;
-    this.add(scene.add.nineslice(0, 0, ui("lp-frame"), undefined, width, LP_BAR.h, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE, FRAME_SLICE).setOrigin(0));
+    const slice = THEME.lpBar.slice; // the frame sprite's nine-slice inset
+    this.add(scene.add.nineslice(0, 0, ui("lp-frame"), undefined, width, LP_BAR.h, slice, slice, slice, slice).setOrigin(0));
     this.fill = scene.add.container(RIM, RIM);
     this.add(this.fill);
     const ty = (this.textY = RIM + Math.floor((TRACK_H - 5) / 2));
@@ -43,10 +37,12 @@ export class LPBar extends Phaser.GameObjects.Container {
   set(lp: number): this {
     const value = Math.max(0, Math.round(lp));
     const ratio = Math.min(1, value / this.max);
-    const band = FILLS.find((f) => ratio >= f.min) ?? FILLS[FILLS.length - 1];
+    // Filler sprite per LP band (theme), with its nine-slice insets (top highlight / bottom shade rows).
+    const fills = THEME.lpBar.fills;
+    const band = fills.find((f) => ratio >= f.min) ?? fills[fills.length - 1];
     const w = Math.round(this.trackW * ratio);
     this.fill.removeAll(true);
-    if (w > 0) this.fill.add(this.scene.add.nineslice(0, 0, band.key, undefined, w, TRACK_H, ...band.slice).setOrigin(0));
+    if (w > 0) this.fill.add(this.scene.add.nineslice(0, 0, ui(band.role), undefined, w, TRACK_H, ...band.slice).setOrigin(0));
     for (const t of this.lpText) t.setText(String(value));
     return this;
   }
@@ -59,7 +55,7 @@ export class LPBar extends Phaser.GameObjects.Container {
     for (const t of this.delta) t.destroy();
     this.deltaTimer?.remove();
     const label = delta > 0 ? `+${delta}` : `${delta}`;
-    this.delta = this.shadowed(RIM + 3 + 18, this.textY, label, 0, delta > 0 ? GAIN : LOSS);
+    this.delta = this.shadowed(RIM + 3 + 18, this.textY, label, 0, delta > 0 ? THEME.lpBar.gain : THEME.lpBar.loss);
     this.deltaTimer = this.scene.time.delayedCall(ms, () => {
       for (const t of this.delta) t.destroy();
       this.delta = [];
@@ -67,8 +63,8 @@ export class LPBar extends Phaser.GameObjects.Container {
   }
 
   /** Light label with a 1px dark drop shadow, so it reads over both the fill and the empty track. */
-  private shadowed(x: number, y: number, label: string, originX: number, color = LABEL): Phaser.GameObjects.BitmapText[] {
-    const shadow = text(this.scene, x + 1, y + 1, label, { color: SHADOW, originX });
+  private shadowed(x: number, y: number, label: string, originX: number, color = THEME.lpBar.label): Phaser.GameObjects.BitmapText[] {
+    const shadow = text(this.scene, x + 1, y + 1, label, { color: THEME.lpBar.shadow, originX });
     const front = text(this.scene, x, y, label, { color, originX });
     this.add([shadow, front]);
     return [shadow, front];
