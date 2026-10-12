@@ -70,6 +70,8 @@ export interface PlayerView {
   spells: (CardView | null)[];
   grave: CardView[];
   banished: CardView[];
+  /** Extra Deck cards: the viewer sees their own; the opponent's are face-down, so hidden (code 0). */
+  extra: CardView[];
 }
 
 export interface FieldSnapshot {
@@ -208,6 +210,7 @@ export class DuelSession {
       spells: read(p, OcgLocation.SZONE).slice(0, 6),
       grave: read(p, OcgLocation.GRAVE).filter((c) => c !== null),
       banished: read(p, OcgLocation.REMOVED).filter((c) => c !== null),
+      extra: read(p, OcgLocation.EXTRA).filter((c) => c !== null),
     }));
     return { players: players as [PlayerView, PlayerView] };
   }

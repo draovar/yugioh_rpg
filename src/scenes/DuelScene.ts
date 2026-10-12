@@ -669,7 +669,8 @@ export class DuelScene extends Phaser.Scene {
       p.monsters.forEach((c, seq) => c && this.placeCard(c, slotXY(s, { kind: "mzone", seq })));
       p.spells.forEach((c, seq) => c && this.placeCard(c, slotXY(s, { kind: "szone", seq })));
       this.drawPile(s, { kind: "deck" }, p.deckCount, null);
-      this.drawPile(s, { kind: "extra" }, p.extraCount, null);
+      // Only your own Extra Deck can be browsed (the opponent's cards are hidden anyway).
+      this.drawPile(s, { kind: "extra" }, p.extraCount, null, s === 0 ? p.extra : undefined);
       this.drawPile(s, { kind: "grave" }, p.grave.length, p.grave.at(-1) ?? null, [...p.grave].reverse(), p.banished);
       this.drawHand(s, p.hand);
     });
@@ -700,7 +701,7 @@ export class DuelScene extends Phaser.Scene {
         sp.on("pointerover", () => this.showInfo(top.code));
         sp.on("pointerout", () => this.hoverEnd());
       }
-      if (contents) sp.on("pointerup", () => this.browsePile(side, contents, banished));
+      if (contents) sp.on("pointerup", () => this.browsePile(side, contents, banished, slot.kind === "extra" ? "extra" : "grave"));
       this.board.add([sp, this.badge(x + 19, y - 28, String(count), 1)]);
     }
     // Banished cards have no zone in this layout: a badge under the Graveyard, listed when browsing it.
@@ -751,12 +752,13 @@ export class DuelScene extends Phaser.Scene {
     return sp;
   }
 
-  private browsePile(side: 0 | 1, contents: CardView[], banished: CardView[]) {
+  /** Lists a pile's cards in a picker dialog: a Graveyard (newest first, then banished cards) or your Extra Deck. */
+  private browsePile(side: 0 | 1, contents: CardView[], banished: CardView[], pile: "grave" | "extra" = "grave") {
     if (this.modal.isOpen || !contents.length && !banished.length) return;
     const pending = this.controller.waitingForHuman;
     const owner = side === 0 ? "Your" : "Opponent's";
     this.modal.picker({
-      title: `${owner} Graveyard (newest first)${banished.length ? ", then banished" : ""}`,
+      title: pile === "extra" ? `${owner} Extra Deck` : `${owner} Graveyard (newest first)${banished.length ? ", then banished" : ""}`,
       // No names (they're on the cards); only banished cards get a caption, to tell them apart.
       cards: [
         ...contents.map((c) => ({ code: c.code, locked: true, caption: "" })),
