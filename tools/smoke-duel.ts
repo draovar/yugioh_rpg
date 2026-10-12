@@ -44,7 +44,7 @@ for (let i = 0; i < runs; i++) {
       turns += step.messages.filter((m) => m.type === OcgMessageType.NEW_TURN).length;
       if (step.ended) { winner = step.winner; break; }
       if (++decisions > 20_000) throw new Error("duel did not finish");
-      duel.respond(autoRespond(step.prompt!));
+      duel.respond(autoRespond(step.prompt!, Math.random, cards));
     }
     console.log(`duel ${i + 1} (${p0} vs ${p1}): winner P${winner}, ${turns} turns, ${msgs} messages, ${decisions} decisions`);
   } catch (e) {

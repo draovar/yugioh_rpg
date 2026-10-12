@@ -2,14 +2,19 @@
 // They cover the field but not the info panel, so hovering a card in a modal still shows it.
 import Phaser from "phaser";
 import type { CardDb } from "../../duel/cardData.ts";
+import { CardSearch, type NamedCard } from "../../duel/cardSearch.ts";
 import { FONT_CARD, FONT_UI, fit, measure, text } from "../pixel.ts";
 import { LIST_BUTTON_H, makeListButton, type ListButton } from "../widgets.ts";
 import { CardSprite } from "./CardSprite.ts";
 import { CARD, INFO, INSET } from "./layout.ts";
 import { THEME, ui } from "../theme.ts";
+import { createTextInput } from "../textInput.ts";
 
 /** The board and its text (theme). */
-const WOOD = { ...THEME.panel, rim: INSET.board, frame: ui("panel-frame") };
+const WOOD = { ...THEME.panel, rim: INSET.board, frame: ui("panel-frame"), paper: ui("panel-paper") };
+/** Card-name search: rows of matches shown at once, and the text field's height. */
+const SEARCH_ROWS = 8;
+const FIELD_H = 15;
 
 const DEPTH = 1000;
 /** The info panel is drawn above dialogs' shade (they never overlap it). */
@@ -59,8 +64,19 @@ export interface PickerOptions {
   onHoverEnd?: () => void;
 }
 
+export interface SearchOptions {
+  title: string;
+  /** The cards that may be picked. */
+  codes: number[];
+  onPick: (code: number) => void;
+  /** Called for the highlighted match (pointer or arrow keys), e.g. to show it in the info panel. */
+  onHover?: (code: number) => void;
+}
+
 export class Modal {
   private root: Phaser.GameObjects.Container | null = null;
+  /** Things to undo on close besides the display objects (the search's HTML input, its caret timer). */
+  private cleanups: (() => void)[] = [];
   private readonly scene: Phaser.Scene;
   private readonly cards: CardDb;
 
@@ -74,6 +90,7 @@ export class Modal {
   }
 
   close(): void {
+    for (const f of this.cleanups.splice(0)) f();
     this.root?.destroy();
     this.root = null;
   }
@@ -234,6 +251,87 @@ export class Modal {
       refresh();
     };
     render(0);
+  }
+
+  /**
+   * Card-name search (declarations; scales to thousands of cards, unlike paging): a text field on paper with
+   * the match count, the best SEARCH_ROWS matches as list rows, and a hint line. Typing filters live
+   * (CardSearch); Up/Down move the highlight (previewed via onHover), Enter or a click picks. The text is
+   * collected by an invisible HTML input over the field, so tapping it opens a phone's keyboard.
+   */
+  search(opts: SearchOptions): void {
+    const s = this.scene;
+    const root = this.open();
+    const rim = WOOD.rim, pad = CARD_GAP;
+    const finder = new CardSearch(opts.codes.map((code) => ({ code, name: this.cards.name(code) })));
+    const w = WIDE_W, innerW = innerWidth(w);
+    const rowPitch = LIST_BUTTON_H + 2;
+    const title = text(s, 0, 0, opts.title.toUpperCase(), { color: WOOD.ink, maxWidth: innerW }).setCenterAlign();
+    const h = rim + pad + title.height + 4 + FIELD_H + 4 + SEARCH_ROWS * rowPitch - 2 + 5 + 5 + pad + rim;
+    const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
+    const innerX = left + rim + pad;
+    root.add(s.add.nineslice(left, top, WOOD.frame, undefined, w, h, WOOD.slice, WOOD.slice, WOOD.slice, WOOD.slice).setOrigin(0));
+    title.setPosition(Math.round(innerX + (innerW - title.width) / 2), top + rim + pad);
+    root.add(title);
+
+    // Text field: paper inset, typed text + blinking caret on the left, match count on the right.
+    const fieldY = title.y + title.height + 4;
+    const ps = WOOD.paperSlice;
+    root.add(s.add.nineslice(innerX, fieldY, WOOD.paper, undefined, innerW, FIELD_H, ps, ps, ps, ps).setOrigin(0));
+    const typed = text(s, innerX + 5, fieldY + 5, "", { color: WOOD.paperInk });
+    const caret = text(s, innerX + 5, fieldY + 5, "_", { color: WOOD.paperInk });
+    const count = text(s, 0, fieldY + 5, "", { color: WOOD.inkSoft });
+    root.add([typed, caret, count]);
+    const blink = s.time.addEvent({ delay: 450, loop: true, callback: () => caret.setVisible(!caret.visible) });
+
+    let results: NamedCard[] = [];
+    let highlight = 0;
+    const rowsY = fieldY + FIELD_H + 4;
+    const rows = Array.from({ length: SEARCH_ROWS }, (_, i) => {
+      const btn = makeListButton(s, innerX, rowsY + i * rowPitch, innerW, "", () => { const c = results[i]; if (c) pick(c.code); });
+      btn[2].on("pointerover", () => { if (results[i]) setHighlight(i); });
+      root.add(btn);
+      return btn;
+    });
+    const hint = text(s, innerX + innerW / 2, rowsY + SEARCH_ROWS * rowPitch - 2 + 5, "TYPE A NAME (TAP THE BOX ON A PHONE) - UP / DOWN, ENTER TO PICK",
+      { color: WOOD.inkSoft, originX: 0.5 });
+    root.add(hint);
+
+    const pick = (code: number) => { this.close(); opts.onPick(code); };
+    const setHighlight = (i: number) => {
+      highlight = i;
+      rows.forEach((r, j) => r.setHighlighted(j === i && !!results[j]));
+      const c = results[i];
+      if (c) opts.onHover?.(c.code);
+    };
+    const update = (query: string) => {
+      results = finder.find(query);
+      const shownText = fit(s, FONT_UI, query.toUpperCase(), innerW - 70);
+      typed.setText(shownText);
+      caret.setX(innerX + 5 + (shownText ? typed.width + 1 : 0));
+      count.setText(results.length === 1 ? "1 MATCH" : `${results.length} MATCHES`);
+      count.setX(Math.round(innerX + innerW - 5 - count.width));
+      rows.forEach((r, i) => {
+        const c = results[i];
+        for (const part of r) (part as unknown as Phaser.GameObjects.Components.Visible).setVisible(!!c);
+        if (c) r.setLabel(fit(s, FONT_UI, c.name.toUpperCase(), innerW - 8));
+      });
+      setHighlight(0);
+    };
+
+    const input = createTextInput(s, { x: innerX, y: fieldY, w: innerW, h: FIELD_H }, {
+      onChange: update,
+      onKey: (e) => {
+        const n = Math.min(results.length, SEARCH_ROWS);
+        if (e.key === "ArrowDown" && n) { setHighlight((highlight + 1) % n); return true; }
+        if (e.key === "ArrowUp" && n) { setHighlight((highlight + n - 1) % n); return true; }
+        if (e.key === "Enter") { const c = results[highlight]; if (c) pick(c.code); return true; }
+        return false;
+      },
+    });
+    this.cleanups.push(() => { input.destroy(); blink.remove(); });
+    update("");
+    input.focus();
   }
 
   private open(): Phaser.GameObjects.Container {

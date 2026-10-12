@@ -1,6 +1,7 @@
 // A deliberately dumb bot that always returns *some* legal response.
 // Used for headless tests and as the fallback/placeholder opponent AI.
 import {
+  cardMatchesOpcode,
   OcgLocation,
   OcgMessageType,
   OcgPosition,
@@ -8,13 +9,16 @@ import {
   SelectBattleCMDAction,
   SelectIdleCMDAction,
   type OcgMessage,
+  type OcgOpCode,
   type OcgResponse,
   type SelectFieldPlace,
 } from "ocgcore-wasm";
+import type { CardDb } from "./cardData.ts";
 
 const firstN = (n: number) => Array.from({ length: n }, (_, i) => i);
 
-export function autoRespond(m: OcgMessage, rng: () => number = Math.random): OcgResponse {
+/** `cards`: the game's cards, so a card declaration picks a legal name (without: Blue-Eyes, which may be refused). */
+export function autoRespond(m: OcgMessage, rng: () => number = Math.random, cards?: CardDb): OcgResponse {
   switch (m.type) {
     case OcgMessageType.SELECT_IDLECMD:
       if (m.summons.length) return { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.SELECT_SUMMON, index: 0 };
@@ -77,13 +81,25 @@ export function autoRespond(m: OcgMessage, rng: () => number = Math.random): Ocg
     }
     case OcgMessageType.ANNOUNCE_NUMBER:
       return { type: OcgResponseType.ANNOUNCE_NUMBER, value: 0 };
-    case OcgMessageType.ANNOUNCE_CARD:
-      return { type: OcgResponseType.ANNOUNCE_CARD, card: 89631139 };
+    case OcgMessageType.ANNOUNCE_CARD: {
+      const legal = cards ? declarableCards(cards, m.opcodes) : [];
+      return { type: OcgResponseType.ANNOUNCE_CARD, card: legal.length ? legal[Math.floor(rng() * legal.length)] : 89631139 };
+    }
     case OcgMessageType.ROCK_PAPER_SCISSORS:
       return { type: OcgResponseType.ROCK_PAPER_SCISSORS, value: (1 + Math.floor(rng() * 3)) as 1 | 2 | 3 };
     default:
       throw new Error(`autoRespond: no response for message type ${m.type}`);
   }
+}
+
+/**
+ * The cards (of those the game knows: pool + tokens) a card declaration accepts, sorted by name. The prompt's
+ * opcodes are a small filter program (e.g. "any card except tokens", "a monster"), checked by ocgcore-wasm.
+ */
+export function declarableCards(cards: CardDb, opcodes: OcgOpCode[]): number[] {
+  return [...cards.records.keys()]
+    .filter((code) => { const c = cards.get(code); return c !== null && cardMatchesOpcode(c, opcodes); })
+    .sort((a, b) => cards.name(a).localeCompare(cards.name(b)));
 }
 
 /**

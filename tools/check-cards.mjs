@@ -11,7 +11,7 @@ const pool = new Set(JSON.parse(readFileSync(path.join(ROOT, "data/pool.json"), 
 
 /** What each mechanic means for the game today. Update as the UI catches up. */
 const MECHANICS = [
-  { key: "declare", test: /Announce(Card|Number|Race|Attribute|Level|Type)/, status: "UI missing: the random bot declares for you" },
+  { key: "declare", test: /Announce(Card|Number|Race|Attribute|Level|Type)/, status: "works: Type / Attribute / number dialogs, card-name picker" },
   { key: "sort", test: /SortDeck(top|bottom)/, status: "UI missing: the random bot sorts for you" },
   { key: "rps", test: /RockPaperScissors/, status: "UI missing: the random bot picks for you" },
   { key: "counter", test: /AddCounter|EnableCounterPermit/, status: "works; total shown as a number badge (kinds not told apart)" },

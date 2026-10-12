@@ -1,7 +1,10 @@
 // Human-readable log lines for engine messages (null = not worth logging).
 import { OcgLocation, OcgMessageType, type OcgMessage } from "ocgcore-wasm";
 import type { DuelText } from "../../duel/text.ts";
-import { PHASE_NAMES } from "../../duel/text.ts";
+import { PHASE_NAMES, attributeNames, raceNames } from "../../duel/text.ts";
+
+/** HINT types the engine sends after a declaration (the player is the one who declared). */
+const HINT_DECLARE = { race: 6, attribute: 7, code: 8, number: 9 } as const;
 
 /** `me` = seat of the player on this machine ("You"); the other seat is "Opponent". */
 export function describeMessage(m: OcgMessage, text: DuelText, me: number): string | null {
@@ -44,6 +47,16 @@ export function describeMessage(m: OcgMessage, text: DuelText, me: number): stri
         return `${name(m.card)} is sent to the Graveyard`;
       if (m.to.location === OcgLocation.REMOVED) return `${name(m.card)} is banished`;
       return null;
+    case OcgMessageType.HINT: {
+      const v = m.hint;
+      switch (m.hint_type) {
+        case HINT_DECLARE.race: return `${act(m.player, "declare")} ${raceNames(BigInt(v))}`;
+        case HINT_DECLARE.attribute: return `${act(m.player, "declare")} ${attributeNames(Number(v))}`;
+        case HINT_DECLARE.code: return `${act(m.player, "declare")} ${name(Number(v))}`;
+        case HINT_DECLARE.number: return `${act(m.player, "declare")} ${v}`;
+        default: return null;
+      }
+    }
     case OcgMessageType.WIN:
       return m.player === me ? "You win the duel!" : "You lose the duel.";
     default:

@@ -1,15 +1,19 @@
 // Dev-only test boards: `/?duel&setup=NAME` places these cards before the duel starts (you go first), so a
 // situation can be tried straight away instead of played into. Both decks are otherwise unchanged.
-import { OcgLocation } from "ocgcore-wasm";
+import { OcgLocation, OcgPosition } from "ocgcore-wasm";
 import type { Deck, StartCard } from "../duel/DuelSession.ts";
 
 const BLUE_EYES = 89631139, DARK_MAGICIAN = 46986414, SKULL = 70781052, CELTIC = 91152256, GEMINI = 69140098;
 const VORSE = 14898066, MAN_EATER = 54652250;
 const BREAKER = 71413901, SKILLED_DM = 73752131, POT_OF_GREED = 55144522;
+const TRIBE_INFECTING_VIRUS = 33184167, MIND_CRUSH = 15800838, SIXTH_SENSE = 3280747, DNA_TRANSPLANT = 56769674;
 const SINISTER_SERPENT = 8131171, SCAPEGOAT = 73915051, METAMORPHOSIS = 46411259, POLYMERIZATION = 24094653, SNATCH_STEAL = 45986603, AXE = 40619825;
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
 const monster = (code: number, sequence: number): StartCard => ({ code, location: OcgLocation.MZONE, sequence });
+/** A Spell/Trap set face-down in Spell & Trap zone `sequence`. */
+const set = (code: number, sequence: number): StartCard =>
+  ({ code, location: OcgLocation.SZONE, sequence, position: OcgPosition.FACEDOWN_DEFENSE });
 
 const SETUPS: Record<string, { you: StartCard[]; opponent: StartCard[] }> = {
   /**
@@ -32,6 +36,14 @@ const SETUPS: Record<string, { you: StartCard[]; opponent: StartCard[] }> = {
   fusion: {
     you: [hand(BLUE_EYES), hand(BLUE_EYES), hand(BLUE_EYES), hand(POLYMERIZATION)],
     opponent: [monster(GEMINI, 2)],
+  },
+  /**
+   * Declarations: Tribe-Infecting Virus (discard, declare a Type), Mind Crush (a card name), Sixth Sense (two
+   * numbers), DNA Transplant (an Attribute).
+   */
+  declare: {
+    you: [monster(TRIBE_INFECTING_VIRUS, 0), set(MIND_CRUSH, 0), set(SIXTH_SENSE, 1), set(DNA_TRANSPLANT, 2)],
+    opponent: [monster(GEMINI, 1), monster(CELTIC, 3)],
   },
   /** Counters: Normal Summon Breaker (1 Spell Counter), activate Pot of Greed (Skilled Dark Magician gets 1). */
   counters: {

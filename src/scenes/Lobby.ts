@@ -3,7 +3,8 @@ import { DECKS, deckProblems } from "../duel/decks.ts";
 import { loadEngine } from "../duel/loadEngine.ts";
 import { CODE_LENGTH, hostDuel, joinDuel, type DuelEntry, type NetDuel, type PendingDuel } from "../net/p2p.ts";
 import { chosenDeck } from "../ui/prefs.ts";
-import { WHITE, text } from "../ui/pixel.ts";
+import { WHITE, border, text } from "../ui/pixel.ts";
+import { createTextInput } from "../ui/textInput.ts";
 import { makeButton } from "../ui/widgets.ts";
 import type { DuelSceneData } from "./DuelScene.ts";
 
@@ -100,8 +101,12 @@ export class Lobby extends Phaser.Scene {
     this.reset();
     this.header("TYPE OR PASTE THE ROOM CODE YOUR FRIEND SENT YOU.");
     this.code = "";
+    // The code field: an outlined box (tap it on a phone to get the keyboard) with the code at 3x.
+    const box = { x: CX - 70, y: 106, w: 140, h: 31 };
+    const outline = this.add.graphics();
+    border(outline, box.x, box.y, box.w, box.h, SOFT);
     const field = text(this, CX, 114, "", { color: WHITE, scale: 3 });
-    this.view.add(field);
+    this.view.add([outline, field]);
     const join = this.button(170, "JOIN", () => this.connect(this.code));
     this.button(192, "BACK", () => this.showMenu());
     const refresh = () => {
@@ -109,26 +114,23 @@ export class Lobby extends Phaser.Scene {
       field.setX(Math.round(CX - field.width / 2));
       join.setEnabled(this.code.length === CODE_LENGTH);
     };
-    const typed = (e: KeyboardEvent) => {
-      if (e.key === "Backspace") this.code = this.code.slice(0, -1);
-      else if (e.key === "Enter" && this.code.length === CODE_LENGTH) return this.connect(this.code);
-      else if (/^[a-z0-9]$/i.test(e.key) && this.code.length < CODE_LENGTH) this.code += e.key.toUpperCase();
-      refresh();
-    };
-    // Pasting accepts the code itself or the whole invite link.
-    const pasted = (e: ClipboardEvent) => {
-      const s = e.clipboardData?.getData("text") ?? "";
-      const code = (s.match(/join=([a-z0-9]+)/i)?.[1] ?? s).replace(/[^a-z0-9]/gi, "");
-      this.code = code.toUpperCase().slice(0, CODE_LENGTH);
-      refresh();
-    };
-    this.input.keyboard!.on("keydown", typed);
-    window.addEventListener("paste", pasted);
-    this.detach = () => {
-      this.input.keyboard?.off("keydown", typed);
-      window.removeEventListener("paste", pasted);
-    };
+    // Typed or pasted: the code itself, or the whole invite link (its ?join= part is used).
+    const input = createTextInput(this, box, {
+      onChange: (value) => {
+        const code = (value.match(/join=([a-z0-9]+)/i)?.[1] ?? value).replace(/[^a-z0-9]/gi, "");
+        this.code = code.toUpperCase().slice(0, CODE_LENGTH);
+        refresh();
+      },
+      onKey: (e) => {
+        if (e.key !== "Enter") return false;
+        if (this.code.length === CODE_LENGTH) void this.connect(this.code);
+        return true;
+      },
+      maxLength: 200,
+    });
+    this.detach = () => input.destroy();
     refresh();
+    input.focus();
   }
 
   private async connect(code: string) {

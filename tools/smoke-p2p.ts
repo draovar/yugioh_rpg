@@ -51,7 +51,7 @@ function play(seed: [bigint, bigint, bigint, bigint]): Promise<[Result, Result]>
         onUpdate: () => jitter(3),
         onPrompt: (prompt) => {
           if (++prompts > 20_000) return reject(new Error("duel did not finish"));
-          void jitter(3).then(() => ctl.answer(autoRespond(prompt)));
+          void jitter(3).then(() => ctl.answer(autoRespond(prompt, Math.random, cards)));
         },
         onEnd: (winner) => { resolve({ winner, checksum: session.checksum(), prompts }); session.destroy(); },
         onError: (message) => reject(new Error(`P${me}: ${message}`)),

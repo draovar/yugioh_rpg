@@ -100,6 +100,8 @@ export interface StepResult {
 }
 
 export class DuelSession {
+  /** The game's cards (pool + tokens), e.g. for answering card declarations. */
+  readonly cards: CardDb;
   private readonly core: OcgCoreSync;
   private readonly handle: OcgDuelHandle;
   private ended = false;
@@ -108,6 +110,7 @@ export class DuelSession {
 
   constructor(cfg: DuelConfig) {
     this.core = cfg.core;
+    this.cards = cfg.cards;
     const team = { drawCountPerTurn: 1, startingDrawCount: 5, startingLP: cfg.startingLP ?? 8000 };
     const seed = cfg.seed ?? randomSeed();
     const handle = cfg.core.createDuel({

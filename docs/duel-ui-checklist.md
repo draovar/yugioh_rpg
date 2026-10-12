@@ -24,6 +24,8 @@ To see any of #3–#14 without setting it up in a duel, open `/?duel&dialogs` an
 | 5 | Choose an option (`SELECT_OPTION`) | Title + one button per option (stacked if long) | Runewood | Cards with "choose one effect"; none certain in this pool | [ ] |
 | 6 | Battle position (`SELECT_POSITION`) | Card at 2x, ATTACK / FD ATTACK / DEFENSE / FD DEFENSE (only legal ones) | Runewood | Monster Reborn a monster | [ ] |
 | 7 | Duel over | YOU WIN / YOU LOST / DRAW, CONTINUE | Runewood | Finish a duel (`&lp=500` makes it quick) | [ ] |
+| 18 | Declare a Type / Attribute (`ANNOUNCE_RACE`, `ANNOUNCE_ATTRIB`) | One button per allowed Type / Attribute; several needed = one dialog per pick, "(1/2)" | Runewood | `&setup=declare`: Tribe-Infecting Virus, DNA Transplant | [ ] |
+| 19a | Declare a number (`ANNOUNCE_NUMBER`) | One button per allowed number | Runewood | `&setup=declare`: Sixth Sense (two dialogs) | [ ] |
 
 ## Card pickers (`Modal.picker`)
 
@@ -41,6 +43,8 @@ picker dialog when a choice is in the Graveyard, Deck, etc. Try the board versio
 | 11 | Select/unselect (`SELECT_UNSELECT_CARD`) | Cards in board order, picked ones raised + CHOSEN, FINISH n/max / CANCEL | Runewood | Some multi-target effects; none certain in this pool | [ ] |
 | 12 | Sum selection (`SELECT_SUM`) | Cards with VALUE captions, CONFIRM sum/target | Runewood | Ritual summons; no ritual cards in this pool | [ ] |
 | 13 | Graveyard browser | YOUR / OPPONENT'S Graveyard (newest first, no names), then BANISHED; CLOSE | Runewood | Click a Graveyard pile | [ ] |
+| 13b | Extra Deck browser | YOUR Extra Deck; CLOSE (the opponent's isn't clickable) | Runewood | `&deck=kaiba`, click your Extra Deck | [ ] |
+| 19b | Declare a card name (`ANNOUNCE_CARD`) | Search dialog (`Modal.search`): text field + match count, best 8 matches as rows, Up/Down + Enter or click; tapping the field opens a phone keyboard | Runewood | `&setup=declare`: Mind Crush | [ ] |
 
 ## Field prompts
 
@@ -52,11 +56,10 @@ picker dialog when a choice is in the Graveyard, Deck, etc. Try the board versio
 ## Auto-answered (no UI yet)
 
 `autoBot` answers these and the log says `(auto-answered …)`. None should come up with the current pool.
+Declarations (#18, #19) have their UI now (see above); the bot picks a legal card name via `declarableCards`.
 
 | # | Prompt | Would need |
 |---|---|---|
 | 16 | `SELECT_COUNTER` | Counter removal picker |
 | 17 | `SORT_CARD`, `SORT_CHAIN` | Ordering list |
-| 18 | `ANNOUNCE_RACE`, `ANNOUNCE_ATTRIB` | Type / attribute picker |
-| 19 | `ANNOUNCE_NUMBER`, `ANNOUNCE_CARD` | Number list / card-name search |
 | 20 | `ROCK_PAPER_SCISSORS` | RPS buttons |

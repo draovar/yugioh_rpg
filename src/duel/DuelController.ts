@@ -141,7 +141,7 @@ export class DuelController {
       // The AI "thinks" a moment before each real choice.
       this.schedule(this.aiDelayMs, () => {
         if (this.destroyed) return;
-        this.session.respond(autoRespond(prompt));
+        this.session.respond(autoRespond(prompt, Math.random, this.session.cards));
         void this.step();
       });
       return;

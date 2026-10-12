@@ -16,7 +16,8 @@ import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../du
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { DECKS } from "../duel/decks.ts";
 import type { NetDuel } from "../net/p2p.ts";
-import { autoRespond, freePlaces } from "../duel/autoBot.ts";
+import { autoRespond, declarableCards, freePlaces } from "../duel/autoBot.ts";
+import { ATTRIBUTES, RACES, raceNames } from "../duel/text.ts";
 import {
   ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, SPELL_ATTRIBUTE, SPELL_KIND_ICON, SPELL_NORMAL_ICON, SPELL_SHEET, TRAP_ATTRIBUTE,
   type CardHighlight,
@@ -470,7 +471,7 @@ export class DuelScene extends Phaser.Scene {
       const stat = (v: number) => (v < 0 ? "?" : String(v));
       this.statPlate(p, statX, artY, statW, "ATK", stat(r.atk), STAT_ICON.sword);
       this.statPlate(p, statX, artY + STAT_PLATE_H + 4, statW, "DEF", stat(r.def), STAT_ICON.shield);
-      types = [raceName(BigInt(r.race)), ...monsterTypes(r.type)];
+      types = [raceNames(BigInt(r.race)), ...monsterTypes(r.type)];
     } else {
       // SPELL / TRAP icon and the kind icon side by side, 1x, centred where monsters have ATK / DEF.
       const plateH = 2 * STAT_PLATE_H + 4;
@@ -1077,11 +1078,55 @@ export class DuelScene extends Phaser.Scene {
           ? t.describe(569, name(Number(hint)))
           : t.describe(m.type === OcgMessageType.SELECT_PLACE ? 560 : 570));
         return;
-      default:
-        // Rare in the GOAT pool (announce, counters, sorting, RPS): let the bot answer for now.
-        this.log(`(auto-answered ${OcgMessageType[m.type] ?? m.type})`);
-        this.answer(autoRespond(m));
+      // Declarations (Tribe-Infecting Virus, DNA Transplant, Sixth Sense, Mind Crush...).
+      case OcgMessageType.ANNOUNCE_RACE:
+        this.declareFlags(title("Declare a Type"), RACES, BigInt(m.available), m.count,
+          (races) => ({ type: OcgResponseType.ANNOUNCE_RACE, races }) as OcgResponse);
+        return;
+      case OcgMessageType.ANNOUNCE_ATTRIB:
+        this.declareFlags(title("Declare an Attribute"), ATTRIBUTES.map(([bit, n]) => [BigInt(bit), n]), BigInt(m.available), m.count,
+          (picked) => ({ type: OcgResponseType.ANNOUNCE_ATTRIB, attributes: picked.map(Number) }) as OcgResponse);
+        return;
+      case OcgMessageType.ANNOUNCE_NUMBER:
+        // The answer is the option's index, not the number.
+        this.modal.dialog(title("Declare a number").toUpperCase(), m.options.map((value, index) => ({
+          label: String(value), onClick: () => this.answer({ type: OcgResponseType.ANNOUNCE_NUMBER, value: index }),
+        })));
+        return;
+      case OcgMessageType.ANNOUNCE_CARD: {
+        // Typed search over every card the game knows that passes the prompt's filter.
+        const codes = declarableCards(this.engine.cards, m.opcodes);
+        if (!codes.length) break;
+        this.modal.search({
+          title: title("Declare a card name"),
+          codes,
+          onPick: (card) => this.answer({ type: OcgResponseType.ANNOUNCE_CARD, card }),
+          onHover: (code) => this.showInfo(code),
+        });
+        return;
+      }
     }
+    // Anything not handled above (rare in the GOAT pool: counters to remove, sorting, RPS): the bot answers.
+    this.log(`(auto-answered ${OcgMessageType[m.type] ?? m.type})`);
+    this.answer(autoRespond(m, Math.random, this.engine.cards));
+  }
+
+  /**
+   * Declares `count` of the flags in `available` (Types or Attributes): one button dialog per pick, without
+   * the ones already picked; answers once all are chosen.
+   */
+  private declareFlags(title: string, options: [bigint, string][], available: bigint, count: number,
+    make: (picked: bigint[]) => OcgResponse, picked: bigint[] = []) {
+    const open = options.filter(([bit]) => available & bit && !picked.includes(bit));
+    const step = count > 1 ? ` (${picked.length + 1}/${count})` : "";
+    this.modal.dialog(`${title}${step}`.toUpperCase(), open.map(([bit, name]) => ({
+      label: name,
+      onClick: () => {
+        const next = [...picked, bit];
+        if (next.length >= count) this.answer(make(next));
+        else this.declareFlags(title, options, available, count, make, next);
+      },
+    })));
   }
 
   private yesNo(msg: string, make: (yes: boolean) => OcgResponse, code?: number) {
@@ -1182,15 +1227,6 @@ function locationName(location: number, controller: number, me: number): string 
   return `${owner}${names[location] ?? "?"}`;
 }
 
-const RACES: [bigint, string][] = [
-  [0x1n, "WARRIOR"], [0x2n, "SPELLCASTER"], [0x4n, "FAIRY"], [0x8n, "FIEND"], [0x10n, "ZOMBIE"], [0x20n, "MACHINE"],
-  [0x40n, "AQUA"], [0x80n, "PYRO"], [0x100n, "ROCK"], [0x200n, "WINGED BEAST"], [0x400n, "PLANT"], [0x800n, "INSECT"],
-  [0x1000n, "THUNDER"], [0x2000n, "DRAGON"], [0x4000n, "BEAST"], [0x8000n, "BEAST-WARRIOR"], [0x10000n, "DINOSAUR"],
-  [0x20000n, "FISH"], [0x40000n, "SEA SERPENT"], [0x80000n, "REPTILE"], [0x100000n, "PSYCHIC"], [0x200000n, "DIVINE-BEAST"],
-];
-function raceName(race: bigint): string {
-  return RACES.find(([bit]) => race & bit)?.[1] ?? "";
-}
 
 /**
  * A monster's types in card type-line order (after the race): special kinds, Flip, then Effect or Normal.

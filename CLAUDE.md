@@ -73,7 +73,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
   card action menus (idle/battle), zone highlights (place), and `Modal` dialogs/card pickers for everything else.
-  Rare prompts (announce, counters, sort, RPS) are still auto-answered by `autoBot`.
+  Declarations (`ANNOUNCE_*`): Type / Attribute / number as button dialogs, card names in `Modal.search` (typed search,
+  `src/duel/cardSearch.ts`; candidates filtered by the prompt's opcodes via `declarableCards` in `autoBot.ts`). Text entry
+  in the canvas = `src/ui/textInput.ts` (card search, lobby room code): an invisible HTML input over the drawn field (phone keyboards, paste); it pauses
+  Phaser's global key capture while it exists; the engine's HINT after each one is logged ("You declare
+  DARK"). Rare prompts (counters to remove, sort, RPS) are still auto-answered by `autoBot`.
 - `src/ui/` — `pixel.ts` (bitmap text, crisp 1px borders), `widgets.ts` (buttons), `duel/` (CardSprite, Modal,
   layout geometry, log text, DuelAnimator).
   Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
@@ -177,7 +181,7 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ Runewood card action menu (on the card) and prompt dialogs.
    Next: Runewood card pickers (and turn banner?). Later: chain-link display, deck search UX, sound.
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
-   Next mechanics (see `check-cards`): declaration pickers, equip links, coin/dice feedback. ✅ Token frame, counter badges.
+   Next mechanics (see `check-cards`): equip links, coin/dice feedback. ✅ Token frame, counter badges, declarations.
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.

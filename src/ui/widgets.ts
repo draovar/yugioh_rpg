@@ -76,8 +76,13 @@ export const LIST_BUTTON_H = LIST_BUTTON.h;
 const LIST_SLICE = THEME.listButton.slice;
 const LIST_INK = { normal: THEME.listButton.ink, hover: THEME.listButton.inkHover };
 
-/** A list-row button's parts (frame, label, hit zone), to add to a container, plus enabled/label setters. */
-export type ListButton = Phaser.GameObjects.GameObject[] & { setEnabled(on: boolean): void; setLabel(label: string): void };
+/** A list-row button's parts (frame, label, hit zone), to add to a container, plus enabled/label/highlight setters. */
+export type ListButton = Phaser.GameObjects.GameObject[] & {
+  setEnabled(on: boolean): void;
+  setLabel(label: string): void;
+  /** Keeps the hover look on without the pointer (e.g. the row picked with the arrow keys). */
+  setHighlighted(on: boolean): void;
+};
 
 /**
  * A list-row button, top-left at (x, y), 11px tall: darker on hover, fires on release. Returns its parts
@@ -88,14 +93,14 @@ export function makeListButton(
 ): ListButton {
   const box = scene.add.nineslice(x, y, ui("menu-button"), undefined, w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE).setOrigin(0);
   const t = text(scene, x + w / 2, y + LIST_BUTTON.textY, label.toUpperCase(), { color: LIST_INK.normal, originX: 0.5 });
-  let enabled = true;
+  let enabled = true, highlighted = false;
   const hover = (on: boolean) => {
     box.setTexture(ui(on ? "menu-button-hover" : "menu-button")).setSlices(w, LIST_BUTTON_H, LIST_SLICE, LIST_SLICE, LIST_SLICE, LIST_SLICE);
     t.setTint(on ? LIST_INK.hover : LIST_INK.normal);
   };
   const hit = scene.add.zone(x, y, w, LIST_BUTTON_H).setOrigin(0).setInteractive({ useHandCursor: true });
   hit.on("pointerover", () => enabled && hover(true));
-  hit.on("pointerout", () => hover(false));
+  hit.on("pointerout", () => hover(highlighted));
   hit.on("pointerup", () => enabled && onClick());
   return Object.assign([box, t, hit], {
     setEnabled(on: boolean) {
@@ -107,6 +112,10 @@ export function makeListButton(
     },
     setLabel(s: string) {
       t.setText(s.toUpperCase()).setX(Math.round(x + w / 2 - t.width / 2));
+    },
+    setHighlighted(on: boolean) {
+      highlighted = on;
+      hover(on);
     },
   });
 }
