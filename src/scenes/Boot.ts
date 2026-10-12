@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { deckByName } from "../duel/decks.ts";
 import { loadEngine } from "../duel/loadEngine.ts";
 import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, FRAMES, SPELL_SHEET, frameKey } from "../ui/duel/CardSprite.ts";
 import { FONT_CARD, FONT_UI, WHITE, text } from "../ui/pixel.ts";
@@ -28,7 +29,7 @@ export class Boot extends Phaser.Scene {
     loadEngine()
       .then(() => {
         // Dev shortcut: /?duel jumps straight into a duel; &lp=1000 for a short one, &seed=N to replay one,
-        // &setup=NAME to start from a test board (devSetups.ts).
+        // &setup=NAME to start from a test board (devSetups.ts), &deck=NAME / &opp=NAME pick the decks (decks.ts).
         const params = new URLSearchParams(location.search);
         const lp = Number(params.get("lp")) || undefined;
         const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
@@ -40,7 +41,12 @@ export class Boot extends Phaser.Scene {
           history.replaceState(null, "", `${location.pathname}${params.size ? `?${params}` : ""}`);
           this.scene.start("Lobby", { join });
         } else if (params.has("mp")) this.scene.start("Lobby");
-        else if (params.has("duel")) this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp, seed, setup });
+        else if (params.has("duel")) {
+          this.scene.start("Duel", {
+            opponentName: "Test Opponent", startingLP: lp, seed, setup,
+            playerDeck: deckByName(params.get("deck"), "yugi"), opponentDeck: deckByName(params.get("opp"), "kaiba"),
+          });
+        }
         else this.scene.start("Overworld");
       })
       .catch((e) => {

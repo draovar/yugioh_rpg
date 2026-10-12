@@ -1,6 +1,6 @@
 // Turns the downloaded artworks (vendor/art/<code>.jpg) into game pixels, using the shared
 // palette in data/palette.gpl and the style settings in tools/lib/art-style.mjs:
-//   public/cards/art32.png + art32.json – 32x32 art for every pool card, one atlas (card faces)
+//   public/cards/art32.png + art32.json – 32x32 art for every card in public/data/cards.json (pool + tokens), one atlas
 //   public/cards/art128/<code>.png      – 128x128 art per card (info panel, loaded on demand)
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -12,7 +12,7 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const SRC = path.join(ROOT, "vendor/art");
 const OUT = path.join(ROOT, "public/cards");
 const PALETTE = readGpl(path.join(ROOT, "data/palette.gpl"));
-const pool = JSON.parse(readFileSync(path.join(ROOT, "data/pool.json"), "utf-8")).cards;
+const pool = JSON.parse(readFileSync(path.join(ROOT, "public/data/cards.json"), "utf-8")).map((c) => c.code);
 mkdirSync(path.join(OUT, "art128"), { recursive: true });
 
 /** Resize + boost + map to the shared palette; returns a PNG buffer. */

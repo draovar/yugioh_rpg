@@ -12,8 +12,9 @@ export const ATTRIBUTE_SHEET = "attributes";
 export const SPELL_SHEET = "spells";
 
 const TYPE_MONSTER = 0x1, TYPE_SPELL = 0x2, TYPE_TRAP = 0x4, TYPE_EFFECT = 0x20, TYPE_FUSION = 0x40, TYPE_RITUAL = 0x80;
+const TYPE_TOKEN = 0x4000;
 
-export const FRAMES = ["normal_monster", "effect_monster", "fusion_monster", "ritual_monster", "spell", "trap"] as const;
+export const FRAMES = ["normal_monster", "effect_monster", "fusion_monster", "ritual_monster", "token", "spell", "trap"] as const;
 export const frameKey = (name: (typeof FRAMES)[number]) => `frame-${name}`;
 
 export function frameFor(type: number): (typeof FRAMES)[number] {
@@ -21,6 +22,7 @@ export function frameFor(type: number): (typeof FRAMES)[number] {
   if (type & TYPE_TRAP) return "trap";
   if (type & TYPE_FUSION) return "fusion_monster";
   if (type & TYPE_RITUAL) return "ritual_monster";
+  if (type & TYPE_TOKEN) return "token";
   if (type & TYPE_EFFECT) return "effect_monster";
   return "normal_monster";
 }

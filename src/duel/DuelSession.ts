@@ -55,6 +55,8 @@ export interface CardView {
   faceDown: boolean;
   attack: number;
   defense: number;
+  /** Counters on the card (all kinds added up, e.g. Spell Counters); public, so never hidden. */
+  counters: number;
 }
 
 export interface PlayerView {
@@ -74,7 +76,7 @@ export interface FieldSnapshot {
   players: [PlayerView, PlayerView];
 }
 
-const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE) as OcgQueryFlags;
+const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE | OcgQueryFlags.COUNTERS) as OcgQueryFlags;
 
 /** A NEW_TURN message with the duel's turn number (1, 2, ...) added by DuelSession. */
 export type NewTurnMessage = Extract<OcgMessage, { type: OcgMessageType.NEW_TURN }> & { turn?: number };
@@ -219,6 +221,7 @@ export class DuelSession {
       controller, location, sequence, position, faceDown,
       attack: hidden ? 0 : q.attack ?? 0,
       defense: hidden ? 0 : q.defense ?? 0,
+      counters: Object.values(q.counters ?? {}).reduce((n, c) => n + c, 0),
     };
   }
 

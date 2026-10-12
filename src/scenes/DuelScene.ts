@@ -14,7 +14,7 @@ import {
 import { loadEngine, type Engine } from "../duel/loadEngine.ts";
 import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
-import { starterDeck } from "../duel/decks.ts";
+import { DECKS, NET_DECK } from "../duel/decks.ts";
 import type { NetDuel } from "../net/p2p.ts";
 import { autoRespond, freePlaces } from "../duel/autoBot.ts";
 import {
@@ -38,7 +38,9 @@ const PANEL = { ...THEME.panel, rim: INSET.board, paperRim: INSET.paper, frame: 
 import { THEME, ui, type PhaseState } from "../ui/theme.ts";
 
 export interface DuelSceneData {
+  /** Default: the Yugi deck. */
   playerDeck?: Deck;
+  /** Default: the Kaiba deck. */
   opponentDeck?: Deck;
   opponentName?: string;
   startingLP?: number;
@@ -48,7 +50,7 @@ export interface DuelSceneData {
   returnScene?: string;
   /** Dev: name of a test board from devSetups.ts (`&setup=tribute`), placed before the duel starts. */
   setup?: string;
-  /** Peer-to-peer duel against a player on another machine (both use the starter deck). */
+  /** Peer-to-peer duel against a player on another machine (both use the NET_DECK). */
   net?: NetDuel;
 }
 
@@ -133,6 +135,8 @@ export class DuelScene extends Phaser.Scene {
 
   private board!: Phaser.GameObjects.Container;
   private sprites = new Map<string, CardSprite>();
+  /** Counter badges on field cards; hidden while animating (they don't follow moving cards), redrawn after. */
+  private counterBadges: Phaser.GameObjects.Container[] = [];
   private actions = new Map<string, CardAction[]>();
   private phaseActions = new Map<PhaseAction, OcgResponse>();
   private menu: CardMenu | null = null;
@@ -237,8 +241,8 @@ export class DuelScene extends Phaser.Scene {
 
     const net = this.sceneData.net;
     const decks: [Deck, Deck] = net
-      ? [starterDeck(cards), starterDeck(cards)]
-      : withDevSetup([this.sceneData.playerDeck ?? starterDeck(cards), this.sceneData.opponentDeck ?? starterDeck(cards)], this.sceneData.setup);
+      ? [DECKS[NET_DECK].deck, DECKS[NET_DECK].deck]
+      : withDevSetup([this.sceneData.playerDeck ?? DECKS.yugi.deck, this.sceneData.opponentDeck ?? DECKS.kaiba.deck], this.sceneData.setup);
     const seed = net ? net.seed
       : this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as [bigint, bigint, bigint, bigint]) : undefined;
     const session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
@@ -572,6 +576,7 @@ export class DuelScene extends Phaser.Scene {
         players: snapshot.players.map((p) => ({ ...p, hand: [], deckCount: p.deckCount + p.hand.length })) as unknown as FieldSnapshot["players"],
       });
     }
+    if (messages.length) for (const b of this.counterBadges) b.setVisible(false);
     await this.animator.play(messages, (m) => {
       if (m.type === OcgMessageType.NEW_TURN) this.turnPlayer = m.player;
       // Card mode starts empty; the first card you draw fills it.
@@ -655,6 +660,7 @@ export class DuelScene extends Phaser.Scene {
   private renderBoard(snap: FieldSnapshot) {
     this.board.removeAll(true);
     this.sprites.clear();
+    this.counterBadges = [];
     snap.players.forEach((p, player) => {
       const s = this.side(player);
       this.handCount[s] = p.hand.length;
@@ -672,7 +678,14 @@ export class DuelScene extends Phaser.Scene {
 
   private placeCard(c: CardView, at: { x: number; y: number }) {
     const sp = this.cardSprite(c, at.x, at.y);
-    if (c.location === OcgLocation.MZONE && c.position & DEFENSE) sp.setAngle(90);
+    const sideways = c.location === OcgLocation.MZONE && (c.position & DEFENSE) !== 0;
+    if (sideways) sp.setAngle(90);
+    // Counters: a number badge on the card's top-right corner, like the pile counts.
+    if (c.counters) {
+      const badge = this.badge(at.x + (sideways ? CARD.h : CARD.w) / 2, at.y - (sideways ? CARD.w : CARD.h) / 2, String(c.counters), 1);
+      this.counterBadges.push(badge);
+      this.board.add(badge);
+    }
   }
 
   private drawPile(side: 0 | 1, slot: Slot, count: number, top: CardView | null, contents?: CardView[], banished: CardView[] = []) {
@@ -1187,7 +1200,8 @@ function monsterTypes(type: number): string[] {
     [0x800, "GEMINI"], [0x400000, "TOON"], [0x1000, "TUNER"], [0x200000, "FLIP"],
   ];
   const out = kinds.filter(([bit]) => type & bit).map(([, name]) => name);
-  if (type & 0x20) out.push("EFFECT");
+  if (type & 0x4000) out.push("TOKEN");
+  else if (type & 0x20) out.push("EFFECT");
   else if (type & 0x10) out.push("NORMAL");
   return out;
 }

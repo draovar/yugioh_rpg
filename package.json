@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "fetch-data": "node tools/fetch-data.mjs",
     "build-data": "node tools/build-data.mjs",
+    "check-cards": "node tools/check-cards.mjs",
     "smoke": "node tools/smoke-duel.ts",
     "smoke-p2p": "node tools/smoke-p2p.ts",
     "fetch-art": "node tools/fetch-art.mjs",
