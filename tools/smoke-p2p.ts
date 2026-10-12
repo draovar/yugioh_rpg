@@ -10,7 +10,7 @@ import { CardDb, type CardRecord } from "../src/duel/cardData.ts";
 import { DuelSession } from "../src/duel/DuelSession.ts";
 import { DuelController, type RemotePeer } from "../src/duel/DuelController.ts";
 import { autoRespond } from "../src/duel/autoBot.ts";
-import { DECKS, NET_DECK } from "../src/duel/decks.ts";
+import { DECKS } from "../src/duel/decks.ts";
 import { decodeResponse, encodeResponse } from "../src/net/wire.ts";
 
 const DATA = path.resolve(import.meta.dirname, "../public/data");
@@ -42,7 +42,7 @@ interface Result { winner: number | null; checksum: number; prompts: number }
 function play(seed: [bigint, bigint, bigint, bigint]): Promise<[Result, Result]> {
   const links = wire();
   const runs = ([0, 1] as const).map((me) => new Promise<Result>((resolve, reject) => {
-    const session = new DuelSession({ core, cards, readScript, seed, decks: [DECKS[NET_DECK].deck, DECKS[NET_DECK].deck], onCoreLog: () => {} });
+    const session = new DuelSession({ core, cards, readScript, seed, decks: [DECKS.goat.deck, DECKS.yugi.deck], onCoreLog: () => {} });
     let prompts = 0;
     const ctl: DuelController = new DuelController({
       session, me, remote: links[me],

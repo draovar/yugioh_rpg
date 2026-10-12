@@ -1,6 +1,8 @@
 import Phaser from "phaser";
+import { DECKS, deckProblems } from "../duel/decks.ts";
 import { loadEngine } from "../duel/loadEngine.ts";
-import { CODE_LENGTH, hostDuel, joinDuel, type NetDuel, type PendingDuel } from "../net/p2p.ts";
+import { CODE_LENGTH, hostDuel, joinDuel, type DuelEntry, type NetDuel, type PendingDuel } from "../net/p2p.ts";
+import { chosenDeck } from "../ui/prefs.ts";
 import { WHITE, text } from "../ui/pixel.ts";
 import { makeButton } from "../ui/widgets.ts";
 import type { DuelSceneData } from "./DuelScene.ts";
@@ -17,7 +19,7 @@ const BUTTON = { w: 120, h: 16 };
 
 /**
  * Placeholder multiplayer menu: host a peer-to-peer duel (shows a room code and a link to share) or join
- * one by typing the code. Both players use the starter deck. Once connected, starts the Duel scene.
+ * one by typing the code. Each player brings the deck picked in the world menu. Once connected, starts the Duel scene.
  */
 export class Lobby extends Phaser.Scene {
   private view!: Phaser.GameObjects.Container;
@@ -50,6 +52,13 @@ export class Lobby extends Phaser.Scene {
   private header(subtitle: string) {
     this.view.add(text(this, CX, 50, "MULTIPLAYER", { color: WHITE, scale: 2, originX: 0.5 }));
     this.view.add(text(this, CX, 70, subtitle, { color: SOFT, originX: 0.5, maxWidth: 420 }));
+    this.view.add(text(this, CX, 330, `YOUR DECK: ${DECKS[chosenDeck()].label.toUpperCase()} (CHANGE IT IN THE WORLD MENU)`, { color: SOFT, originX: 0.5 }));
+  }
+
+  /** This machine's side of the handshake: data fingerprint, the chosen deck, and the check for the other deck. */
+  private async entry(): Promise<DuelEntry> {
+    const { fingerprint, cards } = await loadEngine();
+    return { fingerprint, deck: DECKS[chosenDeck()].deck, deckProblems: (deck) => deckProblems(deck, cards) };
   }
 
   private button(y: number, label: string, onClick: () => void) {
@@ -60,7 +69,7 @@ export class Lobby extends Phaser.Scene {
 
   private showMenu(error?: string) {
     this.reset();
-    this.header("DUEL A FRIEND ON ANOTHER COMPUTER. BOTH PLAYERS USE THE STARTER DECK.");
+    this.header("DUEL A FRIEND ON ANOTHER COMPUTER.");
     this.button(150, "HOST A DUEL", () => this.host());
     this.button(172, "JOIN A DUEL", () => this.showJoin());
     this.button(210, "BACK", () => this.scene.start("Overworld"));
@@ -73,8 +82,7 @@ export class Lobby extends Phaser.Scene {
     const status = text(this, CX, 120, "OPENING A ROOM...", { color: SOFT, originX: 0.5 });
     this.view.add(status);
     this.button(250, "CANCEL", () => this.showMenu());
-    const { fingerprint } = await loadEngine();
-    const pending = (this.pending = hostDuel(fingerprint, (code) => {
+    const pending = (this.pending = hostDuel(await this.entry(), (code) => {
       status.destroy();
       const link = `${location.origin}${location.pathname}?join=${code}`;
       this.view.add(text(this, CX, 104, "ROOM CODE", { color: SOFT, originX: 0.5 }));
@@ -128,8 +136,7 @@ export class Lobby extends Phaser.Scene {
     this.header(`JOINING ROOM ${code}...`);
     this.view.add(text(this, CX, 120, "CONNECTING...", { color: SOFT, originX: 0.5 }));
     this.button(250, "CANCEL", () => this.showMenu());
-    const { fingerprint } = await loadEngine();
-    this.await((this.pending = joinDuel(code, fingerprint)));
+    this.await((this.pending = joinDuel(code, await this.entry())));
   }
 
   /** Starts the duel once connected; back to the menu with the reason if it fails. */

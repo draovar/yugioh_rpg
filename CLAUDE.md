@@ -54,20 +54,21 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     `snapshot(viewer)` reads the board from the engine with hidden info masked.
   - `DuelController.ts` — the local player (`me`, either seat) vs the AI or a `RemotePeer`; emits `onUpdate`/`onPrompt`/
     `onEnd`/`onError`, auto-passes empty chain prompts. Peer-to-peer duels run in **lockstep**: both machines run the
-    same duel (same seed, both use `DECKS[NET_DECK]` from `decks.ts`) and send only the answers to their own prompts, each
+    same duel (same seed, same two decks) and send only the answers to their own prompts, each
     with `DuelSession.checksum()` from before it was applied; a mismatch stops the duel ("out of sync"). Anything that
     differs between the two machines (non-seeded randomness in the engine layer, deck order, data) splits the duel.
   - `text.ts` — `DuelText.describe(desc)` resolves system strings and `aux.Stringid` card strings.
   - `autoBot.ts` — always-legal dumb responder (tests, placeholder AI). `freePlaces()` decodes SELECT_PLACE masks.
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names.
-  - `decks.ts` — prebuilt decks until the deck editor exists (`yugi`, `kaiba`, `goat` + Extra Decks), `NET_DECK` for
-    multiplayer, `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
+  - `decks.ts` — prebuilt decks until the deck editor exists (`yugi`, `kaiba`, `goat` + Extra Decks), `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
   - `loadEngine.ts` — browser only: fetches `public/data/*.json`, inits core once.
 - `src/net/` — browser-only networking, no Phaser. `p2p.ts`: PeerJS (WebRTC) rooms; the host opens `ygorpg-<CODE>` on
   PeerJS's free public server, the guest connects, handshake checks `PROTOCOL` + `Engine.fingerprint` (hash of the card
-  data and scripts), the host sends the seed and its random seat. Pings every 3 s; 20 s of silence or a "bye" =
+  data and scripts), each side sends its deck as a passcode list (checked with `deckProblems`), the host sends the
+  seed and its random seat. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
-- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; M = multiplayer) → `Duel` (`DuelScene`,
+- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; bottom bar: deck choice
+  saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; MULTIPLAYER button / M key) → `Duel` (`DuelScene`,
   takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
@@ -180,6 +181,6 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.
-7. **Multiplayer**: ✅ peer-to-peer v1 (lockstep over PeerJS, room codes / invite links, starter deck for both, leave
+7. **Multiplayer**: ✅ peer-to-peer v1 (lockstep over PeerJS, room codes / invite links, each player's chosen deck, leave
    detection). Later: own decks once the deck editor exists, a "waiting for opponent" indicator, concede button,
    reconnect, a TURN server for networks that block direct connections, maybe a server (hidden info stays hidden).

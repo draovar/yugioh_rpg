@@ -14,7 +14,7 @@ import {
 import { loadEngine, type Engine } from "../duel/loadEngine.ts";
 import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
-import { DECKS, NET_DECK } from "../duel/decks.ts";
+import { DECKS } from "../duel/decks.ts";
 import type { NetDuel } from "../net/p2p.ts";
 import { autoRespond, freePlaces } from "../duel/autoBot.ts";
 import {
@@ -50,7 +50,7 @@ export interface DuelSceneData {
   returnScene?: string;
   /** Dev: name of a test board from devSetups.ts (`&setup=tribute`), placed before the duel starts. */
   setup?: string;
-  /** Peer-to-peer duel against a player on another machine (both use the NET_DECK). */
+  /** Peer-to-peer duel against a player on another machine (decks come from the handshake). */
   net?: NetDuel;
 }
 
@@ -241,7 +241,7 @@ export class DuelScene extends Phaser.Scene {
 
     const net = this.sceneData.net;
     const decks: [Deck, Deck] = net
-      ? [DECKS[NET_DECK].deck, DECKS[NET_DECK].deck]
+      ? net.decks
       : withDevSetup([this.sceneData.playerDeck ?? DECKS.yugi.deck, this.sceneData.opponentDeck ?? DECKS.kaiba.deck], this.sceneData.setup);
     const seed = net ? net.seed
       : this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as [bigint, bigint, bigint, bigint]) : undefined;

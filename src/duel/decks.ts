@@ -85,9 +85,6 @@ export const DECKS = {
 
 export type DeckName = keyof typeof DECKS;
 
-/** Both players use it in a peer-to-peer duel (same list on both machines, so the duels stay in sync). */
-export const NET_DECK: DeckName = "goat";
-
 export function deckByName(name: string | null | undefined, fallback: DeckName): Deck {
   return (DECKS[name as DeckName] ?? DECKS[fallback]).deck;
 }
