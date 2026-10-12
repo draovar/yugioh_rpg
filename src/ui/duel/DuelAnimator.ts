@@ -5,7 +5,7 @@ import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgMessage } from "ocgcore-wasm";
 import type { CardDb } from "../../duel/cardData.ts";
 import { REASON, type MoveMessage, type NewTurnMessage } from "../../duel/DuelSession.ts";
-import { PHASE_NAMES } from "../../duel/text.ts";
+import { PHASE_NAMES, declarationText } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
 import { THEME } from "../theme.ts";
 import { CardSprite } from "./CardSprite.ts";
@@ -29,6 +29,8 @@ export interface AnimHost {
   lp(player: number): number;
   /** Marks the declared attack (1px outlines on attacker / target); keys or null to clear. */
   markAttack(attacker: string | null, target: string | null): void;
+  /** A message the player must acknowledge (text + OK dialog); resolves when closed. */
+  notice(message: string): Promise<void>;
 }
 
 interface Loc {
@@ -84,6 +86,8 @@ const EASE = "Quad.easeOut";
 /** Turn banner colours: band fill, its 1px top (and turn-number) / bottom (and text shadow) lines. */
 const BANNER = THEME.banner;
 
+const turnLine = (turn: number | undefined) => (turn ? `TURN ${turn}` : undefined);
+
 export class DuelAnimator {
   /** Global speed multiplier (2 = twice as fast). */
   speed = 1;
@@ -132,7 +136,14 @@ export class DuelAnimator {
     switch (m.type) {
       case OcgMessageType.NEW_TURN:
         this.clearAttack();
-        return this.banner(m.player === h.me ? "YOUR TURN" : "OPPONENT'S TURN", (m as NewTurnMessage).turn, m.player === h.me ? BANNER.mine : BANNER.theirs);
+        return this.banner(m.player === h.me ? "YOUR TURN" : "OPPONENT'S TURN", turnLine((m as NewTurnMessage).turn), m.player === h.me ? BANNER.mine : BANNER.theirs);
+      case OcgMessageType.HINT: {
+        // After a declaration the engine hints what was declared (player = who declared). The opponent's
+        // declaration waits for an OK (text only, also for card names); your own is only logged.
+        const what = declarationText(m.hint_type, m.hint, (code) => h.cards.name(code));
+        if (what === null || m.player === h.me) return;
+        return h.notice(`Your opponent declared:\n${what}`);
+      }
       case OcgMessageType.NEW_PHASE:
         if (!(m.phase & 0xf8)) this.clearAttack(); // left the battle phase
         h.setPhase(m.phase, PHASE_NAMES[m.phase] ?? "");
@@ -359,9 +370,9 @@ export class DuelAnimator {
    * lighter line on top, darker at the bottom; the big text has a 1px dark drop shadow, the turn number
    * sits small under it.
    */
-  private async banner(label: string, turn: number | undefined, look: { fill: number; light: number; dark: number }): Promise<void> {
+  private async banner(label: string, sub: string | undefined, look: { fill: number; light: number; dark: number }, hold = T.banner): Promise<void> {
     const s = this.host.scene;
-    const h = turn ? 26 : 18;
+    const h = sub ? 26 : 18;
     const top = FIELD_CENTER.y - Math.floor(h / 2), w = FIELD.right - FIELD.left;
     const g = s.add.graphics().setDepth(700);
     g.fillStyle(look.fill, 0.9).fillRect(FIELD.left, top, w, h);
@@ -372,8 +383,8 @@ export class DuelAnimator {
       parts.push(text(s, FIELD_CENTER.x + dx, top + 4 + dy, label, { color, scale: 2, originX: 0.5 }).setDepth(701));
     big(1, 1, look.dark);
     big(0, 0, 0xffffff);
-    if (turn) parts.push(text(s, FIELD_CENTER.x, top + 17, `TURN ${turn}`, { color: look.light, originX: 0.5 }).setDepth(701));
-    await this.wait(T.banner);
+    if (sub) parts.push(text(s, FIELD_CENTER.x, top + 17, sub, { color: look.light, originX: 0.5 }).setDepth(701));
+    await this.wait(hold);
     for (const p of parts) p.destroy();
   }
 

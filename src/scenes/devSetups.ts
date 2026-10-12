@@ -5,7 +5,7 @@ import type { Deck, StartCard } from "../duel/DuelSession.ts";
 
 const BLUE_EYES = 89631139, DARK_MAGICIAN = 46986414, SKULL = 70781052, CELTIC = 91152256, GEMINI = 69140098;
 const VORSE = 14898066, MAN_EATER = 54652250;
-const BREAKER = 71413901, SKILLED_DM = 73752131, POT_OF_GREED = 55144522;
+const BREAKER = 71413901, SKILLED_DM = 73752131, POT_OF_GREED = 55144522, UPSTART_GOBLIN = 70368879, SWORDS = 72302403;
 const TRIBE_INFECTING_VIRUS = 33184167, MIND_CRUSH = 15800838, SIXTH_SENSE = 3280747, DNA_TRANSPLANT = 56769674;
 const SINISTER_SERPENT = 8131171, SCAPEGOAT = 73915051, METAMORPHOSIS = 46411259, POLYMERIZATION = 24094653, SNATCH_STEAL = 45986603, AXE = 40619825;
 
@@ -45,9 +45,12 @@ const SETUPS: Record<string, { you: StartCard[]; opponent: StartCard[] }> = {
     you: [monster(TRIBE_INFECTING_VIRUS, 0), set(MIND_CRUSH, 0), set(SIXTH_SENSE, 1), set(DNA_TRANSPLANT, 2)],
     opponent: [monster(GEMINI, 1), monster(CELTIC, 3)],
   },
-  /** Counters: Normal Summon Breaker (1 Spell Counter), activate Pot of Greed (Skilled Dark Magician gets 1). */
+  /**
+   * Counters: Normal Summon Breaker (1 Spell Counter); each Spell you activate gives Skilled Dark Magician 1 (Pot of
+   * Greed, Upstart Goblin, Swords: 3, then it can tribute itself for Dark Magician).
+   */
   counters: {
-    you: [monster(SKILLED_DM, 1), hand(BREAKER), hand(POT_OF_GREED)],
+    you: [monster(SKILLED_DM, 1), hand(BREAKER), hand(POT_OF_GREED), hand(UPSTART_GOBLIN), hand(SWORDS)],
     opponent: [],
   },
   /** Equip Spells: Snatch Steal the opponent's Summoned Skull, Axe of Despair on your monster. */

@@ -227,6 +227,9 @@ export class DuelScene extends Phaser.Scene {
         this.attackMarks = [attacker, target];
         this.applyHighlights();
       },
+      notice: (message) => new Promise((resolve) => {
+        this.modal.dialog(message.toUpperCase(), [{ label: "OK", onClick: resolve }]);
+      }),
     });
     try {
       const saved = Number(localStorage.getItem("duel.animSpeed"));

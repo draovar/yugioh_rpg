@@ -77,7 +77,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   `src/duel/cardSearch.ts`; candidates filtered by the prompt's opcodes via `declarableCards` in `autoBot.ts`). Text entry
   in the canvas = `src/ui/textInput.ts` (card search, lobby room code): an invisible HTML input over the drawn field (phone keyboards, paste); it pauses
   Phaser's global key capture while it exists; the engine's HINT after each one is logged ("You declare
-  DARK"). Rare prompts (counters to remove, sort, RPS) are still auto-answered by `autoBot`.
+  DARK") and the opponent's declarations pause the duel on a "YOUR OPPONENT DECLARED: …" OK dialog (text only;
+  `AnimHost.notice`). Rare prompts (counters to remove, sort, RPS) are still auto-answered by `autoBot`.
 - `src/ui/` — `pixel.ts` (bitmap text, crisp 1px borders), `widgets.ts` (buttons), `duel/` (CardSprite, Modal,
   layout geometry, log text, DuelAnimator).
   Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
@@ -100,7 +101,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Fonts: `tiny5` (our own 3x5, UI + ATK/DEF) and `nerds3` (3x3 Font for Nerds by Norwegian Ink, card names —
   no license found; kept by the owner's choice (non-commercial), don't re-raise). TTFs are converted to BMFont by sampling glyph outlines.
 - Card = 38x56 incl. 1px outline. Frames per type in `public/assets/cards/frames/` (drawn by the user; `token.png` for
-  tokens); counters on a card show as a pile-style number badge on its top-right corner (hidden while animating); regions:
+  tokens); counters on a card show as a pile-style number badge (ocgcore-wasm's parser swaps counter
+  kind and count: `DuelSession.counterTotal` reads the counts from the record's keys) on its top-right corner (hidden while animating); regions:
   name bar (2,2) 34x5, stars y 7-10, art window 32x32 at (3,12), bottom bar (2,46) 34x8. Back: `back.png`.
   `attributes.png` = 7 16x16 icons: DARK EARTH FIRE LIGHT WATER WIND DIVINE.
 - Duel layout (`src/ui/duel/layout.ts`): info panel 0-219, divider 220-223, phase column x230 (6 boxes 16x56,

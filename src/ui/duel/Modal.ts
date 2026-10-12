@@ -113,7 +113,10 @@ export class Modal {
     const w = labelW <= innerWidth(STANDARD_W) - side ? STANDARD_W : WIDE_W;
     const maxCol = innerWidth(w) - side;
     const grid = buttonGrid(s, labels, maxCol);
-    const colW = code ? grid.width : Math.max(grid.width, Math.min(maxCol, measure(s, FONT_UI, message) + 1)); // + the trailing pixel BitmapText wraps on
+    // The text column: as wide as the buttons, or wider (up to the space left) for longer text, e.g. a lone OK
+    // under a sentence. `+ 1`: the trailing pixel BitmapText wraps on.
+    const textW = Math.max(...message.split("\n").map((line) => measure(s, FONT_UI, line))) + 1;
+    const colW = Math.max(grid.width, Math.min(maxCol, textW));
     const left = Math.round(MID_X - w / 2);
     const contentX = left + Math.round((w - side - colW) / 2);
     const colX = contentX + side;

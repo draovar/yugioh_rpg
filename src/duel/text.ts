@@ -62,6 +62,20 @@ export function attributeNames(mask: number): string {
   return ATTRIBUTES.filter(([bit]) => mask & bit).map(([, n]) => n).join(", ");
 }
 
+/**
+ * What a declaration hint says was declared (the engine sends HINT_RACE 6 / HINT_ATTRIB 7 / HINT_CODE 8 /
+ * HINT_NUMBER 9 after each declaration, `player` = who declared), or null for any other hint.
+ */
+export function declarationText(hintType: number, value: bigint, cardName: (code: number) => string): string | null {
+  switch (hintType) {
+    case 6: return raceNames(BigInt(value));
+    case 7: return attributeNames(Number(value));
+    case 8: return cardName(Number(value));
+    case 9: return String(value);
+    default: return null;
+  }
+}
+
 export const PHASE_NAMES: Record<number, string> = {
   0x01: "Draw Phase", 0x02: "Standby Phase", 0x04: "Main Phase 1", 0x08: "Battle Phase",
   0x10: "Battle Step", 0x20: "Damage Step", 0x40: "Damage Calculation", 0x80: "Battle Phase",

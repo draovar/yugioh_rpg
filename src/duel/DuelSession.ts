@@ -227,7 +227,7 @@ export class DuelSession {
       controller, location, sequence, position, faceDown,
       attack: hidden ? 0 : q.attack ?? 0,
       defense: hidden ? 0 : q.defense ?? 0,
-      counters: Object.values(q.counters ?? {}).reduce((n, c) => n + c, 0),
+      counters: counterTotal(q.counters),
     };
   }
 
@@ -249,6 +249,15 @@ export class DuelSession {
   destroy(): void {
     this.core.destroyDuel(this.handle);
   }
+}
+
+/**
+ * Total counters on a card. ocgcore packs each counter kind as `kind | count << 16`, and ocgcore-wasm's parser
+ * swaps the halves: its record is `{ [count]: kind }`. So the counts are the keys. (Two kinds with the same count
+ * would collide into one entry; no card in the pool has two kinds.)
+ */
+function counterTotal(counters: Record<number, number> | undefined): number {
+  return Object.keys(counters ?? {}).reduce((n, count) => n + Number(count), 0);
 }
 
 function mulberry32(a: number): () => number {
