@@ -1,5 +1,10 @@
-// Drives a DuelSession for "human (player 0) vs AI (player 1)".
+// Drives a DuelSession for the player on this machine (`me`) against the built-in AI or, in a
+// peer-to-peer duel, a player on another machine (`remote`).
 // UI-agnostic: the scene subscribes to events and answers human prompts via `answer()`.
+//
+// Peer-to-peer duels run in lockstep: both machines run the same duel (same seed, same decks) and send
+// each other only the answers to their own prompts. ocgcore is deterministic, so that keeps them in sync;
+// a board checksum travels with each answer to catch it if they ever drift apart.
 import {
   OcgMessageType,
   OcgResponseType,
@@ -8,9 +13,6 @@ import {
 } from "ocgcore-wasm";
 import { DuelSession, type FieldSnapshot } from "./DuelSession.ts";
 import { autoRespond } from "./autoBot.ts";
-
-export const HUMAN = 0;
-export const AI = 1;
 
 const HINT_SELECTMSG = 3;
 
@@ -26,6 +28,16 @@ export interface DuelEvents {
   /** The human must answer; `hint` is the pending "Select the card(s) to …" system string id, if any. */
   onPrompt(prompt: HumanPrompt, hint: bigint | null): void;
   onEnd(winner: number | null): void;
+  /** The duel can't go on (peer-to-peer: the two machines' duels drifted apart). */
+  onError?(message: string): void;
+}
+
+/** The other player's machine in a peer-to-peer duel. */
+export interface RemotePeer {
+  /** Sends one of our answers, with the board checksum from just before it was applied. */
+  send(response: OcgResponse, checksum: number): void;
+  /** Registers the handler for the peer's answers, delivered in the order they were sent. */
+  onResponse(handler: (response: OcgResponse, checksum: number) => void): void;
 }
 
 export interface DuelControllerOptions {
@@ -35,6 +47,10 @@ export interface DuelControllerOptions {
   schedule: (ms: number, fn: () => void) => void;
   /** How long the AI "thinks" before each decision. */
   aiDelayMs?: number;
+  /** Seat of the player on this machine (0 = goes first). Default 0. */
+  me?: 0 | 1;
+  /** The other seat is a player on another machine; without it, the built-in AI plays it. */
+  remote?: RemotePeer;
 }
 
 export class DuelController {
@@ -42,6 +58,11 @@ export class DuelController {
   private readonly events: DuelEvents;
   private readonly schedule: (ms: number, fn: () => void) => void;
   private readonly aiDelayMs: number;
+  readonly me: 0 | 1;
+  private readonly remote: RemotePeer | null;
+  /** Peer answers that arrived before our duel reached their prompt. */
+  private inbox: { response: OcgResponse; checksum: number }[] = [];
+  private awaitingRemote = false;
   private pending: HumanPrompt | null = null;
   private destroyed = false;
   private hint: bigint | null = null;
@@ -54,6 +75,12 @@ export class DuelController {
     this.events = opts.events;
     this.schedule = opts.schedule;
     this.aiDelayMs = opts.aiDelayMs ?? 450;
+    this.me = opts.me ?? 0;
+    this.remote = opts.remote ?? null;
+    this.remote?.onResponse((response, checksum) => {
+      this.inbox.push({ response, checksum });
+      if (this.awaitingRemote) this.takeRemote();
+    });
   }
 
   start(): void {
@@ -64,6 +91,7 @@ export class DuelController {
   answer(response: OcgResponse): void {
     if (!this.pending) throw new Error("DuelController.answer: no pending prompt");
     this.pending = null;
+    this.remote?.send(response, this.session.checksum());
     this.session.respond(response);
     void this.step();
   }
@@ -72,19 +100,24 @@ export class DuelController {
     return this.pending;
   }
 
+  /** Peer-to-peer: the duel is waiting for the other player's answer. */
+  get waitingForRemote(): boolean {
+    return this.awaitingRemote;
+  }
+
   /** Stops the loop (scene shut down mid-animation); the session is destroyed by its owner. */
   stop(): void {
     this.destroyed = true;
   }
 
   snapshot(): FieldSnapshot {
-    return this.session.snapshot(HUMAN);
+    return this.session.snapshot(this.me);
   }
 
   private async step(): Promise<void> {
     const result = this.session.advance();
     for (const m of result.messages) this.track(m);
-    await this.events.onUpdate(result.messages, this.session.snapshot(HUMAN));
+    await this.events.onUpdate(result.messages, this.session.snapshot(this.me));
     if (this.destroyed) return;
 
     if (result.ended) {
@@ -92,26 +125,46 @@ export class DuelController {
       return;
     }
     const prompt = result.prompt as HumanPrompt;
+    // Answered the same way on both machines in a peer-to-peer duel, so never sent.
     const trivial = this.trivialAnswer(prompt);
-    if (prompt.player === AI) {
-      // The AI only "thinks" when it has a real choice; passing with nothing to do is instant
-      // (otherwise every empty chain window, e.g. around attacks, adds a pause).
-      this.schedule(trivial ? 0 : this.aiDelayMs, () => {
-        if (this.destroyed) return;
-        this.session.respond(trivial ?? autoRespond(prompt));
-        void this.step();
-      });
-      return;
-    }
     if (trivial) {
       this.session.respond(trivial);
       this.schedule(0, () => void (!this.destroyed && this.step()));
+      return;
+    }
+    if (prompt.player !== this.me) {
+      if (this.remote) {
+        this.awaitingRemote = true;
+        this.takeRemote();
+        return;
+      }
+      // The AI "thinks" a moment before each real choice.
+      this.schedule(this.aiDelayMs, () => {
+        if (this.destroyed) return;
+        this.session.respond(autoRespond(prompt));
+        void this.step();
+      });
       return;
     }
     this.pending = prompt;
     const hint = this.hint;
     this.hint = null;
     this.events.onPrompt(prompt, hint);
+  }
+
+  /** Applies the peer's next answer if it has arrived (otherwise `onResponse` calls this again later). */
+  private takeRemote(): void {
+    if (this.destroyed) return;
+    const next = this.inbox.shift();
+    if (!next) return;
+    this.awaitingRemote = false;
+    if (next.checksum !== this.session.checksum()) {
+      this.destroyed = true;
+      this.events.onError?.("The two duels went out of sync.");
+      return;
+    }
+    this.session.respond(next.response);
+    void this.step();
   }
 
   /** Prompts that have exactly one sensible answer and would only slow things down (either player). */
@@ -131,7 +184,7 @@ export class DuelController {
         this.phase = m.phase;
         break;
       case OcgMessageType.HINT:
-        if (m.hint_type === HINT_SELECTMSG && m.player === HUMAN) this.hint = m.hint;
+        if (m.hint_type === HINT_SELECTMSG && m.player === this.me) this.hint = m.hint;
         break;
     }
   }

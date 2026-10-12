@@ -33,7 +33,14 @@ export class Boot extends Phaser.Scene {
         const lp = Number(params.get("lp")) || undefined;
         const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
         const setup = params.get("setup") ?? undefined;
-        if (params.has("duel")) this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp, seed, setup });
+        // Invite link from a multiplayer host: ?join=CODE (dropped from the address so a reload doesn't rejoin).
+        const join = params.get("join");
+        if (join) {
+          params.delete("join");
+          history.replaceState(null, "", `${location.pathname}${params.size ? `?${params}` : ""}`);
+          this.scene.start("Lobby", { join });
+        } else if (params.has("mp")) this.scene.start("Lobby");
+        else if (params.has("duel")) this.scene.start("Duel", { opponentName: "Test Opponent", startingLP: lp, seed, setup });
         else this.scene.start("Overworld");
       })
       .catch((e) => {

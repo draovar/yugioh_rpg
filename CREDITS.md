@@ -6,6 +6,11 @@
 - **BabelCDB** card database and **strings.conf** — Project Ignis.
 - **ocgcore-wasm** — n1xx1.
 
+## Libraries & services
+- **Phaser** (MIT) — game framework.
+- **PeerJS** (MIT) — WebRTC peer-to-peer connections for multiplayer. Rooms are brokered by PeerJS's free public
+  server (0.peerjs.com); the duel data itself goes directly between the two browsers.
+
 ## Art & UI
 - **Complete UI Essential Pack** by **Crusenho Agus Hennihuno** — https://crusenho.itch.io —
   licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Used: Runewood theme sprites

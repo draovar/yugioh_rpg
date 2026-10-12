@@ -4,7 +4,6 @@
 import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgMessage } from "ocgcore-wasm";
 import type { CardDb } from "../../duel/cardData.ts";
-import { HUMAN } from "../../duel/DuelController.ts";
 import { REASON, type MoveMessage, type NewTurnMessage } from "../../duel/DuelSession.ts";
 import { PHASE_NAMES } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
@@ -15,6 +14,8 @@ import { CARD, FIELD, FIELD_CENTER, ROWS, handXY, slotXY } from "./layout.ts";
 export interface AnimHost {
   readonly scene: Phaser.Scene;
   readonly cards: CardDb;
+  /** Seat of the player on this machine: drawn at the bottom (side 0). */
+  readonly me: 0 | 1;
   /** Displayed card sprites keyed `controller:location:sequence`; the animator re-keys them as cards move. */
   readonly sprites: Map<string, CardSprite>;
   /** Container the board lives in (cleared on every redraw, so temporary sprites go here too). */
@@ -83,8 +84,6 @@ const EASE = "Quad.easeOut";
 /** Turn banner colours: band fill, its 1px top (and turn-number) / bottom (and text shadow) lines. */
 const BANNER = THEME.banner;
 
-const sideOf = (controller: number) => (controller === HUMAN ? 0 : 1) as 0 | 1;
-
 export class DuelAnimator {
   /** Global speed multiplier (2 = twice as fast). */
   speed = 1;
@@ -112,6 +111,11 @@ export class DuelAnimator {
     this.host = host;
   }
 
+  /** Screen side of a player: 0 = you (bottom), 1 = opponent (top). */
+  private side(player: number): 0 | 1 {
+    return player === this.host.me ? 0 : 1;
+  }
+
   /** Animates `messages` in order; `onMessage` runs as each one starts (e.g. to log it). */
   async play(messages: OcgMessage[], onMessage?: (m: OcgMessage) => void): Promise<void> {
     for (const m of messages) {
@@ -128,7 +132,7 @@ export class DuelAnimator {
     switch (m.type) {
       case OcgMessageType.NEW_TURN:
         this.clearAttack();
-        return this.banner(m.player === HUMAN ? "YOUR TURN" : "OPPONENT'S TURN", (m as NewTurnMessage).turn, m.player === HUMAN ? BANNER.mine : BANNER.theirs);
+        return this.banner(m.player === h.me ? "YOUR TURN" : "OPPONENT'S TURN", (m as NewTurnMessage).turn, m.player === h.me ? BANNER.mine : BANNER.theirs);
       case OcgMessageType.NEW_PHASE:
         if (!(m.phase & 0xf8)) this.clearAttack(); // left the battle phase
         h.setPhase(m.phase, PHASE_NAMES[m.phase] ?? "");
@@ -184,7 +188,7 @@ export class DuelAnimator {
 
   private async draw(player: number, codes: number[]): Promise<void> {
     const h = this.host;
-    const side = sideOf(player);
+    const side = this.side(player);
     const deck = slotXY(side, { kind: "deck" });
     // Every card goes straight to its place in the final hand, so the hand doesn't re-space mid-draw.
     const first = h.handCount[side];
@@ -197,7 +201,7 @@ export class DuelAnimator {
       h.sprites.set(key({ controller: player, location: OcgLocation.HAND, sequence: first + i }), sp);
       return this.wait(i * T.drawStagger).then(async () => {
         await this.tween({ targets: sp, x: target.x, y: target.y, duration: T.draw, ease: EASE });
-        if (player === HUMAN) this.reveal(sp, code);
+        if (player === h.me) this.reveal(sp, code);
       });
     });
     await Promise.all(flights);
@@ -217,12 +221,12 @@ export class DuelAnimator {
       sp = this.tempSprite(src.x, src.y, this.visible(code, from) ? code : 0);
     }
     if (from.location === OcgLocation.HAND) {
-      h.handCount[sideOf(from.controller)]--;
+      h.handCount[this.side(from.controller)]--;
       this.rekeyHand(from.controller);
-      this.relayoutHand(sideOf(from.controller));
+      this.relayoutHand(this.side(from.controller));
     }
     const toHand = to.location === OcgLocation.HAND;
-    const toSide = sideOf(to.controller);
+    const toSide = this.side(to.controller);
     const target = toHand ? handXY(toSide, h.handCount[toSide]++, h.handCount[toSide]) : dest;
     if (toHand) this.relayoutHand(toSide);
 
@@ -311,7 +315,7 @@ export class DuelAnimator {
    */
   private async shuffleHand(player: number, codes: number[]): Promise<void> {
     const h = this.host;
-    const side = sideOf(player);
+    const side = this.side(player);
     const n = h.handCount[side];
     const handKey = (i: number) => key({ controller: player, location: OcgLocation.HAND, sequence: i });
     const sprites = Array.from({ length: n }, (_, i) => h.sprites.get(handKey(i))).filter((sp): sp is CardSprite => !!sp);
@@ -338,7 +342,7 @@ export class DuelAnimator {
     const h = this.host;
     const sp = h.sprites.get(key(card));
     if (!sp) return;
-    const to = target ? this.locXY(target) : { x: FIELD_CENTER.x, y: card.controller === HUMAN ? ROWS.oppHand : ROWS.myHand };
+    const to = target ? this.locXY(target) : { x: FIELD_CENTER.x, y: card.controller === h.me ? ROWS.oppHand : ROWS.myHand };
     if (!to) return;
     h.board.bringToTop(sp);
     const sx = sp.x, sy = sp.y;
@@ -380,7 +384,7 @@ export class DuelAnimator {
     if (!code) return false;
     if (l.location & (OcgLocation.GRAVE | OcgLocation.REMOVED)) return true;
     if (l.location & ON_FIELD) return !this.faceDown(l);
-    if (l.controller === HUMAN) return l.location !== OcgLocation.DECK;
+    if (l.controller === this.host.me) return l.location !== OcgLocation.DECK;
     return false; // opponent's hand / deck / extra deck
   }
 
@@ -389,7 +393,7 @@ export class DuelAnimator {
   }
 
   private locXY(l: Loc): { x: number; y: number } | null {
-    const side = sideOf(l.controller);
+    const side = this.side(l.controller);
     switch (l.location) {
       case OcgLocation.MZONE: return slotXY(side, { kind: "mzone", seq: Math.min(l.sequence, 4) });
       case OcgLocation.SZONE: return slotXY(side, { kind: "szone", seq: Math.min(l.sequence, 5) });
@@ -426,7 +430,8 @@ export class DuelAnimator {
 
   /** Slides the cards already in a hand to their positions for a hand of `n` cards (default: current size). */
   private relayoutHand(side: 0 | 1, n = this.host.handCount[side]) {
-    const prefix = `${side === 0 ? HUMAN : 1 - HUMAN}:${OcgLocation.HAND}:`;
+    const me = this.host.me;
+    const prefix = `${side === 0 ? me : 1 - me}:${OcgLocation.HAND}:`;
     const hand = [...this.host.sprites].filter(([k]) => k.startsWith(prefix)).sort((a, b) => a[1].x - b[1].x);
     hand.forEach(([, s], i) => {
       const p = handXY(side, i, Math.max(n, hand.length));

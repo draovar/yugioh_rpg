@@ -2,13 +2,12 @@
 import { OcgLocation, OcgMessageType, type OcgMessage } from "ocgcore-wasm";
 import type { DuelText } from "../../duel/text.ts";
 import { PHASE_NAMES } from "../../duel/text.ts";
-import { HUMAN } from "../../duel/DuelController.ts";
 
-/** "You Normal Summon" / "Opponent Normal Summons": subject + verb (last word) conjugated for the player. */
-const act = (p: number, verb: string) => (p === HUMAN ? `You ${verb}` : `Opponent ${verb.replace(/(\S+)$/, "$1s")}`);
-const whose = (p: number) => (p === HUMAN ? "Your" : "Opponent's");
-
-export function describeMessage(m: OcgMessage, text: DuelText): string | null {
+/** `me` = seat of the player on this machine ("You"); the other seat is "Opponent". */
+export function describeMessage(m: OcgMessage, text: DuelText, me: number): string | null {
+  /** "You Normal Summon" / "Opponent Normal Summons": subject + verb (last word) conjugated for the player. */
+  const act = (p: number, verb: string) => (p === me ? `You ${verb}` : `Opponent ${verb.replace(/(\S+)$/, "$1s")}`);
+  const whose = (p: number) => (p === me ? "Your" : "Opponent's");
   const name = (code: number) => (code ? text.name(code) : "a card");
   switch (m.type) {
     case OcgMessageType.NEW_TURN:
@@ -16,7 +15,7 @@ export function describeMessage(m: OcgMessage, text: DuelText): string | null {
     case OcgMessageType.NEW_PHASE:
       return PHASE_NAMES[m.phase] ? `${PHASE_NAMES[m.phase]}` : null;
     case OcgMessageType.DRAW:
-      return m.player === HUMAN
+      return m.player === me
         ? `You draw ${m.drawn.map((d) => name(d.code)).join(", ")}`
         : `Opponent draws ${m.drawn.length} card${m.drawn.length > 1 ? "s" : ""}`;
     case OcgMessageType.SUMMONING:
@@ -46,7 +45,7 @@ export function describeMessage(m: OcgMessage, text: DuelText): string | null {
       if (m.to.location === OcgLocation.REMOVED) return `${name(m.card)} is banished`;
       return null;
     case OcgMessageType.WIN:
-      return m.player === HUMAN ? "You win the duel!" : "You lose the duel.";
+      return m.player === me ? "You win the duel!" : "You lose the duel.";
     default:
       return null;
   }

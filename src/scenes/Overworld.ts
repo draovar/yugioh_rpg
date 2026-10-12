@@ -19,7 +19,9 @@ export class Overworld extends Phaser.Scene {
     this.player = this.add.rectangle(TILE * 10 + 8, TILE * 10 + 8, TILE - 2, TILE - 2, 0x4fa3ff);
     this.npc = this.add.rectangle(TILE * 20 + 8, TILE * 10 + 8, TILE - 2, TILE - 2, 0xff5555);
     text(this, 8, 8, "ARROW KEYS TO MOVE. WALK INTO THE RED DUELIST TO CHALLENGE THEM.", { color: WHITE });
+    text(this, 8, 16, "PRESS M TO DUEL A FRIEND (MULTIPLAYER).", { color: WHITE });
     this.cursors = this.input.keyboard!.createCursorKeys();
+    this.input.keyboard!.once("keydown-M", () => this.scene.start("Lobby"));
   }
 
   update() {

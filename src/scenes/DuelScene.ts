@@ -13,7 +13,9 @@ import {
 } from "ocgcore-wasm";
 import { loadEngine, type Engine } from "../duel/loadEngine.ts";
 import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
-import { AI, DuelController, HUMAN, type HumanPrompt } from "../duel/DuelController.ts";
+import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
+import { starterDeck } from "../duel/decks.ts";
+import type { NetDuel } from "../net/p2p.ts";
 import { autoRespond, freePlaces } from "../duel/autoBot.ts";
 import {
   ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, SPELL_ATTRIBUTE, SPELL_KIND_ICON, SPELL_NORMAL_ICON, SPELL_SHEET, TRAP_ATTRIBUTE,
@@ -46,6 +48,8 @@ export interface DuelSceneData {
   returnScene?: string;
   /** Dev: name of a test board from devSetups.ts (`&setup=tribute`), placed before the duel starts. */
   setup?: string;
+  /** Peer-to-peer duel against a player on another machine (both use the starter deck). */
+  net?: NetDuel;
 }
 
 interface CardAction {
@@ -123,6 +127,9 @@ export class DuelScene extends Phaser.Scene {
   private controller!: DuelController;
   private modal!: Modal;
   private sceneData: DuelSceneData = {};
+  /** Seat of the player on this machine; their side is drawn at the bottom. */
+  private me: 0 | 1 = 0;
+  private ended = false;
 
   private board!: Phaser.GameObjects.Container;
   private sprites = new Map<string, CardSprite>();
@@ -175,6 +182,8 @@ export class DuelScene extends Phaser.Scene {
 
   init(data: DuelSceneData) {
     this.sceneData = data ?? {};
+    this.me = data?.net?.me ?? 0;
+    this.ended = false;
     this.sprites.clear();
     this.actions.clear();
     this.phaseActions.clear();
@@ -202,12 +211,13 @@ export class DuelScene extends Phaser.Scene {
     this.animator = new DuelAnimator({
       scene: this,
       cards,
+      me: this.me,
       sprites: this.sprites,
       board: this.board,
       handCount: this.handCount,
       setPhase: (phase) => { this.phase = phase; this.drawPhaseColumn(); },
       changeLP: (player, lp, delta) => this.changeLP(player, lp, delta),
-      lp: (player) => this.lpValue[player === HUMAN ? 0 : 1],
+      lp: (player) => this.lpValue[this.side(player)],
       markAttack: (attacker, target) => {
         this.attackMarks = [attacker, target];
         this.applyHighlights();
@@ -225,18 +235,17 @@ export class DuelScene extends Phaser.Scene {
       if (this.menu && !over.some((o) => this.menu!.exists(o))) this.closeMenu(true);
     });
 
-    const fallback = (): Deck => {
-      const pool = [...cards.records.keys()];
-      return { main: [...pool, ...pool].slice(0, 40) };
-    };
-    const session = new DuelSession({
-      core, cards, readScript,
-      startingLP: this.sceneData.startingLP,
-      seed: this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as [bigint, bigint, bigint, bigint]) : undefined,
-      decks: withDevSetup([this.sceneData.playerDeck ?? fallback(), this.sceneData.opponentDeck ?? fallback()], this.sceneData.setup),
-    });
+    const net = this.sceneData.net;
+    const decks: [Deck, Deck] = net
+      ? [starterDeck(cards), starterDeck(cards)]
+      : withDevSetup([this.sceneData.playerDeck ?? starterDeck(cards), this.sceneData.opponentDeck ?? starterDeck(cards)], this.sceneData.setup);
+    const seed = net ? net.seed
+      : this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as [bigint, bigint, bigint, bigint]) : undefined;
+    const session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
     this.controller = new DuelController({
       session,
+      me: this.me,
+      remote: net?.remote,
       schedule: (ms, fn) => this.time.delayedCall(ms, fn),
       events: {
         onUpdate: (messages, snapshot) => this.onUpdate(messages, snapshot),
@@ -246,11 +255,14 @@ export class DuelScene extends Phaser.Scene {
           this.onPrompt(prompt, hint);
         },
         onEnd: (winner) => this.onEnd(winner),
+        onError: (message) => this.abort(`${message} The duel can't continue.`),
       },
     });
+    net?.onClose(() => this.abort("Your opponent left the duel."));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.controller.stop();
       session.destroy();
+      net?.close();
     });
     // Debug handle for the browser console (dev builds only).
     if (import.meta.env.DEV) (window as unknown as { duelScene: DuelScene }).duelScene = this;
@@ -289,7 +301,7 @@ export class DuelScene extends Phaser.Scene {
       const box = this.add.nineslice(x, y, ui(`phase-${state}`), undefined, PHASE_COL.w, PHASE_COL.h, ...look.slice).setOrigin(0);
       this.phaseGfx.add(box);
       // Letters stacked vertically, centred on the button face.
-      const color = state === "current" ? (this.turnPlayer === HUMAN ? THEME.turnText.mine : THEME.turnText.theirs) : look.text;
+      const color = state === "current" ? (this.turnPlayer === this.me ? THEME.turnText.mine : THEME.turnText.theirs) : look.text;
       const letters = [...p.label];
       const top = y + Math.floor((PHASE_COL.h - letters.length * 6 + 1) / 2) + look.textDy;
       const glyphs = letters.flatMap((ch, j) => (ch === " " ? [] : [text(this, x + PHASE_COL.w / 2, top + j * 6, ch, { color, originX: 0.5 })]));
@@ -562,11 +574,11 @@ export class DuelScene extends Phaser.Scene {
     await this.animator.play(messages, (m) => {
       if (m.type === OcgMessageType.NEW_TURN) this.turnPlayer = m.player;
       // Card mode starts empty; the first card you draw fills it.
-      if (m.type === OcgMessageType.DRAW && m.player === HUMAN && !this.lastCode && m.drawn[0]?.code) {
+      if (m.type === OcgMessageType.DRAW && m.player === this.me && !this.lastCode && m.drawn[0]?.code) {
         this.lastCode = m.drawn[0].code;
         if (this.panelMode === "card") this.showCard(this.lastCode);
       }
-      const line = describeMessage(m, this.engine.text);
+      const line = describeMessage(m, this.engine.text, this.me);
       if (line) this.log(line);
     });
     this.snapshot = snapshot;
@@ -575,7 +587,7 @@ export class DuelScene extends Phaser.Scene {
 
   /** Counts the LP bar to `lp`, with a floating +/- label. */
   private changeLP(player: number, lp: number, delta: number): Promise<void> {
-    const i = (player === HUMAN ? 0 : 1) as 0 | 1;
+    const i = this.side(player);
     const from = this.lpValue[i];
     const to = Math.max(0, lp);
     this.lpValue[i] = to;
@@ -590,12 +602,31 @@ export class DuelScene extends Phaser.Scene {
   }
 
   private onEnd(winner: number | null) {
+    this.ended = true;
     this.clearInteraction();
-    this.endDialog(winner, () => this.scene.start(this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === HUMAN } }));
+    this.endDialog(winner, () => this.scene.start(this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === this.me } }));
+  }
+
+  /** The duel stopped early (peer-to-peer: opponent gone, or the duels went out of sync). */
+  private abort(message: string) {
+    if (this.ended) return;
+    this.ended = true;
+    this.controller.stop();
+    this.modal.close();
+    this.clearInteraction();
+    this.modal.dialog(message.toUpperCase(), [
+      { label: "CONTINUE", onClick: () => this.scene.start(this.sceneData.returnScene ?? "Overworld") },
+    ]);
+  }
+
+  /** Screen side of a player: 0 = you (bottom), 1 = opponent (top). */
+  private side(player: number): 0 | 1 {
+    return player === this.me ? 0 : 1;
   }
 
   private endDialog(winner: number | null, onContinue: () => void) {
-    this.modal.dialog(winner === HUMAN ? "YOU WIN THE DUEL!" : winner === AI ? "YOU LOST THE DUEL..." : "THE DUEL ENDED IN A DRAW.", [
+    const lost = winner === 1 - this.me;
+    this.modal.dialog(winner === this.me ? "YOU WIN THE DUEL!" : lost ? "YOU LOST THE DUEL..." : "THE DUEL ENDED IN A DRAW.", [
       { label: "CONTINUE", onClick: onContinue },
     ]);
   }
@@ -605,8 +636,8 @@ export class DuelScene extends Phaser.Scene {
   private renderBoard(snap: FieldSnapshot) {
     this.board.removeAll(true);
     this.sprites.clear();
-    snap.players.forEach((p, side) => {
-      const s = side as 0 | 1;
+    snap.players.forEach((p, player) => {
+      const s = this.side(player);
       this.handCount[s] = p.hand.length;
       this.lpValue[s] = p.lp;
       this.lpBars[s].set(p.lp);
@@ -654,7 +685,7 @@ export class DuelScene extends Phaser.Scene {
     hand.forEach((c, i) => {
       const { x, y } = handXY(side, i, hand.length);
       const sp = this.cardSprite(c, x, y);
-      if (side === HUMAN) {
+      if (side === 0) {
         // Hover lift. Skipped while animating, and for a sprite that has since left the hand (an
         // animation may be flying it to the field), so it never fights an animation.
         const k = key(c.controller, c.location, c.sequence);
@@ -883,7 +914,7 @@ export class DuelScene extends Phaser.Scene {
           cards: m.selects.map((c) => {
             const effect = this.activateLabel(c.code, c.description);
             if (effect !== "Activate") return { code: c.code, caption: effect };
-            return { code: c.code, caption: c.location === OcgLocation.SZONE ? "" : locationName(c.location, c.controller) };
+            return { code: c.code, caption: c.location === OcgLocation.SZONE ? "" : locationName(c.location, c.controller, this.me) };
           }),
           mode: "single",
           onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: i }),
@@ -918,7 +949,7 @@ export class DuelScene extends Phaser.Scene {
       case OcgMessageType.SELECT_CARD:
         this.pickCards(m.selects, {
           title: title(`Select ${range(m.min, m.max)} card(s)`),
-          cards: m.selects.map((c) => ({ code: c.code, caption: locationName(c.location, c.controller) })),
+          cards: m.selects.map((c) => ({ code: c.code, caption: locationName(c.location, c.controller, this.me) })),
           mode: m.min === 1 && m.max === 1 ? "single" : "multi",
           isValid: (sel) => sel.length >= m.min && sel.length <= m.max,
           max: m.max,
@@ -934,7 +965,7 @@ export class DuelScene extends Phaser.Scene {
           // Tributes are normally your own field monsters: caption only the unusual ones (hand, opponent's).
           cards: m.selects.map((c) => ({
             code: c.code,
-            caption: c.controller === HUMAN && c.location === OcgLocation.MZONE ? "" : locationName(c.location, c.controller),
+            caption: c.controller === this.me && c.location === OcgLocation.MZONE ? "" : locationName(c.location, c.controller, this.me),
           })),
           mode: "multi",
           // release_param: how many tributes this card counts as (Double Tribute monsters count 2).
@@ -966,7 +997,7 @@ export class DuelScene extends Phaser.Scene {
           : { label: "Cancel", onClick: () => this.answer(done) };
         this.pickCards(entries.map((e) => e.c), {
           title: title(`Select ${range(m.min, m.max)} card(s)`),
-          cards: entries.map((e) => ({ code: e.c.code, caption: e.chosen ? "CHOSEN" : locationName(e.c.location, e.c.controller), selected: e.chosen })),
+          cards: entries.map((e) => ({ code: e.c.code, caption: e.chosen ? "CHOSEN" : locationName(e.c.location, e.c.controller, this.me), selected: e.chosen })),
           mode: "single",
           buttons: [button],
           onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_UNSELECT_CARD, index: entries[i].index }),
@@ -1071,7 +1102,7 @@ export class DuelScene extends Phaser.Scene {
     this.setPrompt(label);
     for (const place of free) {
       if (place.location === OcgLocation.MZONE && place.sequence > 4) continue; // no Extra Monster Zones in GOAT
-      const side = (place.player === HUMAN ? 0 : 1) as 0 | 1;
+      const side = this.side(place.player);
       const slot: Slot = place.location === OcgLocation.MZONE ? { kind: "mzone", seq: place.sequence } : { kind: "szone", seq: place.sequence };
       const { x, y } = slotXY(side, slot);
       const g = this.add.graphics().setDepth(790);
@@ -1105,8 +1136,8 @@ function range(min: number, max: number) {
   return min === max ? String(min) : `${min}-${max}`;
 }
 
-function locationName(location: number, controller: number): string {
-  const owner = controller === HUMAN ? "" : "OPP ";
+function locationName(location: number, controller: number, me: number): string {
+  const owner = controller === me ? "" : "OPP ";
   const names: Record<number, string> = {
     [OcgLocation.DECK]: "DECK", [OcgLocation.HAND]: "HAND", [OcgLocation.MZONE]: "FIELD",
     [OcgLocation.SZONE]: "S/T", [OcgLocation.GRAVE]: "GY", [OcgLocation.REMOVED]: "BANISHED", [OcgLocation.EXTRA]: "EXTRA",

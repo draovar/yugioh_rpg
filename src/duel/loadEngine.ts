@@ -8,6 +8,11 @@ export interface Engine {
   cards: CardDb;
   readScript: (name: string) => string | null;
   text: DuelText;
+  /**
+   * Hash of the card data and scripts. Peer-to-peer duels only start when both machines have the same
+   * one: a different script version could play a card differently and split the duel.
+   */
+  fingerprint: number;
 }
 
 let engine: Promise<Engine> | null = null;
@@ -27,7 +32,14 @@ export function loadEngine(): Promise<Engine> {
       cards,
       text: new DuelText(cards, strings),
       readScript: (name) => scripts[name.split("/").pop()!] ?? null,
+      fingerprint: fnv1a(JSON.stringify([records, Object.entries(scripts).sort(([a], [b]) => (a < b ? -1 : 1))])),
     };
   })();
   return engine;
+}
+
+function fnv1a(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return h >>> 0;
 }

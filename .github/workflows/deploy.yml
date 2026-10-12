@@ -41,6 +41,7 @@ jobs:
       - run: npm run fetch-art
       - run: npm run build-art
       - run: npm run smoke -- 3
+      - run: npm run smoke-p2p -- 3
       - run: npm run build
 
       - uses: actions/upload-pages-artifact@v3

@@ -22,14 +22,16 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `node tools/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession`; fails on RETRY/crash |
+| `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
 After changing `data/pool.json`, rerun `build-data`, `fetch-art`, `build-art`, then `smoke`.
 
-Deploy: every push to `main` runs `.github/workflows/deploy.yml` (the fresh-clone pipeline + `smoke -- 3` + `build`)
+Deploy: every push to `main` runs `.github/workflows/deploy.yml` (the fresh-clone pipeline + `smoke -- 3` + `smoke-p2p -- 3` + `build`)
 and publishes `dist/` to GitHub Pages: https://draovar.github.io/yugioh_rpg/ . Never upload a local `dist/`: Vite
 copies all of `public/`, including the gitignored paid tilesets.
 
+Multiplayer URLs (work in the deployed game too): `?mp` opens the multiplayer lobby, `?join=CODE` joins a room.
 Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations (`src/scenes/animPreview.ts`);
 `&dialogs` adds one that opens every prompt UI with sample cards (`src/scenes/dialogPreview.ts`; answers are only
 logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`);
@@ -45,12 +47,22 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - `src/duel/` — engine layer, **no Phaser imports**. Runs unchanged in Node (tools) and the browser.
   - `DuelSession.ts` — wraps one duel: `advance()` runs until a prompt/end, `respond()` answers it,
     `snapshot(viewer)` reads the board from the engine with hidden info masked.
-  - `DuelController.ts` — human (P0) vs AI (P1) loop; emits `onUpdate`/`onPrompt`/`onEnd`, auto-passes empty chain prompts.
+  - `DuelController.ts` — the local player (`me`, either seat) vs the AI or a `RemotePeer`; emits `onUpdate`/`onPrompt`/
+    `onEnd`/`onError`, auto-passes empty chain prompts. Peer-to-peer duels run in **lockstep**: both machines run the
+    same duel (same seed, both use `starterDeck` from `decks.ts`) and send only the answers to their own prompts, each
+    with `DuelSession.checksum()` from before it was applied; a mismatch stops the duel ("out of sync"). Anything that
+    differs between the two machines (non-seeded randomness in the engine layer, deck order, data) splits the duel.
   - `text.ts` — `DuelText.describe(desc)` resolves system strings and `aux.Stringid` card strings.
   - `autoBot.ts` — always-legal dumb responder (tests, placeholder AI). `freePlaces()` decodes SELECT_PLACE masks.
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names.
   - `loadEngine.ts` — browser only: fetches `public/data/*.json`, inits core once.
-- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map) → `Duel` (`DuelScene`, takes `DuelSceneData`).
+- `src/net/` — browser-only networking, no Phaser. `p2p.ts`: PeerJS (WebRTC) rooms; the host opens `ygorpg-<CODE>` on
+  PeerJS's free public server, the guest connects, handshake checks `PROTOCOL` + `Engine.fingerprint` (hash of the card
+  data and scripts), the host sends the seed and its random seat. Pings every 3 s; 20 s of silence or a "bye" =
+  opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
+- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; M = multiplayer) → `Duel` (`DuelScene`,
+  takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
+  draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
   card action menus (idle/battle), zone highlights (place), and `Modal` dialogs/card pickers for everything else.
   Rare prompts (announce, counters, sort, RPS) are still auto-answered by `autoBot`.
@@ -152,3 +164,6 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.
+7. **Multiplayer**: ✅ peer-to-peer v1 (lockstep over PeerJS, room codes / invite links, starter deck for both, leave
+   detection). Later: own decks once the deck editor exists, a "waiting for opponent" indicator, concede button,
+   reconnect, a TURN server for networks that block direct connections, maybe a server (hidden info stays hidden).

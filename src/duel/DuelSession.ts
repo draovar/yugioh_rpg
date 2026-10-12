@@ -222,6 +222,17 @@ export class DuelSession {
     };
   }
 
+  /**
+   * Fingerprint of the whole board (both sides, nothing hidden). Peer-to-peer duels send it with every
+   * answer, so two machines whose duels drifted apart notice at once instead of playing on diverged.
+   */
+  checksum(): number {
+    const s = JSON.stringify([this.snapshot(0), this.snapshot(1)]);
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+    return h >>> 0;
+  }
+
   get isOver(): boolean {
     return this.ended;
   }
