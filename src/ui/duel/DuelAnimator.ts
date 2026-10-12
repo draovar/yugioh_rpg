@@ -10,7 +10,7 @@ import { PHASE_NAMES } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
 import { THEME } from "../theme.ts";
 import { CardSprite } from "./CardSprite.ts";
-import { FIELD, FIELD_CENTER, ROWS, handXY, slotXY } from "./layout.ts";
+import { CARD, FIELD, FIELD_CENTER, ROWS, handXY, slotXY } from "./layout.ts";
 
 export interface AnimHost {
   readonly scene: Phaser.Scene;
@@ -67,6 +67,12 @@ const T = {
   flash: 240,
   /** Activated card shown at 2x in the middle of the field. */
   activateHold: 950,
+  /** Cards revealed to a player (e.g. a searched card) shown at 2x in the middle of the field. */
+  confirmHold: 900,
+  /** Hand shuffle: cards slide into a stack, rest there, then spread out in their new order. */
+  shuffleGather: 180,
+  shuffleHold: 140,
+  shuffleSpread: 220,
   /** Screen shake when damage takes a player's LP to 0. */
   lethalShake: 300,
   /** Turn banner on screen. */
@@ -139,6 +145,10 @@ export class DuelAnimator {
         return this.summonBurst(m, m.type === OcgMessageType.SPSUMMONING ? 0x5aa8ff : 0xfff2a8);
       case OcgMessageType.POS_CHANGE:
         return this.posChange(m, m.code, m.prev_position, m.position);
+      case OcgMessageType.CONFIRM_CARDS:
+        return this.confirm(m.cards.map((c) => c.code));
+      case OcgMessageType.SHUFFLE_HAND:
+        return this.shuffleHand(m.player, m.cards);
       case OcgMessageType.CHAINING:
         return this.activate(m, m.code);
       case OcgMessageType.ATTACK:
@@ -276,6 +286,52 @@ export class DuelAnimator {
     const big = new CardSprite(h.scene, FIELD_CENTER.x, FIELD_CENTER.y).show(code, h.cards.records.get(code)).setScale(2).setDepth(600);
     await this.wait(T.activateHold);
     big.destroy();
+  }
+
+  /**
+   * Cards revealed to a player (CONFIRM_CARDS, e.g. after a search the added card is shown to the
+   * opponent): shown side by side at 2x in the middle of the field for a moment (1x if more than four).
+   */
+  private async confirm(codes: number[]): Promise<void> {
+    const h = this.host;
+    const shown = codes.filter((c) => c && h.cards.records.has(c));
+    if (!shown.length) return;
+    const scale = shown.length > 4 ? 1 : 2, pitch = CARD.w * scale + 4;
+    const left = FIELD_CENTER.x - ((shown.length - 1) * pitch) / 2;
+    const big = shown.map((code, i) =>
+      new CardSprite(h.scene, Math.round(left + i * pitch), FIELD_CENTER.y).show(code, h.cards.records.get(code)).setScale(scale).setDepth(600));
+    await this.wait(T.confirmHold);
+    for (const b of big) b.destroy();
+  }
+
+  /**
+   * SHUFFLE_HAND: the player's hand cards slide together into a stack at the hand's centre, rest, then spread
+   * out in their new order (`codes`, the hand after the shuffle; matched to the shown faces so the redraw that
+   * follows doesn't move anything; face-down cards just fill the remaining spots). Re-keys the sprites.
+   */
+  private async shuffleHand(player: number, codes: number[]): Promise<void> {
+    const h = this.host;
+    const side = sideOf(player);
+    const n = h.handCount[side];
+    const handKey = (i: number) => key({ controller: player, location: OcgLocation.HAND, sequence: i });
+    const sprites = Array.from({ length: n }, (_, i) => h.sprites.get(handKey(i))).filter((sp): sp is CardSprite => !!sp);
+    if (sprites.length < 2) return;
+    const center = handXY(side, 0, 1);
+    await Promise.all(sprites.map((sp) => this.tween({ targets: sp, x: center.x, y: center.y, duration: T.shuffleGather, ease: EASE })));
+    await this.wait(T.shuffleHold);
+    // New order: first every face-up card at the spot of its code, then the rest (backs) fill the gaps.
+    const pool = [...sprites];
+    const slots: (CardSprite | null)[] = codes.slice(0, sprites.length).map((code) => {
+      const j = pool.findIndex((sp) => sp.code !== 0 && sp.code === code);
+      return j >= 0 ? pool.splice(j, 1)[0] : null;
+    });
+    const order = slots.map((sp) => sp ?? pool.shift()!);
+    order.push(...pool); // codes shorter than the shown hand (shouldn't happen)
+    order.forEach((sp, i) => h.sprites.set(handKey(i), sp));
+    await Promise.all(order.map((sp, i) => {
+      const to = handXY(side, i, order.length);
+      return this.tween({ targets: sp, x: to.x, y: to.y, duration: T.shuffleSpread, ease: EASE });
+    }));
   }
 
   private async attack(card: Loc, target: Loc | null): Promise<void> {

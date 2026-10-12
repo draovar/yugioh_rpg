@@ -170,6 +170,24 @@ const PREVIEWS: Preview[] = [
   lpPreview("#10 Turn banner: your turn", { type: OcgMessageType.NEW_TURN, player: 0, turn: 3 }),
   lpPreview("#10 Turn banner: opponent's turn", { type: OcgMessageType.NEW_TURN, player: 1, turn: 4 }),
   {
+    label: "#12 Search: card revealed, then hand shuffled (you)",
+    async run(host, snap) {
+      // As after Sangan's search: CONFIRM_CARDS to the opponent, then SHUFFLE_HAND with the new order.
+      const hand = snap.players[0].hand.map((c) => c.code);
+      await host.animator.play([
+        { type: OcgMessageType.CONFIRM_CARDS, player: 1, cards: [{ code: hand[0], controller: 0, location: OcgLocation.HAND, sequence: 0 }] } as OcgMessage,
+        { type: OcgMessageType.SHUFFLE_HAND, player: 0, cards: [...hand].reverse() } as OcgMessage,
+      ]);
+    },
+  },
+  {
+    label: "#12 Search: opponent's hand shuffled",
+    async run(host, snap) {
+      const n = snap.players[1].hand.length;
+      await host.animator.play([{ type: OcgMessageType.SHUFFLE_HAND, player: 1, cards: Array(n).fill(0) } as OcgMessage]);
+    },
+  },
+  {
     label: "#11 Phase change: whole turn (no actions)",
     async run(host) {
       // Draw, Standby, Main 1, Battle, Main 2, End, back-to-back as the engine sends them.

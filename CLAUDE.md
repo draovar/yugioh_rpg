@@ -138,7 +138,8 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 
 1. ✅ Environment: Vite + TS + Phaser 3.88, ocgcore-wasm, data pipeline, headless smoke test, engine runs in the browser.
 2. ✅ **Duel screen v1**: playable human-vs-bot duel with all common prompts, card art, info panel, log, LP, end screen.
-   ✅ Animations for draws, moves, summons, flips, activations, attacks, LP and turn changes.
+   ✅ Animations for draws, moves, summons, flips, activations, attacks, LP and turn changes, revealed cards
+   (CONFIRM_CARDS, e.g. a searched card) and hand shuffles (stack, then spread in the new order).
    ✅ 640x360 pixel-art duel screen from the layout sketch, custom frames, downscaled art, bitmap fonts.
    ✅ Animation review pass (#1-#12 reviewed with the user; `&anims` dropdown replays each).
    ✅ Runewood card action menu (on the card) and prompt dialogs.
