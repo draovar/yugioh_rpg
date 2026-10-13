@@ -225,6 +225,13 @@ const PREVIEWS: Preview[] = [
   },
   lpPreview("#13 Coin toss: heads", { type: OcgMessageType.TOSS_COIN, player: 0, results: [true] }),
   lpPreview("#13 Coin toss: tails", { type: OcgMessageType.TOSS_COIN, player: 0, results: [false] }),
+  {
+    label: "#13 Coin toss: opponent calls heads, tails comes up",
+    run: (host) => host.animator.play([
+      { type: OcgMessageType.HINT, hint_type: 4, player: 1, hint: 60n },
+      { type: OcgMessageType.TOSS_COIN, player: 1, results: [false] },
+    ] as unknown as OcgMessage[]),
+  },
   lpPreview("#13 Coin toss: three coins", { type: OcgMessageType.TOSS_COIN, player: 0, results: [true, false, true] }),
   {
     label: "#14 Die roll: random result",

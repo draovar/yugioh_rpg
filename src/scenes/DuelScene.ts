@@ -18,7 +18,7 @@ import { DECKS } from "../duel/decks.ts";
 import { CHAIN_MODES, chainMode, setChainMode } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
 import { autoRespond, declarableCards, freePlaces } from "../duel/autoBot.ts";
-import { ATTRIBUTES, RACES, raceNames } from "../duel/text.ts";
+import { ATTRIBUTES, COIN_HEADS_STRING, COIN_TAILS_STRING, RACES, raceNames } from "../duel/text.ts";
 import {
   ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, SPELL_ATTRIBUTE, SPELL_KIND_ICON, SPELL_NORMAL_ICON, SPELL_SHEET, TRAP_ATTRIBUTE,
   type CardHighlight,
@@ -61,8 +61,6 @@ interface CardAction {
 
 /** Button plate on the Extra Deck slot: as wide as fits left of the Spell/Trap zones; light counter text. */
 const BUTTON_PLATE_W = 56;
-/** System strings "Heads" / "Tails": the options of a coin call. */
-const COIN_HEADS_STRING = 60, COIN_TAILS_STRING = 61;
 const key = (controller: number, location: number, sequence: number) => `${controller}:${location}:${sequence}`;
 const locKey = (c: OcgCardLoc) => key(c.controller, c.location, c.sequence);
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;

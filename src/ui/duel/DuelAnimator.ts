@@ -5,7 +5,7 @@ import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgMessage } from "ocgcore-wasm";
 import type { CardDb } from "../../duel/cardData.ts";
 import { REASON, type MoveMessage, type NewTurnMessage } from "../../duel/DuelSession.ts";
-import { PHASE_NAMES, declarationText } from "../../duel/text.ts";
+import { PHASE_NAMES, coinCallText, declarationText } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
 import { THEME } from "../theme.ts";
 import { CardSprite } from "./CardSprite.ts";
@@ -186,9 +186,13 @@ export class DuelAnimator {
         return this.banner(m.player === h.me ? "YOUR TURN" : "OPPONENT'S TURN", turnLine((m as NewTurnMessage).turn), m.player === h.me ? THEME.banner.mine : THEME.banner.theirs);
       case OcgMessageType.HINT: {
         // After a declaration the engine hints what was declared (player = who declared). The opponent's
-        // declaration waits for an OK (text only, also for card names); your own is only logged.
+        // declaration waits for an OK (text only, also for card names); your own is only logged. A coin call
+        // (heads / tails, before the toss) works the same way.
+        if (m.player === h.me) return;
+        const call = coinCallText(m.hint_type, m.hint);
+        if (call) return h.notice(`Your opponent called:\n${call}`);
         const what = declarationText(m.hint_type, m.hint, (code) => h.cards.name(code));
-        if (what === null || m.player === h.me) return;
+        if (what === null) return;
         return h.notice(`Your opponent declared:\n${what}`);
       }
       case OcgMessageType.NEW_PHASE:

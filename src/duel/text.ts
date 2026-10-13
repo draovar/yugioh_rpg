@@ -76,6 +76,18 @@ export function declarationText(hintType: number, value: bigint, cardName: (code
   }
 }
 
+/** System strings "Heads" / "Tails": the options of a coin call (Duel.AnnounceCoin). */
+export const COIN_HEADS_STRING = 60, COIN_TAILS_STRING = 61;
+
+/**
+ * The call of a coin toss, from the hint the engine sends after it (HINT_OPSELECTED 4 with system string 60 / 61,
+ * `player` = who called), or null for any other hint.
+ */
+export function coinCallText(hintType: number, value: bigint): string | null {
+  if (hintType !== 4) return null;
+  return Number(value) === COIN_HEADS_STRING ? "Heads" : Number(value) === COIN_TAILS_STRING ? "Tails" : null;
+}
+
 export const PHASE_NAMES: Record<number, string> = {
   0x01: "Draw Phase", 0x02: "Standby Phase", 0x04: "Main Phase 1", 0x08: "Battle Phase",
   0x10: "Battle Step", 0x20: "Damage Step", 0x40: "Damage Calculation", 0x80: "Battle Phase",

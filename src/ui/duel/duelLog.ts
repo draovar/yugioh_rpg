@@ -1,7 +1,7 @@
 // Human-readable log lines for engine messages (null = not worth logging).
 import { OcgLocation, OcgMessageType, type OcgMessage } from "ocgcore-wasm";
 import type { DuelText } from "../../duel/text.ts";
-import { PHASE_NAMES, declarationText } from "../../duel/text.ts";
+import { PHASE_NAMES, coinCallText, declarationText } from "../../duel/text.ts";
 
 /** `me` = seat of the player on this machine ("You"); the other seat is "Opponent". */
 export function describeMessage(m: OcgMessage, text: DuelText, me: number): string | null {
@@ -45,6 +45,8 @@ export function describeMessage(m: OcgMessage, text: DuelText, me: number): stri
       if (m.to.location === OcgLocation.REMOVED) return `${name(m.card)} is banished`;
       return null;
     case OcgMessageType.HINT: {
+      const call = coinCallText(m.hint_type, m.hint);
+      if (call) return `${act(m.player, "call")} ${call}`;
       const what = declarationText(m.hint_type, m.hint, name);
       return what === null ? null : `${act(m.player, "declare")} ${what}`;
     }
