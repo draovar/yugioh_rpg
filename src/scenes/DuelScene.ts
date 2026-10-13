@@ -1209,6 +1209,16 @@ export class DuelScene extends Phaser.Scene {
         this.refreshFieldPick();
         return;
       }
+      case OcgMessageType.SORT_CARD:
+        // Big Eye: the cards come top-first; the one numbered 1 goes on top.
+        this.modal.sortCards({
+          title: title("Click the cards in their new order (1 = top)"),
+          codes: m.cards.map((c) => c.code),
+          onConfirm: (order) => this.answer({ type: OcgResponseType.SORT_CARD, order }),
+          onHover: (code) => this.showInfo(code),
+          onHoverEnd: () => this.hoverEnd(),
+        });
+        return;
       case OcgMessageType.SELECT_PLACE:
       case OcgMessageType.SELECT_DISFIELD:
         // For zone prompts the hint is the passcode of the card being placed, not a string id.

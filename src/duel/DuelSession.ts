@@ -7,6 +7,7 @@ import {
   OcgPosition,
   OcgProcessResult,
   OcgQueryFlags,
+  OcgResponseType,
   type OcgCardQueryInfo,
   type OcgCoreSync,
   type OcgDuelHandle,
@@ -205,6 +206,7 @@ export class DuelSession {
   }
 
   respond(response: OcgResponse): void {
+    if (response.type === OcgResponseType.SORT_CARD && response.order) response = { ...response, order: rawSortOrder(response.order) };
     this.core.duelSetResponse(this.handle, response);
   }
 
@@ -265,6 +267,15 @@ export class DuelSession {
   destroy(): void {
     this.core.destroyDuel(this.handle);
   }
+}
+
+/**
+ * ocgcore-wasm writes a SORT_CARD answer as `order.length` followed by the order, but the core reads the order bytes
+ * alone (so every real order came back as RETRY). Its encoder only reads `.length` and iterates the array, so this
+ * hands it an iterable whose `.length` is the first value: the bytes come out as exactly `order`.
+ */
+function rawSortOrder(order: number[]): number[] {
+  return { length: order[0], [Symbol.iterator]: () => order.slice(1)[Symbol.iterator]() } as unknown as number[];
 }
 
 /**

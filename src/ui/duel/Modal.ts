@@ -3,7 +3,7 @@
 import Phaser from "phaser";
 import type { CardDb } from "../../duel/cardData.ts";
 import { CardSearch, type NamedCard } from "../../duel/cardSearch.ts";
-import { FONT_CARD, FONT_UI, fit, measure, text } from "../pixel.ts";
+import { FONT_CARD, FONT_UI, INK, WHITE, fit, measure, text } from "../pixel.ts";
 import { LIST_BUTTON_H, makeListButton, type ListButton } from "../widgets.ts";
 import { CardSprite } from "./CardSprite.ts";
 import { CARD, INFO, INSET } from "./layout.ts";
@@ -179,6 +179,70 @@ export class Modal {
       root.add(img);
       root.add(makeListButton(s, colX + Math.round((colW - btnW) / 2), coinsTop + coin + 5, btnW, labels[i], () => pick(heads)));
     });
+  }
+
+  /**
+   * Putting cards in an order (SORT_CARD, e.g. Big Eye's top 5): the cards in a row, each click numbers the next
+   * card (1, 2, ...) with a badge on its top-right corner. RESET clears the numbers; CONFIRM (once every card has
+   * one) answers `order[i]` = the 0-based number of card i. Numbered cards stay raised; unnumbered ones lift a little
+   * on hover.
+   */
+  sortCards(opts: { title: string; codes: number[]; onConfirm: (order: number[]) => void; onHover?: (code: number) => void; onHoverEnd?: () => void }): void {
+    const s = this.scene;
+    const root = this.open();
+    const rim = INSET.board, pad = CARD_GAP;
+    const n = opts.codes.length;
+    const cardsW = n * PICK_PITCH_X - (PICK_PITCH_X - CARD.w);
+    const btnW = Math.max(44, ...["RESET", `CONFIRM ${n}/${n}`].map((l) => measure(s, FONT_UI, l) + 10));
+    const buttonsW = 2 * btnW + BTN_GAP;
+    const titleW = measure(s, FONT_UI, opts.title.toUpperCase()) + 1;
+    const w = Math.max(cardsW, buttonsW, titleW) <= innerWidth(STANDARD_W) ? STANDARD_W : WIDE_W;
+    const innerW = innerWidth(w);
+    const title = text(s, 0, 0, opts.title.toUpperCase(), { color: THEME.panel.ink, maxWidth: innerW }).setCenterAlign();
+    const h = rim + pad + title.height + 3 + SELECTED_LIFT + CARD.h + 5 + LIST_BUTTON_H + pad + rim;
+    const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
+    const innerX = left + rim + pad;
+    root.add(board(s, left, top, w, h));
+    title.setPosition(Math.round(innerX + (innerW - title.width) / 2), top + rim + pad);
+    root.add(title);
+
+    /** Click number of each card (0-based), -1 while it has none. */
+    const order: number[] = opts.codes.map(() => -1);
+    let next = 0;
+    const cardsTop = title.y + title.height + 3 + SELECTED_LIFT;
+    const rowLeft = innerX + Math.round((innerW - cardsW) / 2);
+    const by = cardsTop + CARD.h + 5;
+    const bx = Math.round(innerX + (innerW - buttonsW) / 2);
+    const confirm = makeListButton(s, bx + btnW + BTN_GAP, by, btnW, "", () => { this.close(); opts.onConfirm([...order]); });
+    const items = opts.codes.map((code, i) => {
+      const x = rowLeft + i * PICK_PITCH_X + CARD.w / 2, y = cardsTop + CARD.h / 2;
+      const sp = new CardSprite(s, x, y).show(code, this.cards.records.get(code)).setInteractive({ useHandCursor: true });
+      // The number badge, like the board's counters: white on black at the card's top-right corner.
+      const label = text(s, 0, 0, "", { color: WHITE });
+      const box = s.add.rectangle(0, 0, 0, 7, INK).setOrigin(0);
+      return { sp, x, y, label, box };
+    });
+    const refresh = (hovered = -1) => {
+      items.forEach(({ sp, x, y, label, box }, i) => {
+        const numbered = order[i] >= 0;
+        sp.y = y - (numbered ? SELECTED_LIFT : i === hovered ? HOVER_LIFT : 0);
+        label.setText(numbered ? String(order[i] + 1) : "");
+        const bw = label.width + 4, right = x + CARD.w / 2, bTop = Math.round(sp.y - CARD.h / 2);
+        box.setSize(bw, 7).setPosition(right - bw, bTop).setVisible(numbered);
+        label.setPosition(right - bw + 2, bTop + 1).setVisible(numbered);
+      });
+      confirm.setEnabled(next === n);
+      confirm.setLabel(`CONFIRM ${next}/${n}`);
+    };
+    items.forEach(({ sp, label, box }, i) => {
+      sp.on("pointerover", () => { opts.onHover?.(opts.codes[i]); refresh(i); });
+      sp.on("pointerout", () => { opts.onHoverEnd?.(); refresh(); });
+      sp.on("pointerup", () => { if (order[i] < 0) { order[i] = next++; refresh(); } });
+      root.add([sp, box, label]);
+    });
+    root.add(makeListButton(s, bx, by, btnW, "RESET", () => { order.fill(-1); next = 0; refresh(); }));
+    root.add(confirm);
+    refresh();
   }
 
   /**

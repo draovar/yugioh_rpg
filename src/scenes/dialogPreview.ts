@@ -59,6 +59,10 @@ const PREVIEWS: Preview[] = [
     run: (h) => h.prompt(msg({ type: OcgMessageType.SELECT_OPTION, options: [60n, 61n] }), null),
   },
   {
+    label: "#17 Sort cards (Big Eye: top 5 of the Deck)",
+    run: (h) => h.prompt(msg({ type: OcgMessageType.SORT_CARD, cards: [POT, RAIGEKI, SANGAN, MIRROR_FORCE, BLUE_EYES].map((code, i) => loc(code, OcgLocation.DECK, 30 - i)) }), null),
+  },
+  {
     label: "#5 Choose an option (long)",
     run: (h) => h.prompt(msg({ type: OcgMessageType.SELECT_OPTION, options: [stringId(RAIGEKI, 0), 94n, 98n, 222n] }), 555n),
   },

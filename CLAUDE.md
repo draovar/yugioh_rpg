@@ -84,7 +84,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   Phaser's global key capture while it exists; the engine's HINT after each one is logged ("You declare
   DARK") and the opponent's declarations pause the duel on a "YOUR OPPONENT DECLARED: …" OK dialog (text only;
   `AnimHost.notice`). Removing counters (`SELECT_COUNTER`) is picked on the board like tributes (`fieldPick.counters`: one counter per
-  click, badges count down). Rare prompts (sort, RPS) are still auto-answered by `autoBot`.
+  click, badges count down). Ordering cards (`SORT_CARD`, Big Eye) = `Modal.sortCards`: click the cards in order, number
+  badges, RESET / CONFIRM; ocgcore-wasm's encoder adds a length byte the core doesn't expect, worked around in
+  `DuelSession.respond` (`rawSortOrder`). Rare prompts (`SORT_CHAIN`, RPS) are still auto-answered by `autoBot`.
 - `src/ui/` — `pixel.ts` (bitmap text, crisp 1px borders), `widgets.ts` (buttons), `duel/` (CardSprite, Modal,
   layout geometry, log text, DuelAnimator).
   Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
@@ -205,8 +207,8 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ Animation review pass (#1-#12 reviewed with the user; `&anims` dropdown replays each).
    ✅ Runewood card action menu (on the card) and prompt dialogs.
    ✅ Runewood card pickers; the turn banner stays as it is (owner's choice). Later: chain-link display, deck search UX, sound.
-   ✅ Counter removal on the board, counters per kind in the info panel.
-   Auto-answered prompts (SORT_CARD/CHAIN, RPS) wait until a card batch
+   ✅ Counter removal on the board, counters per kind in the info panel. ✅ Card ordering dialog (Big Eye, `&setup=sort`).
+   Auto-answered prompts (SORT_CHAIN, RPS) wait until a card batch
    needs them (none came up in 150 bot duels with the current pool).
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
    ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).

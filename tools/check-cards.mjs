@@ -12,7 +12,7 @@ const pool = new Set(JSON.parse(readFileSync(path.join(ROOT, "data/pool.json"), 
 /** What each mechanic means for the game today. Update as the UI catches up. */
 const MECHANICS = [
   { key: "declare", test: /Announce(Card|Number|Race|Attribute|Level|Type)/, status: "works: Type / Attribute / number dialogs, card-name picker" },
-  { key: "sort", test: /SortDeck(top|bottom)/, status: "UI missing: the random bot sorts for you" },
+  { key: "sort", test: /SortDeck(top|bottom)/, status: "works: click-to-number ordering dialog" },
   { key: "rps", test: /RockPaperScissors/, status: "UI missing: the random bot picks for you" },
   { key: "counter", test: /AddCounter|EnableCounterPermit/, status: "works; total shown as a number badge (kinds not told apart)" },
   { key: "equip", test: /Duel\.Equip|EFFECT_EQUIP|aux\.AddEquipProcedure/, status: "works; hover shows the equip link (Equip Spell icon on the partner card)" },

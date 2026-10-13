@@ -45,6 +45,7 @@ picker dialog when a choice is in the Graveyard, Deck, etc. Try the board versio
 | 12 | Sum selection (`SELECT_SUM`) | Cards with VALUE captions, CONFIRM sum/target | Runewood | Ritual summons; no ritual cards in this pool | [ ] |
 | 13 | Graveyard browser | YOUR / OPPONENT'S Graveyard (newest first, no names), then BANISHED; CLOSE | Runewood | Click a Graveyard pile | [ ] |
 | 13b | Extra Deck browser | YOUR Extra Deck; CLOSE (the opponent's isn't clickable) | Runewood | `&deck=kaiba`, click your Extra Deck | [ ] |
+| 17 | Order cards (`SORT_CARD`) | Cards in a row (top of the Deck first); each click numbers the next card (badge, card raised), RESET / CONFIRM n/total; 1 goes on top | Runewood | `&setup=sort`: Flip Summon Big Eye (TO ATK) | [ ] |
 | 19b | Declare a card name (`ANNOUNCE_CARD`) | Search dialog (`Modal.search`): text field + match count, best 8 matches as rows, Up/Down + Enter or click; tapping the field opens a phone keyboard | Runewood | `&setup=declare`: Mind Crush | [ ] |
 
 ## Field prompts
@@ -62,5 +63,5 @@ Declarations (#18, #19) have their UI now (see above); the bot picks a legal car
 
 | # | Prompt | Would need |
 |---|---|---|
-| 17 | `SORT_CARD`, `SORT_CHAIN` | Ordering list |
+| 17b | `SORT_CHAIN` | Ordering list (could reuse #17's dialog) |
 | 20 | `ROCK_PAPER_SCISSORS` | RPS buttons |
