@@ -156,7 +156,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   a loss outside the engine; in a peer-to-peer duel a "surrender" packet makes the opponent win). The same squash flip turns set Spells/Traps face-up (`T.flip`).
 - Prompt dialogs (`Modal.dialog`): info-panel wood board, message as plain text, list-row buttons (`makeListButton`
   in `widgets.ts`, shared with the card menu). With a card: card (2x) left, text top-right wrapped to the button
-  grid's width, buttons bottom-right; otherwise text over buttons. Boards are 240px wide (408 for 6+ cards).
+  grid's width, buttons centred under it at the bottom; otherwise text over buttons. Boards are 240px wide (408 for 6+ cards).
 - Card choices (`pickCards` in DuelScene): SELECT_CARD / TRIBUTE / UNSELECT_CARD are picked on the board when
   every candidate is a field/hand card (yellow 1px outline = choice, orange 2px = picked; `PICK_COLOR`), else in the
   `Modal.picker` dialog. The prompt text is centred in the field strip (`setPrompt`); CONFIRM / CANCEL / FINISH

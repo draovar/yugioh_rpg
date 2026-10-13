@@ -134,12 +134,12 @@ export class Modal {
     // Centred in the column, each wrapped line too.
     body.setCenterAlign().setPosition(Math.round(colX + (colW - body.width) / 2), contentTop + 2);
     root.add(body);
-    // With a card the buttons sit at the bottom of the column, left-aligned; otherwise right under the text.
+    // Each row of buttons centred in the column. With a card they sit at its bottom, otherwise right under the text.
     const by = code ? contentTop + contentH - grid.h : contentTop + textH;
     buttons.forEach((b, i) => {
       const row = Math.floor(i / grid.perRow), col = i % grid.perRow;
       const n = Math.min(grid.perRow, buttons.length - row * grid.perRow);
-      const rowLeft = code ? colX : Math.round(colX + (colW - (n * (grid.w + BTN_GAP) - BTN_GAP)) / 2);
+      const rowLeft = Math.round(colX + (colW - (n * (grid.w + BTN_GAP) - BTN_GAP)) / 2);
       const label = fit(s, FONT_UI, b.label.toUpperCase(), grid.w - 6); // very long options get cut
       root.add(makeListButton(s, rowLeft + col * (grid.w + BTN_GAP), by + row * (LIST_BUTTON_H + BTN_GAP), grid.w, label,
         () => { this.close(); b.onClick(); }));
