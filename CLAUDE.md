@@ -201,7 +201,9 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ 640x360 pixel-art duel screen from the layout sketch, custom frames, downscaled art, bitmap fonts.
    ✅ Animation review pass (#1-#12 reviewed with the user; `&anims` dropdown replays each).
    ✅ Runewood card action menu (on the card) and prompt dialogs.
-   Next: Runewood card pickers (and turn banner?). Later: chain-link display, deck search UX, sound.
+   ✅ Runewood card pickers; the turn banner stays as it is (owner's choice). Later: chain-link display, deck search UX, sound.
+   Auto-answered prompts (SELECT_COUNTER, SORT_CARD/CHAIN, RPS) and per-kind counter badges wait until a card batch
+   needs them (none came up in 150 bot duels with the current pool).
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
    ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
