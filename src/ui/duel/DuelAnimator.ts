@@ -56,7 +56,7 @@ export const DICE_SHEET = "dice";
  * no in-between scales or angles. Faces swap instantly, rotations snap. Exception: a set Spell/Trap
  * flipping up to activate squashes to its centre line and opens on its face (like the card action menu).
  */
-const T = {
+export const T = {
   /** Card flying between zones / to the hand / to the GY. */
   move: 320,
   /** Each drawn card's flight from the deck, and the delay between consecutive cards. */

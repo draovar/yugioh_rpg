@@ -15,6 +15,7 @@ import { loadEngine, type Engine } from "../duel/loadEngine.ts";
 import { DuelSession, counterTotal, type CardView, type CounterView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { DECKS } from "../duel/decks.ts";
+import { aiRpsOpponent } from "../duel/rps.ts";
 import { CHAIN_MODES, chainMode, setChainMode } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
 import { autoRespond, declarableCards, freePlaces } from "../duel/autoBot.ts";
@@ -26,6 +27,7 @@ import {
 import { INFO_DEPTH, Modal, type PickerOptions } from "../ui/duel/Modal.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
+import { RpsIntro } from "../ui/duel/RpsIntro.ts";
 import { CardMenu } from "../ui/duel/CardMenu.ts";
 import { drawField } from "../ui/duel/field.ts";
 import { CARD, FIELD, FIELD_CENTER, INFO, INSET, PHASE_COL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
@@ -48,8 +50,10 @@ export interface DuelSceneData {
   seed?: number;
   /** Scene to return to when the duel ends. */
   returnScene?: string;
-  /** Dev: name of a test board from devSetups.ts (`&setup=tribute`), placed before the duel starts. */
+  /** Dev: name of a test board from devSetups.ts (`&setup=tribute`), placed before the duel starts (you go first). */
   setup?: string;
+  /** Skips rock-paper-scissors: whether you go first (dev URLs, replays). */
+  goFirst?: boolean;
   /** Peer-to-peer duel against a player on another machine (decks come from the handshake). */
   net?: NetDuel;
 }
@@ -189,7 +193,7 @@ export class DuelScene extends Phaser.Scene {
 
   init(data: DuelSceneData) {
     this.sceneData = data ?? {};
-    this.me = data?.net?.me ?? 0;
+    this.me = 0; // until rock-paper-scissors decides
     this.ended = false;
     this.sprites.clear();
     this.actions.clear();
@@ -217,10 +221,11 @@ export class DuelScene extends Phaser.Scene {
 
     this.drawStaticBoard();
     this.board = this.add.container(0, 0);
+    const scene = this;
     this.animator = new DuelAnimator({
       scene: this,
       cards,
-      me: this.me,
+      get me() { return scene.me; },
       sprites: this.sprites,
       board: this.board,
       handCount: this.handCount,
@@ -248,12 +253,29 @@ export class DuelScene extends Phaser.Scene {
     });
 
     const net = this.sceneData.net;
-    const decks: [Deck, Deck] = net
-      ? net.decks
-      : withDevSetup([this.sceneData.playerDeck ?? DECKS.yugi.deck, this.sceneData.opponentDeck ?? DECKS.kaiba.deck], this.sceneData.setup);
+    let session: DuelSession | null = null;
+    net?.onClose(() => this.stopDuel("Your opponent left the duel."));
+    net?.onSurrender(() => this.stopDuel("Your opponent forfeited. You win the duel!", true));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (session) {
+        this.controller.stop();
+        session.destroy();
+      }
+      net?.close();
+    });
+    // Debug handle for the browser console (dev builds only).
+    if (import.meta.env.DEV) (window as unknown as { duelScene: DuelScene }).duelScene = this;
+
+    // Seat 0 goes first: rock-paper-scissors decides who takes it.
+    this.me = (await this.decideFirst()) ? 0 : 1;
+    if (this.ended) return;
+    const mine = net ? net.deck : this.sceneData.playerDeck ?? DECKS.yugi.deck;
+    const theirs = net ? net.opponentDeck : this.sceneData.opponentDeck ?? DECKS.kaiba.deck;
+    const bySeat: [Deck, Deck] = this.me === 0 ? [mine, theirs] : [theirs, mine];
+    const decks = net ? bySeat : withDevSetup(bySeat, this.sceneData.setup);
     const seed = net ? net.seed
       : this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as [bigint, bigint, bigint, bigint]) : undefined;
-    const session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
+    session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
     this.controller = new DuelController({
       session,
       me: this.me,
@@ -271,15 +293,6 @@ export class DuelScene extends Phaser.Scene {
         onError: (message) => this.stopDuel(`${message} The duel can't continue.`),
       },
     });
-    net?.onClose(() => this.stopDuel("Your opponent left the duel."));
-    net?.onSurrender(() => this.stopDuel("Your opponent forfeited. You win the duel!", true));
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      this.controller.stop();
-      session.destroy();
-      net?.close();
-    });
-    // Debug handle for the browser console (dev builds only).
-    if (import.meta.env.DEV) (window as unknown as { duelScene: DuelScene }).duelScene = this;
     this.controller.start();
     // Dev: `&anims` adds a dropdown to replay single animations (see animPreview.ts).
     if (import.meta.env.DEV && new URLSearchParams(location.search).has("anims")) {
@@ -295,6 +308,29 @@ export class DuelScene extends Phaser.Scene {
         graveyard: (side, codes, banished) => this.previewPrompt(() => this.browsePile(side, codes.map((code) => ({ code }) as CardView), banished.map((code) => ({ code }) as CardView))),
       });
     }
+  }
+
+  /**
+   * Whether you go first: rock-paper-scissors on the board (vs the AI or the other player), unless the scene data
+   * fixes it (`goFirst`; a dev setup board is always yours to start).
+   */
+  private async decideFirst(): Promise<boolean> {
+    const d = this.sceneData;
+    if (d.setup && !d.net) return true;
+    if (d.goFirst !== undefined && !d.net) return d.goFirst;
+    const rps = new RpsIntro({
+      scene: this,
+      opponent: d.net?.rps ?? aiRpsOpponent((ms, fn) => this.time.delayedCall(ms, fn)),
+      speed: () => this.animator.speed,
+      prompt: (label) => void this.setPrompt(label),
+      ask: (message, buttons) => new Promise((resolve) => {
+        this.modal.dialog(message, buttons.map((label, i) => ({ label, onClick: () => resolve(i) })));
+      }),
+      log: (line) => this.log(line),
+      active: () => !this.ended,
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => rps.destroy());
+    return rps.run();
   }
 
   // ---------------------------------------------------------------- static layout
@@ -649,7 +685,7 @@ export class DuelScene extends Phaser.Scene {
   private stopDuel(message: string, won?: boolean) {
     if (this.ended) return;
     this.ended = true;
-    this.controller.stop();
+    this.controller?.stop(); // none yet during rock-paper-scissors
     this.modal.close();
     this.clearInteraction();
     const duelResult = won === undefined ? undefined : { won };

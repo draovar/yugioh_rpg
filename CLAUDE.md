@@ -40,6 +40,7 @@ Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations
 logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`);
 `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
 `&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`; default Yugi vs Kaiba),
+`&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `equip`, `coin`, `confiscation`; cards placed in hand/on the field first),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
@@ -63,17 +64,22 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   - `autoBot.ts` — always-legal dumb responder (tests, placeholder AI). `freePlaces()` decodes SELECT_PLACE masks.
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names.
   - `decks.ts` — prebuilt decks until the deck editor exists (`yugi`, `kaiba`, `goat` + Extra Decks), `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
+  - `rps.ts` — rock-paper-scissors before each duel (`rpsWinner`, `RpsOpponent`: the AI picks at random and goes
+    first when it wins; peer-to-peer via `NetDuel.rps`). The winner picks first/second, which sets the seats (seat 0 goes first).
   - `loadEngine.ts` — browser only: fetches `public/data/*.json`, inits core once.
 - `src/net/` — browser-only networking, no Phaser. `p2p.ts`: PeerJS (WebRTC) rooms; the host opens `ygorpg-<CODE>` on
   PeerJS's free public server, the guest connects, handshake checks `PROTOCOL` + `Engine.fingerprint` (hash of the card
   data and scripts), each side sends its deck as a passcode list (checked with `deckProblems`), the host sends the
-  seed and its random seat. Pings every 3 s; 20 s of silence or a "bye" =
+  seed; then rock-paper-scissors packets (`rps` hands, the winner's `order`) decide the seats. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; bottom bar: deck choice
   saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; THEME buttons (switch in place);
   MULTIPLAYER button / M key) → `Duel` (`DuelScene`,
   takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
+  Before the engine starts, `DuelScene.decideFirst` plays rock-paper-scissors on the board (`src/ui/duel/RpsIntro.ts`:
+  both draw ROCK/PAPER/SCISSORS, set one face-down in the middle Monster Zone, both flip, the loser's card flashes red,
+  the winner gets a FIRST/SECOND dialog; a draw replays); `me` is only known after it.
   `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
   card action menus (idle/battle), zone highlights (place), and `Modal` dialogs/card pickers for everything else.
   Calling a coin (`SELECT_OPTION` between system strings 60/61) gets `Modal.coinCall` (the two coin faces); the call
@@ -125,6 +131,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   name bar (2,2) 34x5, stars y 7-10, art window 32x32 at (3,12), bottom bar (2,46) 34x8. Back: `back.png`.
   Coin toss / die roll sprites (not themed): `public/assets/duel/coin_flip.png` (8 frames 32x32, loop; heads = frame 0,
   tails = 4) and `dice.png` (6 frames 16x16, faces 1-6), played at 2x mid-field by `DuelAnimator.toss`.
+  Rock-paper-scissors art: `public/assets/duel/rps.png` (3 frames 32x32: rock, paper, scissors; drawn by the user),
+  shown in the token frame via `CardSprite.showPlain`.
   `attributes.png` = 7 16x16 icons: DARK EARTH FIRE LIGHT WATER WIND DIVINE.
   Equip links (`CardView.equipTarget`, from the EQUIP_CARD query): hovering an equip card or an equipped monster shows
   the semi-transparent Equip Spell icon (`spells.png` #2) over the partner card's art (`CardSprite.setEquipMark`).
@@ -212,6 +220,7 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    needs them (none came up in 150 bot duels with the current pool).
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
    ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).
+   ✅ Rock-paper-scissors before each duel (cards on the board); the winner chooses to go first or second.
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.

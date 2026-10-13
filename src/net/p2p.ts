@@ -2,19 +2,21 @@
 // connects to it. PeerJS's free public server only introduces the two browsers; the duel's data then
 // goes directly between them. Browser only (no Phaser).
 //
-// Handshake: guest -> "hello" (protocol, data fingerprint, its deck), host -> "start" (duel seed, which seat the
-// host plays, its deck) or "reject". Decks travel as passcode lists, not names, so both machines build the duel
-// from exactly the same cards. After that both sides send "answer" packets (see DuelController), a "ping"
-// every few seconds, "surrender" when a player forfeits, and "bye" when leaving. WebRTC itself takes very long
+// Handshake: guest -> "hello" (protocol, data fingerprint, its deck), host -> "start" (duel seed, its deck) or
+// "reject". Decks travel as passcode lists, not names, so both machines build the duel from exactly the same cards.
+// Then rock-paper-scissors: each side sends its "rps" hand every round until one wins, and the winner sends
+// "order" (whether it goes first), which sets the seats. After that both sides send "answer" packets (see
+// DuelController), a "ping" every few seconds, "surrender" when a player forfeits, and "bye" when leaving. WebRTC itself takes very long
 // (or forever) to notice a closed tab, so silence for HEARTBEAT.timeoutMs also counts as the other player leaving.
 import { Peer, type DataConnection, type PeerError } from "peerjs";
 import type { OcgResponse } from "ocgcore-wasm";
 import type { RemotePeer } from "../duel/DuelController.ts";
 import type { Deck } from "../duel/DuelSession.ts";
+import type { RpsHand, RpsOpponent } from "../duel/rps.ts";
 import { decodeResponse, encodeResponse } from "./wire.ts";
 
 /** Bump when the packets or anything else that changes how a duel plays out on both machines changes. */
-const PROTOCOL = 2;
+const PROTOCOL = 3;
 /** PeerJS ids are global on its public server; the prefix keeps our rooms apart from other apps'. */
 const ID_PREFIX = "ygorpg-";
 /** Room codes: letters only, without the ones the tiny5 font draws like a digit or each other (B/8, I/1, L, O/0, S/5, Z/2). */
@@ -29,8 +31,11 @@ type Seed = [bigint, bigint, bigint, bigint];
 
 type Packet =
   | { t: "hello"; protocol: number; fingerprint: number; deck: Deck }
-  | { t: "start"; seed: string[]; hostSeat: 0 | 1; deck: Deck }
+  | { t: "start"; seed: string[]; deck: Deck }
   | { t: "reject"; reason: string }
+  | { t: "rps"; hand: RpsHand }
+  /** The sender won rock-paper-scissors and goes first (or second). */
+  | { t: "order"; first: boolean }
   | { t: "answer"; response: string; checksum: number }
   | { t: "ping" }
   | { t: "surrender" }
@@ -38,11 +43,12 @@ type Packet =
 
 /** A connected peer-to-peer duel, ready to hand to the Duel scene. */
 export interface NetDuel {
-  /** Seat this machine plays (0 goes first). */
-  me: 0 | 1;
   seed: Seed;
-  /** Both players' decks, by seat. */
-  decks: [Deck, Deck];
+  /** This machine's deck and the other player's. The seats (who goes first) come from rock-paper-scissors. */
+  deck: Deck;
+  opponentDeck: Deck;
+  /** Rock-paper-scissors against the other player, before the duel. */
+  rps: RpsOpponent;
   remote: RemotePeer;
   /** Called once when the connection drops (the other player left or the network failed). */
   onClose(handler: () => void): void;
@@ -94,10 +100,8 @@ export function hostDuel(entry: DuelEntry, onCode: (code: string) => void): Pend
           if (problems.length) return refuse(`The host's game refused your deck: ${problems.join(", ")}.`);
           taken = true;
           const seed = randomSeed();
-          const hostSeat = (crypto.getRandomValues(new Uint8Array(1))[0] & 1) as 0 | 1;
-          send(conn, { t: "start", seed: seed.map(String), hostSeat, deck: entry.deck });
-          const decks = (hostSeat === 0 ? [entry.deck, hello.deck] : [hello.deck, entry.deck]) as [Deck, Deck];
-          resolve(link(p, conn, hostSeat, seed, decks));
+          send(conn, { t: "start", seed: seed.map(String), deck: entry.deck });
+          resolve(link(p, conn, seed, entry.deck, hello.deck));
         });
       });
     };
@@ -123,9 +127,7 @@ export function joinDuel(code: string, entry: DuelEntry): PendingDuel {
         const problems = entry.deckProblems(p.deck);
         if (problems.length) { conn.close(); return fail(`The host's deck isn't valid here: ${problems.join(", ")}.`); }
         clearTimeout(timer);
-        const me = (1 - p.hostSeat) as 0 | 1;
-        const decks = (me === 0 ? [entry.deck, p.deck] : [p.deck, entry.deck]) as [Deck, Deck];
-        resolve(link(peer, conn, me, p.seed.map(BigInt) as Seed, decks));
+        resolve(link(peer, conn, p.seed.map(BigInt) as Seed, entry.deck, p.deck));
       });
     });
   });
@@ -133,7 +135,9 @@ export function joinDuel(code: string, entry: DuelEntry): PendingDuel {
 }
 
 /** Wraps an open connection as the duel's RemotePeer. Answers that arrive before the duel listens are kept. */
-function link(peer: Peer, conn: DataConnection, me: 0 | 1, seed: Seed, decks: [Deck, Deck]): NetDuel {
+function link(peer: Peer, conn: DataConnection, seed: Seed, deck: Deck, opponentDeck: Deck): NetDuel {
+  const hands = inbox<RpsHand>();
+  const order = inbox<boolean>();
   let onAnswer: ((response: OcgResponse, checksum: number) => void) | null = null;
   const early: [OcgResponse, number][] = [];
   let onClose: (() => void) | null = null;
@@ -166,6 +170,8 @@ function link(peer: Peer, conn: DataConnection, me: 0 | 1, seed: Seed, decks: [D
       surrendered = true;
       return onSurrender?.();
     }
+    if (p?.t === "rps") return hands.push(p.hand);
+    if (p?.t === "order") return order.push(p.first);
     if (p?.t !== "answer") return;
     const response = decodeResponse(p.response);
     if (onAnswer) onAnswer(response, p.checksum);
@@ -174,9 +180,17 @@ function link(peer: Peer, conn: DataConnection, me: 0 | 1, seed: Seed, decks: [D
   conn.on("close", gone);
   conn.on("error", gone);
   return {
-    me,
     seed,
-    decks,
+    deck,
+    opponentDeck,
+    // A plain exchange, no commitment: a modified client could wait for our hand before picking, but lockstep
+    // duels already trust both machines (each one runs the whole duel, hidden cards included).
+    rps: {
+      nextHand: hands.next,
+      sendHand: (hand) => send(conn, { t: "rps", hand }),
+      order: order.next,
+      sendOrder: (meFirst) => send(conn, { t: "order", first: meFirst }),
+    },
     remote: {
       send: (response, checksum) => send(conn, { t: "answer", response: encodeResponse(response), checksum }),
       onResponse: (handler) => {
@@ -200,6 +214,20 @@ function link(peer: Peer, conn: DataConnection, me: 0 | 1, seed: Seed, decks: [D
       conn.close({ flush: true });
       setTimeout(() => peer.destroy(), 1_000);
     },
+  };
+}
+
+/** Values received in order; `next()` takes the oldest, waiting for one if none has arrived yet. */
+function inbox<T>(): { push(value: T): void; next(): Promise<T> } {
+  const values: T[] = [];
+  const waiting: ((value: T) => void)[] = [];
+  return {
+    push: (value) => {
+      const w = waiting.shift();
+      if (w) w(value);
+      else values.push(value);
+    },
+    next: () => (values.length ? Promise.resolve(values.shift()!) : new Promise((resolve) => waiting.push(resolve))),
   };
 }
 

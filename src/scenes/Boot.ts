@@ -3,6 +3,7 @@ import { deckByName } from "../duel/decks.ts";
 import { loadEngine } from "../duel/loadEngine.ts";
 import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, FRAMES, SPELL_SHEET, frameKey } from "../ui/duel/CardSprite.ts";
 import { COIN_SHEET, DICE_SHEET } from "../ui/duel/DuelAnimator.ts";
+import { RPS_SHEET } from "../ui/duel/RpsIntro.ts";
 import { FONT_CARD, FONT_UI, WHITE, text } from "../ui/pixel.ts";
 import { loadThemeSprites } from "../ui/theme.ts";
 
@@ -20,6 +21,7 @@ export class Boot extends Phaser.Scene {
     this.load.spritesheet(SPELL_SHEET, "assets/cards/spells.png", { frameWidth: 16, frameHeight: 16 });
     this.load.spritesheet(COIN_SHEET, "assets/duel/coin_flip.png", { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(DICE_SHEET, "assets/duel/dice.png", { frameWidth: 16, frameHeight: 16 });
+    this.load.spritesheet(RPS_SHEET, "assets/duel/rps.png", { frameWidth: 32, frameHeight: 32 });
     loadThemeSprites(this.load);
     // Built by `npm run build-art`; cards without art fall back to a grey box.
     this.load.atlas(ART_ATLAS, "cards/art32.png", "cards/art32.json");
@@ -31,11 +33,14 @@ export class Boot extends Phaser.Scene {
     loadEngine()
       .then(() => {
         // Dev shortcut: /?duel jumps straight into a duel; &lp=1000 for a short one, &seed=N to replay one,
-        // &setup=NAME to start from a test board (devSetups.ts), &deck=NAME / &opp=NAME pick the decks (decks.ts).
+        // &setup=NAME to start from a test board (devSetups.ts), &deck=NAME / &opp=NAME pick the decks (decks.ts),
+        // &first=you / &first=opp skip rock-paper-scissors (a replay with &seed goes first unless &first=opp).
         const params = new URLSearchParams(location.search);
         const lp = Number(params.get("lp")) || undefined;
         const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
         const setup = params.get("setup") ?? undefined;
+        const first = params.get("first");
+        const goFirst = first === "opp" ? false : first === "you" || seed !== undefined ? true : undefined;
         // Invite link from a multiplayer host: ?join=CODE (dropped from the address so a reload doesn't rejoin).
         const join = params.get("join");
         if (join) {
@@ -45,7 +50,7 @@ export class Boot extends Phaser.Scene {
         } else if (params.has("mp")) this.scene.start("Lobby");
         else if (params.has("duel")) {
           this.scene.start("Duel", {
-            opponentName: "Test Opponent", startingLP: lp, seed, setup,
+            opponentName: "Test Opponent", startingLP: lp, seed, setup, goFirst,
             playerDeck: deckByName(params.get("deck"), "yugi"), opponentDeck: deckByName(params.get("opp"), "kaiba"),
           });
         }

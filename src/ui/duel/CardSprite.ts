@@ -107,6 +107,20 @@ export class CardSprite extends Phaser.GameObjects.Container {
     return this;
   }
 
+  /** A card that isn't in the card database (e.g. rock-paper-scissors): a frame, 32x32 art and a name. */
+  showPlain(frame: (typeof FRAMES)[number], art: { key: string; frame: number }, name: string): this {
+    for (const p of this.parts) p.destroy();
+    this.code = 0;
+    const sc = this.scene;
+    this.parts = [
+      sc.add.image(0, 0, frameKey(frame)),
+      sc.add.image(LEFT + 3, TOP + 12, art.key, art.frame).setOrigin(0),
+      text(sc, LEFT + 3, TOP + 3, fit(sc, FONT_CARD, name.toUpperCase(), 32), { font: FONT_CARD }),
+    ];
+    this.addAt(this.parts, 0);
+    return this;
+  }
+
   private drawText(r: CardRecord, opts: ShowOptions, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T) {
     const sc = this.scene;
     const monster = (r.type & TYPE_MONSTER) !== 0;
