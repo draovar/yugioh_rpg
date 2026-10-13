@@ -519,12 +519,13 @@ export class DuelScene extends Phaser.Scene {
 
   /**
    * Marquee for long card names: wait, scroll left until the end is visible, pause, jump back to the
-   * start, pause, repeat. The name (text + shadow, `nameWidth` wide) is clipped to `width` by a geometry mask.
+   * start, pause, repeat. The name (text + shadow, `nameWidth` wide) is clipped to `width` by a Mask filter
+   * (Phaser 4; the mask rectangle is in world coordinates, so it stays put while the name scrolls).
    */
   private scrollName(name: Phaser.GameObjects.Container, nameWidth: number, width: number) {
     const mask = this.make.graphics({}, false);
     mask.fillStyle(0xffffff).fillRect(name.x, name.y - 1, width, 2 * 7 + 3);
-    name.setMask(mask.createGeometryMask());
+    name.enableFilters().filters!.internal.addMask(mask);
     const overflow = nameWidth - width;
     this.nameScroll = {
       mask,

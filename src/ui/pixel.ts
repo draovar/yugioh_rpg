@@ -22,9 +22,41 @@ export interface TextOptions {
   originY?: number;
 }
 
+/**
+ * Phaser 4 never rounds BitmapText glyphs to whole pixels (v3 did with `roundPixels`). A glyph at a half-pixel
+ * position (a centred line whose width differs from the longest by an odd number, text in a moving container)
+ * then samples the font texture on texel edges and breaks up. This submitter snaps each glyph's top-left corner
+ * to the pixel grid and moves the other corners by the same amount, exactly like v3.
+ */
+class GlyphSnapSubmitter extends Phaser.Renderer.WebGL.RenderNodes.SubmitterQuad {
+  static readonly NAME = "GlyphSnapSubmitter";
+
+  constructor(manager: Phaser.Renderer.WebGL.RenderNodes.RenderNodeManager) {
+    super(manager, { name: GlyphSnapSubmitter.NAME });
+  }
+
+  override run(...args: Parameters<Phaser.Renderer.WebGL.RenderNodes.SubmitterQuad["run"]>) {
+    const [context, , , , , transformer] = args;
+    const q = (transformer as { quad: Float32Array }).quad;
+    if (context.camera?.roundPixels) {
+      const dx = Math.round(q[0]) - q[0], dy = Math.round(q[1]) - q[1];
+      for (let i = 0; i < 8; i += 2) { q[i] += dx; q[i + 1] += dy; }
+    }
+    super.run(...args);
+  }
+}
+
+function snapGlyphs(t: Phaser.GameObjects.BitmapText) {
+  const nodes = (t.scene.sys.renderer as Partial<Phaser.Renderer.WebGL.WebGLRenderer>).renderNodes;
+  if (!nodes) return; // Canvas renderer
+  if (!nodes.hasNode(GlyphSnapSubmitter.NAME)) nodes.addNodeConstructor(GlyphSnapSubmitter.NAME, GlyphSnapSubmitter);
+  t.setRenderNodeRole("Submitter", GlyphSnapSubmitter.NAME);
+}
+
 export function text(scene: Phaser.Scene, x: number, y: number, str: string, o: TextOptions = {}): Phaser.GameObjects.BitmapText {
   const scale = o.scale ?? 1;
   const t = scene.add.bitmapText(x, y, o.font ?? FONT_UI, str).setTint(o.color ?? INK).setScale(scale);
+  snapGlyphs(t);
   if (o.maxWidth) t.setMaxWidth(Math.floor(o.maxWidth / scale));
   // Align via a rounded top-left corner instead of a fractional origin, so glyphs stay on whole pixels.
   t.setPosition(Math.round(x - t.width * (o.originX ?? 0)), Math.round(y - t.height * (o.originY ?? 0)));

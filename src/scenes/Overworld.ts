@@ -26,7 +26,10 @@ export class Overworld extends Phaser.Scene {
   }
 
   create() {
-    this.add.grid(320, 180, 640, 360, TILE, TILE, 0x1d3b1d, 1, 0x2a4f2a, 1);
+    // Ground, then 2px grid lines on the tile edges. (Phaser 4's Grid centres 1px strokes on the edges and its cell
+    // fills skip the top row, so the fill is a plain rectangle and the stroke is widened to v3's 2px look.)
+    this.add.rectangle(0, 0, 640, 360, 0x1d3b1d).setOrigin(0);
+    this.add.grid(320, 180, 640, 360, TILE, TILE).setFillStyle().setStrokeStyle(2, 0x2a4f2a);
     this.player = this.add.rectangle(TILE * 10 + 8, TILE * 10 + 8, TILE - 2, TILE - 2, 0x4fa3ff);
     this.npc = this.add.rectangle(TILE * 20 + 8, TILE * 10 + 8, TILE - 2, TILE - 2, 0xff5555);
     text(this, 8, 8, "ARROW KEYS TO MOVE. WALK INTO THE RED DUELIST TO CHALLENGE THEM.", { color: WHITE });
