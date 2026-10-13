@@ -35,6 +35,9 @@ export const SPELL_KIND_ICON: [number, number][] = [
   [0x100000, 0], [0x10000, 1], [0x40000, 2], [0x80, 3], [0x80000, 4], [0x20000, 6],
 ];
 export const SPELL_NORMAL_ICON = 5;
+export const SPELL_EQUIP_ICON = 2;
+/** Opacity of the equip icon shown over a card's art while its equip partner is hovered. */
+const EQUIP_MARK_ALPHA = 0.5;
 
 /** Attribute bit -> index in attributes.png (DARK EARTH FIRE LIGHT WATER WIND DIVINE, then SPELL TRAP). */
 export const ATTRIBUTE_INDEX: Record<number, number> = { 0x20: 0, 0x01: 1, 0x04: 2, 0x10: 3, 0x02: 4, 0x08: 5, 0x40: 6 };
@@ -70,6 +73,7 @@ export class CardSprite extends Phaser.GameObjects.Container {
   code = 0;
   private parts: Phaser.GameObjects.GameObject[] = [];
   private outline: Phaser.GameObjects.Graphics;
+  private equipMark: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -129,6 +133,18 @@ export class CardSprite extends Phaser.GameObjects.Container {
     } else {
       add(text(sc, 0, TOP + 48, r.type & TYPE_SPELL ? "SPELL" : "TRAP", { font: FONT_UI, color: INK, originX: 0.5 }));
     }
+  }
+
+  /** Shows/hides the Equip Spell icon at 2x (32x32), covering the art window (the card's centre). */
+  setEquipMark(on: boolean): this {
+    if (on && !this.equipMark) {
+      this.equipMark = this.scene.add.image(0, 0, SPELL_SHEET, SPELL_EQUIP_ICON).setScale(2).setAlpha(EQUIP_MARK_ALPHA);
+      this.add(this.equipMark);
+    } else if (!on && this.equipMark) {
+      this.equipMark.destroy();
+      this.equipMark = null;
+    }
+    return this;
   }
 
   setHighlight(kind: CardHighlight): this {

@@ -61,6 +61,8 @@ interface CardAction {
 
 /** Button plate on the Extra Deck slot: as wide as fits left of the Spell/Trap zones; light counter text. */
 const BUTTON_PLATE_W = 56;
+/** System strings "Heads" / "Tails": the options of a coin call. */
+const COIN_HEADS_STRING = 60, COIN_TAILS_STRING = 61;
 const key = (controller: number, location: number, sequence: number) => `${controller}:${location}:${sequence}`;
 const locKey = (c: OcgCardLoc) => key(c.controller, c.location, c.sequence);
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
@@ -684,6 +686,7 @@ export class DuelScene extends Phaser.Scene {
       this.drawPile(s, { kind: "grave" }, p.grave.length, p.grave.at(-1) ?? null, [...p.grave].reverse(), p.banished);
       this.drawHand(s, p.hand);
     });
+    this.linkEquips(snap);
     this.applyHighlights();
   }
 
@@ -696,6 +699,30 @@ export class DuelScene extends Phaser.Scene {
       const badge = this.badge(at.x + (sideways ? CARD.h : CARD.w) / 2, at.y - (sideways ? CARD.w : CARD.h) / 2, String(c.counters), 1);
       this.counterBadges.push(badge);
       this.board.add(badge);
+    }
+  }
+
+  /**
+   * Hovering an equip card marks the monster it's equipped to with the Equip Spell icon, and hovering an
+   * equipped monster marks its equip cards.
+   */
+  private linkEquips(snap: FieldSnapshot) {
+    const partners = new Map<CardSprite, CardSprite[]>();
+    const link = (a: CardSprite, b: CardSprite) => partners.set(a, [...(partners.get(a) ?? []), b]);
+    for (const p of snap.players) {
+      for (const c of [...p.monsters, ...p.spells]) {
+        if (!c?.equipTarget) continue;
+        const t = c.equipTarget;
+        const equip = this.sprites.get(key(c.controller, c.location, c.sequence));
+        const target = this.sprites.get(key(t.controller, t.location, t.sequence));
+        if (!equip || !target) continue;
+        link(equip, target);
+        link(target, equip);
+      }
+    }
+    for (const [sp, others] of partners) {
+      sp.on("pointerover", () => !this.animator.busy && others.forEach((o) => o.setEquipMark(true)));
+      sp.on("pointerout", () => others.forEach((o) => o.setEquipMark(false)));
     }
   }
 
@@ -981,11 +1008,19 @@ export class DuelScene extends Phaser.Scene {
       case OcgMessageType.SELECT_YESNO:
         this.yesNo(t.describe(m.description), (yes) => ({ type: OcgResponseType.SELECT_YESNO, yes }));
         return;
-      case OcgMessageType.SELECT_OPTION:
+      case OcgMessageType.SELECT_OPTION: {
+        // Calling a coin toss (Duel.AnnounceCoin) is an option prompt between system strings 60 / 61.
+        const heads = m.options.findIndex((o) => Number(o) === COIN_HEADS_STRING);
+        const tails = m.options.findIndex((o) => Number(o) === COIN_TAILS_STRING);
+        if (m.options.length === 2 && heads >= 0 && tails >= 0) {
+          this.modal.coinCall(title("Call the coin toss"), (h) => this.answer({ type: OcgResponseType.SELECT_OPTION, index: h ? heads : tails }));
+          return;
+        }
         this.modal.dialog(title("Choose an option").toUpperCase(), m.options.map((o, index) => ({
           label: t.describe(o).toUpperCase(), onClick: () => this.answer({ type: OcgResponseType.SELECT_OPTION, index }),
         })));
         return;
+      }
       case OcgMessageType.SELECT_POSITION: {
         const choices: [OcgPosition, string][] = [
           [OcgPosition.FACEUP_ATTACK, "ATTACK"], [OcgPosition.FACEDOWN_ATTACK, "FD ATTACK"],

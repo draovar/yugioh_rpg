@@ -48,6 +48,10 @@ export function describeMessage(m: OcgMessage, text: DuelText, me: number): stri
       const what = declarationText(m.hint_type, m.hint, name);
       return what === null ? null : `${act(m.player, "declare")} ${what}`;
     }
+    case OcgMessageType.TOSS_COIN:
+      return `${act(m.player, "toss")} ${m.results.length > 1 ? "coins" : "a coin"}: ${m.results.map((h) => (h ? "Heads" : "Tails")).join(", ")}`;
+    case OcgMessageType.TOSS_DICE:
+      return `${act(m.player, "roll")} ${m.results.length > 1 ? "dice" : "a die"}: ${m.results.join(", ")}`;
     case OcgMessageType.WIN:
       return m.player === me ? "You win the duel!" : "You lose the duel.";
     default:

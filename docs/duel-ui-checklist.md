@@ -22,6 +22,7 @@ To see any of #3–#14 without setting it up in a duel, open `/?duel&dialogs` an
 | 3 | Optional effect (`SELECT_EFFECTYN`) | Card at 2x, "Activate …?", YES / NO | Runewood | Optional trigger effects; rare in this pool | [ ] |
 | 4 | Yes/no question (`SELECT_YESNO`) | Question, YES / NO | Runewood | Card scripts asking a question; rare in this pool | [ ] |
 | 5 | Choose an option (`SELECT_OPTION`) | Title + one button per option (stacked if long) | Runewood | Cards with "choose one effect"; none certain in this pool | [ ] |
+| 5b | Call a coin toss (`SELECT_OPTION` with Heads / Tails) | Title over both coin faces (2x), HEADS / TAILS button under each; coins lift on hover | Runewood | `&setup=coin`: Time Wizard's effect | [ ] |
 | 6 | Battle position (`SELECT_POSITION`) | Card at 2x, ATTACK / FD ATTACK / DEFENSE / FD DEFENSE (only legal ones) | Runewood | Monster Reborn a monster | [ ] |
 | 7 | Duel over | YOU WIN / YOU LOST / DRAW, CONTINUE | Runewood | Finish a duel (`&lp=500` makes it quick) | [ ] |
 | 18 | Declare a Type / Attribute (`ANNOUNCE_RACE`, `ANNOUNCE_ATTRIB`) | One button per allowed Type / Attribute; several needed = one dialog per pick, "(1/2)" | Runewood | `&setup=declare`: Tribe-Infecting Virus, DNA Transplant | [ ] |

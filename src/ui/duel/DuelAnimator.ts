@@ -45,6 +45,12 @@ const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
 const ON_FIELD = OcgLocation.MZONE | OcgLocation.SZONE;
 const key = (l: Loc) => `${l.controller}:${l.location}:${l.sequence}`;
 
+/** Coin toss sheet: 8 frames 32x32, a looping flip; frame 0 = heads, 4 = tails. */
+export const COIN_SHEET = "coin-flip";
+const COIN_FRAMES = 8, COIN_HEADS = 0, COIN_TAILS = 4;
+/** Die sheet: 6 frames 16x16, faces 1..6 in order. */
+export const DICE_SHEET = "dice";
+
 /**
  * Timings (ms, at speed 1). Pixel-art style: quick, direct moves; no squash/stretch, no overshoot,
  * no in-between scales or angles. Faces swap instantly, rotations snap. Exception: a set Spell/Trap
@@ -82,6 +88,12 @@ const T = {
   lethalShake: 300,
   /** Turn banner on screen. */
   banner: 1100,
+  /** Coin toss / die roll: each frame while spinning, spin time (coin: minimum), then the result is held. */
+  coinFrame: 60,
+  diceFrame: 120,
+  coinSpin: 700,
+  diceSpin: 1000,
+  tossHold: 800,
 };
 const EASE = "Quad.easeOut";
 
@@ -224,6 +236,10 @@ export class DuelAnimator {
         return h.changeLP(m.player, h.lp(m.player) - m.amount, -m.amount);
       case OcgMessageType.RECOVER:
         return h.changeLP(m.player, h.lp(m.player) + m.amount, m.amount);
+      case OcgMessageType.TOSS_COIN:
+        return this.toss(m.results.map((heads) => (heads ? COIN_HEADS : COIN_TAILS)), COIN_SHEET);
+      case OcgMessageType.TOSS_DICE:
+        return this.toss(m.results.map((n) => n - 1), DICE_SHEET);
       case OcgMessageType.LPUPDATE:
         // LP set to a value (e.g. by an effect): show the difference like any other change.
         return h.changeLP(m.player, m.lp, m.lp - h.lp(m.player));
@@ -336,6 +352,39 @@ export class DuelAnimator {
     const big = new CardSprite(h.scene, FIELD_CENTER.x, FIELD_CENTER.y).show(code, h.cards.records.get(code)).setScale(2).setDepth(600);
     await this.wait(T.activateHold);
     big.destroy();
+  }
+
+  /**
+   * Coin tosses / die rolls in the middle of the field at 2x, side by side if several, over the dialogs' shade:
+   * the coin loops its flip, the die shows random faces, then each stops on its result (a frame index) and holds it.
+   */
+  private async toss(results: number[], sheet: string): Promise<void> {
+    if (!results.length) return;
+    const h = this.host;
+    const size = sheet === COIN_SHEET ? 64 : 32, pitch = size + 8;
+    const left = FIELD_CENTER.x - ((results.length - 1) * pitch) / 2;
+    const shade = h.scene.add.rectangle(0, 0, 640, 360, 0x000000, THEME.shadeAlpha).setOrigin(0).setDepth(599);
+    const sprites = results.map((_, i) => h.scene.add.image(Math.round(left + i * pitch), FIELD_CENTER.y, sheet, 0).setScale(2).setDepth(600));
+    const coin = sheet === COIN_SHEET;
+    const frame = coin ? T.coinFrame : T.diceFrame;
+    const steps = Math.ceil((coin ? T.coinSpin : T.diceSpin) / frame);
+    // The coin keeps flipping until it lands on its face; the die never shows the same face twice in a row.
+    const coinSteps = results.map((r) => steps + ((r - steps) % COIN_FRAMES + COIN_FRAMES) % COIN_FRAMES);
+    const total = sheet === COIN_SHEET ? Math.max(...coinSteps) : steps;
+    let faces = results.map(() => 0);
+    for (let step = 1; step <= total; step++) {
+      await this.wait(frame);
+      faces = faces.map((f, i) => {
+        if (sheet === COIN_SHEET) return step <= coinSteps[i] ? step % COIN_FRAMES : results[i];
+        if (step === total) return results[i];
+        const next = Math.floor(Math.random() * 5);
+        return next >= f ? next + 1 : next;
+      });
+      sprites.forEach((sp, i) => sp.setFrame(faces[i]));
+    }
+    await this.wait(T.tossHold);
+    for (const sp of sprites) sp.destroy();
+    shade.destroy();
   }
 
   /**

@@ -8,6 +8,7 @@ import { LIST_BUTTON_H, makeListButton, type ListButton } from "../widgets.ts";
 import { CardSprite } from "./CardSprite.ts";
 import { CARD, INFO, INSET } from "./layout.ts";
 import { THEME, ui } from "../theme.ts";
+import { COIN_SHEET } from "./DuelAnimator.ts";
 import { createTextInput } from "../textInput.ts";
 
 /** Card-name search: rows of matches shown at once, and the text field's height. */
@@ -142,6 +143,41 @@ export class Modal {
       const label = fit(s, FONT_UI, b.label.toUpperCase(), grid.w - 6); // very long options get cut
       root.add(makeListButton(s, rowLeft + col * (grid.w + BTN_GAP), by + row * (LIST_BUTTON_H + BTN_GAP), grid.w, label,
         () => { this.close(); b.onClick(); }));
+    });
+  }
+
+  /**
+   * Calling a coin toss: the title over the two coin faces (heads = frame 0, tails = 4), each with a HEADS / TAILS
+   * list button under it, just wide enough for the label. Clicking a coin (it lifts a little on hover) or its
+   * button picks it.
+   */
+  coinCall(title: string, onPick: (heads: boolean) => void): void {
+    const s = this.scene;
+    const root = this.open();
+    const rim = INSET.board, pad = CARD_GAP;
+    const coin = 32, gap = 24;
+    const labels = ["HEADS", "TAILS"];
+    const btnW = Math.max(...labels.map((l) => measure(s, FONT_UI, l))) + 10;
+    const colW = Math.max(coin, btnW);
+    const w = STANDARD_W, innerW = innerWidth(w);
+    const heading = text(s, 0, 0, title.toUpperCase(), { color: THEME.panel.ink, maxWidth: innerW }).setCenterAlign();
+    const h = rim + pad + heading.height + 3 + HOVER_LIFT + coin + 5 + LIST_BUTTON_H + pad + rim;
+    const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
+    const innerX = left + rim + pad;
+    root.add(board(s, left, top, w, h));
+    heading.setPosition(Math.round(innerX + (innerW - heading.width) / 2), top + rim + pad);
+    root.add(heading);
+    const coinsTop = heading.y + heading.height + 3 + HOVER_LIFT;
+    const rowLeft = innerX + Math.round((innerW - (2 * colW + gap)) / 2);
+    const pick = (heads: boolean) => { this.close(); onPick(heads); };
+    [true, false].forEach((heads, i) => {
+      const colX = rowLeft + i * (colW + gap);
+      const img = s.add.image(colX + Math.round((colW - coin) / 2), coinsTop, COIN_SHEET, heads ? 0 : 4).setOrigin(0).setInteractive({ useHandCursor: true });
+      img.on("pointerover", () => img.setY(coinsTop - HOVER_LIFT));
+      img.on("pointerout", () => img.setY(coinsTop));
+      img.on("pointerup", () => pick(heads));
+      root.add(img);
+      root.add(makeListButton(s, colX + Math.round((colW - btnW) / 2), coinsTop + coin + 5, btnW, labels[i], () => pick(heads)));
     });
   }
 

@@ -41,7 +41,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
 `&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`; default Yugi vs Kaiba),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
-(`&deck=kaiba`), `equip`, `confiscation`; cards placed in hand/on the field first),
+(`&deck=kaiba`), `equip`, `coin`, `confiscation`; cards placed in hand/on the field first),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
 choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
@@ -76,6 +76,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
   card action menus (idle/battle), zone highlights (place), and `Modal` dialogs/card pickers for everything else.
+  Calling a coin (`SELECT_OPTION` between system strings 60/61) gets `Modal.coinCall` (the two coin faces).
   Declarations (`ANNOUNCE_*`): Type / Attribute / number as button dialogs, card names in `Modal.search` (typed search,
   `src/duel/cardSearch.ts`; candidates filtered by the prompt's opcodes via `declarableCards` in `autoBot.ts`). Text entry
   in the canvas = `src/ui/textInput.ts` (card search, lobby room code): an invisible HTML input over the drawn field (phone keyboards, paste); it pauses
@@ -116,7 +117,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   tokens); counters on a card show as a pile-style number badge (ocgcore-wasm's parser swaps counter
   kind and count: `DuelSession.counterTotal` reads the counts from the record's keys) on its top-right corner (hidden while animating); regions:
   name bar (2,2) 34x5, stars y 7-10, art window 32x32 at (3,12), bottom bar (2,46) 34x8. Back: `back.png`.
+  Coin toss / die roll sprites (not themed): `public/assets/duel/coin_flip.png` (8 frames 32x32, loop; heads = frame 0,
+  tails = 4) and `dice.png` (6 frames 16x16, faces 1-6), played at 2x mid-field by `DuelAnimator.toss`.
   `attributes.png` = 7 16x16 icons: DARK EARTH FIRE LIGHT WATER WIND DIVINE.
+  Equip links (`CardView.equipTarget`, from the EQUIP_CARD query): hovering an equip card or an equipped monster shows
+  the semi-transparent Equip Spell icon (`spells.png` #2) over the partner card's art (`CardSprite.setEquipMark`).
 - Duel layout (`src/ui/duel/layout.ts`): info panel 0-219, divider 220-223, phase column x230 (6 boxes 16x56,
   clickable BATTLE / MAIN 2 / END P.), zones are card-sized slots at 58px pitch, piles in the side columns. Banished cards
   have no zone: a `B<n>` badge under the Graveyard, listed when browsing it. Your own Extra Deck can be browsed the
@@ -197,7 +202,7 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ Runewood card action menu (on the card) and prompt dialogs.
    Next: Runewood card pickers (and turn banner?). Later: chain-link display, deck search UX, sound.
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
-   Next mechanics (see `check-cards`): equip links, coin/dice feedback. ✅ Token frame, counter badges, declarations.
+   ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).
 3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.

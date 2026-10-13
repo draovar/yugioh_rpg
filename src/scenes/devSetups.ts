@@ -8,7 +8,7 @@ const VORSE = 14898066, MAN_EATER = 54652250;
 const BREAKER = 71413901, SKILLED_DM = 73752131, POT_OF_GREED = 55144522, UPSTART_GOBLIN = 70368879, SWORDS = 72302403;
 const TRIBE_INFECTING_VIRUS = 33184167, MIND_CRUSH = 15800838, SIXTH_SENSE = 3280747, DNA_TRANSPLANT = 56769674;
 const SINISTER_SERPENT = 8131171, SCAPEGOAT = 73915051, METAMORPHOSIS = 46411259, POLYMERIZATION = 24094653, SNATCH_STEAL = 45986603, AXE = 40619825;
-const CONFISCATION = 17375316;
+const CONFISCATION = 17375316, TIME_WIZARD = 71625222;
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
 const monster = (code: number, sequence: number): StartCard => ({ code, location: OcgLocation.MZONE, sequence });
@@ -58,6 +58,11 @@ const SETUPS: Record<string, { you: StartCard[]; opponent: StartCard[] }> = {
   equip: {
     you: [monster(CELTIC, 2), hand(SNATCH_STEAL), hand(AXE)],
     opponent: [monster(SKULL, 2)],
+  },
+  /** Coin call: Time Wizard's effect (call heads/tails, then toss): right destroys the opponent's monsters, wrong yours. */
+  coin: {
+    you: [monster(TIME_WIZARD, 2), monster(CELTIC, 1)],
+    opponent: [monster(SKULL, 2), monster(GEMINI, 3)],
   },
   /** Reveals: Confiscation flips the opponent's hand face-up while you pick the card to discard. */
   confiscation: {

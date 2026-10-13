@@ -57,6 +57,15 @@ export interface CardView {
   defense: number;
   /** Counters on the card (all kinds added up, e.g. Spell Counters); public, so never hidden. */
   counters: number;
+  /** Equip Spells (and other equips): the monster this card is equipped to; public. */
+  equipTarget?: CardPlace;
+}
+
+/** Where a card is: enough to find its CardView in a snapshot. */
+export interface CardPlace {
+  controller: 0 | 1;
+  location: OcgLocation;
+  sequence: number;
 }
 
 export interface PlayerView {
@@ -78,7 +87,7 @@ export interface FieldSnapshot {
   players: [PlayerView, PlayerView];
 }
 
-const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE | OcgQueryFlags.COUNTERS) as OcgQueryFlags;
+const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE | OcgQueryFlags.COUNTERS | OcgQueryFlags.EQUIP_CARD) as OcgQueryFlags;
 
 /** A NEW_TURN message with the duel's turn number (1, 2, ...) added by DuelSession. */
 export type NewTurnMessage = Extract<OcgMessage, { type: OcgMessageType.NEW_TURN }> & { turn?: number };
@@ -228,6 +237,7 @@ export class DuelSession {
       attack: hidden ? 0 : q.attack ?? 0,
       defense: hidden ? 0 : q.defense ?? 0,
       counters: counterTotal(q.counters),
+      ...(q.equipCard ? { equipTarget: { controller: q.equipCard.controller, location: q.equipCard.location, sequence: q.equipCard.sequence } } : {}),
     };
   }
 

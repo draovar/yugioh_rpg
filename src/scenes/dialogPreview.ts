@@ -55,6 +55,10 @@ const PREVIEWS: Preview[] = [
     run: (h) => h.prompt(msg({ type: OcgMessageType.SELECT_OPTION, options: [100n, 101n] }), null), // Go first / second
   },
   {
+    label: "#5b Call a coin toss (heads / tails)",
+    run: (h) => h.prompt(msg({ type: OcgMessageType.SELECT_OPTION, options: [60n, 61n] }), null),
+  },
+  {
     label: "#5 Choose an option (long)",
     run: (h) => h.prompt(msg({ type: OcgMessageType.SELECT_OPTION, options: [stringId(RAIGEKI, 0), 94n, 98n, 222n] }), 555n),
   },

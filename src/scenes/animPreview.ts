@@ -223,9 +223,17 @@ const PREVIEWS: Preview[] = [
       await host.animator.play([0x1, 0x2, 0x4, 0x8, 0x100, 0x200].map((phase) => ({ type: OcgMessageType.NEW_PHASE, phase }) as OcgMessage));
     },
   },
+  lpPreview("#13 Coin toss: heads", { type: OcgMessageType.TOSS_COIN, player: 0, results: [true] }),
+  lpPreview("#13 Coin toss: tails", { type: OcgMessageType.TOSS_COIN, player: 0, results: [false] }),
+  lpPreview("#13 Coin toss: three coins", { type: OcgMessageType.TOSS_COIN, player: 0, results: [true, false, true] }),
+  {
+    label: "#14 Die roll: random result",
+    run: (host) => host.animator.play([{ type: OcgMessageType.TOSS_DICE, player: 0, results: [1 + Math.floor(Math.random() * 6)] } as OcgMessage]),
+  },
+  lpPreview("#14 Die roll: two dice (6, 1)", { type: OcgMessageType.TOSS_DICE, player: 0, results: [6, 1] }),
 ];
 
-/** Plays a single engine message. */
+/** Plays a single engine message (LP changes, coin tosses, die rolls). */
 function lpPreview(label: string, msg: object): Preview {
   return { label, run: (host) => host.animator.play([msg as OcgMessage]) };
 }

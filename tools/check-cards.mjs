@@ -15,8 +15,8 @@ const MECHANICS = [
   { key: "sort", test: /SortDeck(top|bottom)/, status: "UI missing: the random bot sorts for you" },
   { key: "rps", test: /RockPaperScissors/, status: "UI missing: the random bot picks for you" },
   { key: "counter", test: /AddCounter|EnableCounterPermit/, status: "works; total shown as a number badge (kinds not told apart)" },
-  { key: "equip", test: /Duel\.Equip|EFFECT_EQUIP|aux\.AddEquipProcedure/, status: "works; no equip link shown" },
-  { key: "coin/dice", test: /Toss(Coin|Dice)/, status: "works; no coin/dice animation or log line" },
+  { key: "equip", test: /Duel\.Equip|EFFECT_EQUIP|aux\.AddEquipProcedure/, status: "works; hover shows the equip link (Equip Spell icon on the partner card)" },
+  { key: "coin/dice", test: /Toss(Coin|Dice)|CallCoin|AnnounceCoin/, status: "works; coin/dice animation + log line, coin call dialog" },
   { key: "token", test: /CreateToken/, status: "works if build-data exported its tokens (see below)" },
 ];
 const TYPE = { fusion: 0x40, ritual: 0x80, token: 0x4000 };
