@@ -12,7 +12,7 @@ import {
   type SelectFieldPlace,
 } from "ocgcore-wasm";
 import { loadEngine, type Engine } from "../duel/loadEngine.ts";
-import { DuelSession, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
+import { DuelSession, counterTotal, type CardView, type CounterView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { DECKS } from "../duel/decks.ts";
 import { CHAIN_MODES, chainMode, setChainMode } from "../ui/prefs.ts";
@@ -77,6 +77,12 @@ const PHASES = [
 type PhaseAction = "bp" | "m2" | "ep";
 const PHASE_ACTION: Partial<Record<number, PhaseAction>> = { 3: "bp", 4: "m2", 5: "ep" };
 
+/**
+ * SELECT_COUNTER on the board: `need` counters in all, `available[i]` of this kind on card i, `picked[i]`
+ * taken from it so far, `total[i]` = all its counters (what its badge counts).
+ */
+interface CounterPick { need: number; available: number[]; picked: number[]; total: number[] }
+
 /** Info panel geometry: everything sits inside the frame's rim. */
 const LAYOUT = (() => {
   const r = INSET.board;
@@ -130,7 +136,7 @@ export class DuelScene extends Phaser.Scene {
   private board!: Phaser.GameObjects.Container;
   private sprites = new Map<string, CardSprite>();
   /** Counter badges on field cards; hidden while animating (they don't follow moving cards), redrawn after. */
-  private counterBadges: Phaser.GameObjects.Container[] = [];
+  private counterBadges = new Map<string, Phaser.GameObjects.Container>();
   private actions = new Map<string, CardAction[]>();
   private phaseActions = new Map<PhaseAction, OcgResponse>();
   private menu: CardMenu | null = null;
@@ -153,6 +159,9 @@ export class DuelScene extends Phaser.Scene {
   private infoCode = 0;
   /** Last card shown in the info panel (the LOG/CARD toggle returns to it). */
   private lastCode = 0;
+  /** Counters on the last card shown, and its sprite key when it's on the field (redraws refresh them). */
+  private lastCounters: CounterView[] = [];
+  private lastKey: string | null = null;
   private panelToggle!: WoodButton;
   /** "card": the panel keeps the last hovered card. "log": shows the log, cards only while hovered. */
   private panelMode: "card" | "log" = "card";
@@ -172,7 +181,7 @@ export class DuelScene extends Phaser.Scene {
    * Card choice happening on the board (see `pickCards`): `keys[i]` is the sprite key of `opts.cards[i]`;
    * `confirm` is the strip's CONFIRM button in multi mode.
    */
-  private fieldPick: { keys: string[]; selected: Set<number>; opts: PickerOptions; confirm: ListButton | null } | null = null;
+  private fieldPick: { keys: string[]; selected: Set<number>; opts: PickerOptions; confirm: ListButton | null; counters?: CounterPick } | null = null;
 
   constructor() {
     super("Duel");
@@ -195,6 +204,8 @@ export class DuelScene extends Phaser.Scene {
     this.phase = 0;
     this.infoCode = 0;
     this.lastCode = 0;
+    this.lastCounters = [];
+    this.lastKey = null;
     this.panelMode = "card";
     this.attackMarks = [null, null];
   }
@@ -396,7 +407,7 @@ export class DuelScene extends Phaser.Scene {
     this.panelToggle = makeWoodButton(this, x, top + pitch, w, "LOG", () => {
       this.panelMode = this.panelMode === "card" ? "log" : "card";
       this.panelToggle.setLabel(this.panelMode === "card" ? "LOG" : "CARD");
-      if (this.panelMode === "card" && this.lastCode) this.showCard(this.lastCode);
+      if (this.panelMode === "card" && this.lastCode) this.showCard(this.lastCode, this.lastCounters);
       else this.showLog();
     });
     const chainLabel = () => chainMode().toUpperCase();
@@ -421,11 +432,13 @@ export class DuelScene extends Phaser.Scene {
    * Pointer entered a card. Card mode: show it and keep it (until another card is hovered).
    * Log mode: show it only while hovered (`hoverEnd` returns to the log).
    */
-  private showInfo(code: number) {
+  private showInfo(code: number, counters: CounterView[] = [], k: string | null = null) {
     if (!code || !this.engine.cards.records.has(code)) return;
     this.hoverTimer?.remove();
     this.lastCode = code;
-    this.showCard(code);
+    this.lastCounters = counters;
+    this.lastKey = k;
+    this.showCard(code, counters);
   }
 
   /** Pointer left a card: in log mode, go back to the log (slightly delayed so moving between cards doesn't flicker). */
@@ -435,8 +448,8 @@ export class DuelScene extends Phaser.Scene {
     this.hoverTimer = this.time.delayedCall(120, () => this.showLog());
   }
 
-  /** Renders a card's details in the info panel. */
-  private showCard(code: number) {
+  /** Renders a card's details in the info panel, with the counters on it (a field card's). */
+  private showCard(code: number, counters: CounterView[] = []) {
     const r = this.engine.cards.records.get(code);
     if (!r) return;
     this.infoCode = code;
@@ -492,6 +505,12 @@ export class DuelScene extends Phaser.Scene {
     const pr = THEME.plate.slice;
     p.add(this.add.nineslice(statX, typesY, ui("menu-back"), undefined, statW, artY + ART_FRAME - typesY, pr, pr, pr, pr).setOrigin(0));
     types.forEach((str, i) => p.add(text(this, statX + 5, typesY + 5 + i * 8, str, { color: THEME.plate.ink })));
+    // Counters on the card, listed from the plate's bottom up ("SPELL CTR 2": "COUNTER" doesn't fit).
+    const plateBottom = artY + ART_FRAME - 5;
+    counters.forEach((c, i) => {
+      const line = `${this.engine.text.counterName(c.kind).replace(/counter/i, "Ctr").toUpperCase()} ${c.count}`;
+      p.add(text(this, statX + 5, plateBottom - 5 - i * 8, line, { color: THEME.plate.ink }));
+    });
     const descY = artY + ART_FRAME + 5;
     this.paper(L.x, descY, L.w, L.bottom - descY);
     const pad = INSET.paper + 1;
@@ -586,7 +605,7 @@ export class DuelScene extends Phaser.Scene {
         players: snapshot.players.map((p) => ({ ...p, hand: [], deckCount: p.deckCount + p.hand.length })) as unknown as FieldSnapshot["players"],
       });
     }
-    if (messages.length) for (const b of this.counterBadges) b.setVisible(false);
+    if (messages.length) for (const b of this.counterBadges.values()) b.setVisible(false);
     await this.animator.play(messages, (m) => {
       if (m.type === OcgMessageType.NEW_TURN) this.turnPlayer = m.player;
       // Card mode starts empty; the first card you draw fills it.
@@ -670,7 +689,7 @@ export class DuelScene extends Phaser.Scene {
   private renderBoard(snap: FieldSnapshot) {
     this.board.removeAll(true);
     this.sprites.clear();
-    this.counterBadges = [];
+    this.counterBadges.clear();
     snap.players.forEach((p, player) => {
       const s = this.side(player);
       this.handCount[s] = p.hand.length;
@@ -686,18 +705,39 @@ export class DuelScene extends Phaser.Scene {
     });
     this.linkEquips(snap);
     this.applyHighlights();
+    this.refreshInfoCounters(snap);
+  }
+
+  /** The info panel shows a field card whose counters changed since: show the new ones. */
+  private refreshInfoCounters(snap: FieldSnapshot) {
+    if (!this.lastKey) return;
+    const c = snap.players.flatMap((p) => [...p.monsters, ...p.spells]).find((v) => v && key(v.controller, v.location, v.sequence) === this.lastKey);
+    if (!c || c.code !== this.lastCode) { this.lastKey = null; return; }
+    if (JSON.stringify(c.counters) === JSON.stringify(this.lastCounters)) return;
+    this.lastCounters = c.counters;
+    if (this.infoCode === c.code) this.showCard(c.code, c.counters);
   }
 
   private placeCard(c: CardView, at: { x: number; y: number }) {
     const sp = this.cardSprite(c, at.x, at.y);
     const sideways = c.location === OcgLocation.MZONE && (c.position & DEFENSE) !== 0;
     if (sideways) sp.setAngle(90);
-    // Counters: a number badge on the card's top-right corner, like the pile counts.
-    if (c.counters) {
-      const badge = this.badge(at.x + (sideways ? CARD.h : CARD.w) / 2, at.y - (sideways ? CARD.w : CARD.h) / 2, String(c.counters), 1);
-      this.counterBadges.push(badge);
-      this.board.add(badge);
-    }
+    const total = counterTotal(c.counters);
+    if (total) this.counterBadge(key(c.controller, c.location, c.sequence), total);
+  }
+
+  /**
+   * Counters: a number badge on the card's top-right corner, like the pile counts. Redrawn with the count
+   * left on the card while you pick counters to remove.
+   */
+  private counterBadge(k: string, count: number) {
+    const sp = this.sprites.get(k);
+    if (!sp) return;
+    this.counterBadges.get(k)?.destroy();
+    const sideways = sp.angle !== 0;
+    const badge = this.badge(sp.x + (sideways ? CARD.h : CARD.w) / 2, sp.y - (sideways ? CARD.w : CARD.h) / 2, String(count), 1);
+    this.counterBadges.set(k, badge);
+    this.board.add(badge);
   }
 
   /**
@@ -782,7 +822,9 @@ export class DuelScene extends Phaser.Scene {
       atk: onField ? c.attack : undefined, def: onField ? c.defense : undefined,
     });
     sp.setInteractive({ useHandCursor: true });
-    sp.on("pointerover", () => code && this.showInfo(code));
+    // Field cards: the info panel lists their counters and keeps them current (see refreshInfoCounters).
+    const fieldKey = c.location === OcgLocation.HAND ? null : k;
+    sp.on("pointerover", () => code && this.showInfo(code, c.counters, fieldKey));
     sp.on("pointerout", () => this.hoverEnd());
     sp.on("pointerup", () => this.onCardClick(k));
     this.sprites.set(k, sp);
@@ -844,6 +886,9 @@ export class DuelScene extends Phaser.Scene {
   }
 
   private clearInteraction() {
+    // Counter badges back to the counts on the cards (the next redraw would too, but a preview has none).
+    const cp = this.fieldPick?.counters;
+    if (cp) this.fieldPick!.keys.forEach((k, i) => this.counterBadge(k, cp.total[i]));
     this.fieldPick = null;
     this.setPrompt(null);
     this.actions.clear();
@@ -917,6 +962,8 @@ export class DuelScene extends Phaser.Scene {
     if (!fp) return;
     const sel = [...fp.selected].sort((a, b) => a - b);
     const count = fp.opts.counter ?? (fp.opts.max ? { value: (s: number[]) => s.length, of: fp.opts.max } : null);
+    const cp = fp.counters;
+    if (cp) fp.keys.forEach((k, i) => this.counterBadge(k, cp.total[i] - cp.picked[i]));
     fp.confirm?.setEnabled(fp.opts.isValid ? fp.opts.isValid(sel) : true);
     const counter = this.promptCounter;
     if (count && counter) {
@@ -931,6 +978,10 @@ export class DuelScene extends Phaser.Scene {
     const fp = this.fieldPick!;
     const i = fp.keys.indexOf(k);
     if (i < 0 || fp.opts.cards[i].locked) return;
+    if (fp.counters) {
+      this.counterPickClick(i);
+      return;
+    }
     if (fp.opts.mode === "single") {
       fp.opts.onConfirm([i]);
       return;
@@ -940,6 +991,21 @@ export class DuelScene extends Phaser.Scene {
     else if (!max || fp.selected.size < max) fp.selected.add(i);
     else if (max === 1) { fp.selected.clear(); fp.selected.add(i); } // swap the one pick
     else return; // full: unpick one first
+    this.refreshFieldPick();
+  }
+
+  /**
+   * A card clicked while removing counters: takes one more of its counters; once it has given all it can
+   * (or enough are taken), the next click puts its counters back.
+   */
+  private counterPickClick(i: number) {
+    const fp = this.fieldPick!, cp = fp.counters!;
+    const sum = cp.picked.reduce((a, b) => a + b, 0);
+    if (sum < cp.need && cp.picked[i] < cp.available[i]) cp.picked[i]++;
+    else if (cp.picked[i]) cp.picked[i] = 0;
+    else if (cp.need === 1) { cp.picked.fill(0); cp.picked[i] = 1; } // swap the one pick
+    else return; // full: unpick one first
+    fp.selected = new Set(cp.picked.flatMap((n, j) => (n ? [j] : [])));
     this.refreshFieldPick();
   }
 
@@ -1114,6 +1180,33 @@ export class DuelScene extends Phaser.Scene {
           onHover: (code) => this.showInfo(code),
           onHoverEnd: () => this.hoverEnd(),
         });
+        return;
+      }
+      case OcgMessageType.SELECT_COUNTER: {
+        // Like tributing: click the cards to take counters from (one per click), CONFIRM once there are enough.
+        // Counters are only ever on field cards, so this is always on the board.
+        const need = m.count;
+        const cp: CounterPick = { need, available: m.cards.map((c) => c.count), picked: m.cards.map(() => 0), total: [] };
+        const sum = () => cp.picked.reduce((a, b) => a + b, 0);
+        const counterName = this.engine.text.counterName(m.counter_type);
+        this.pickCards(m.cards, {
+          title: title(`Remove ${need} ${counterName}${need > 1 ? "s" : ""}`),
+          cards: m.cards.map((c) => ({ code: c.code })),
+          mode: "multi",
+          isValid: () => sum() === need,
+          counter: { value: sum, of: need },
+          onConfirm: () => this.answer({ type: OcgResponseType.SELECT_COUNTER, counters: [...cp.picked] }),
+          onHover: (code) => this.showInfo(code),
+          onHoverEnd: () => this.hoverEnd(),
+        });
+        const fp = this.fieldPick;
+        if (!fp) { this.modal.close(); break; } // not on the board after all: the bot answers
+        // The badges count every kind of counter on the card.
+        const views = new Map((this.snapshot?.players ?? []).flatMap((p) => [...p.monsters, ...p.spells])
+          .flatMap((v) => (v ? [[key(v.controller, v.location, v.sequence), v] as const] : [])));
+        cp.total = fp.keys.map((k, i) => Math.max(counterTotal(views.get(k)?.counters ?? []), m.cards[i].count));
+        fp.counters = cp;
+        this.refreshFieldPick();
         return;
       }
       case OcgMessageType.SELECT_PLACE:

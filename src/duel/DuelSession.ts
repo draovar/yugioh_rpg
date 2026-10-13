@@ -55,10 +55,16 @@ export interface CardView {
   faceDown: boolean;
   attack: number;
   defense: number;
-  /** Counters on the card (all kinds added up, e.g. Spell Counters); public, so never hidden. */
-  counters: number;
+  /** Counters on the card, one entry per kind (e.g. Spell Counters); public, so never hidden. */
+  counters: CounterView[];
   /** Equip Spells (and other equips): the monster this card is equipped to; public. */
   equipTarget?: CardPlace;
+}
+
+/** Counters of one kind on a card: `kind` is the counter type (COUNTER_SPELL = 0x1...), see `DuelText.counterName`. */
+export interface CounterView {
+  kind: number;
+  count: number;
 }
 
 /** Where a card is: enough to find its CardView in a snapshot. */
@@ -236,7 +242,7 @@ export class DuelSession {
       controller, location, sequence, position, faceDown,
       attack: hidden ? 0 : q.attack ?? 0,
       defense: hidden ? 0 : q.defense ?? 0,
-      counters: counterTotal(q.counters),
+      counters: counterList(q.counters),
       ...(q.equipCard ? { equipTarget: { controller: q.equipCard.controller, location: q.equipCard.location, sequence: q.equipCard.sequence } } : {}),
     };
   }
@@ -262,12 +268,17 @@ export class DuelSession {
 }
 
 /**
- * Total counters on a card. ocgcore packs each counter kind as `kind | count << 16`, and ocgcore-wasm's parser
+ * Counters on a card. ocgcore packs each counter kind as `kind | count << 16`, and ocgcore-wasm's parser
  * swaps the halves: its record is `{ [count]: kind }`. So the counts are the keys. (Two kinds with the same count
  * would collide into one entry; no card in the pool has two kinds.)
  */
-function counterTotal(counters: Record<number, number> | undefined): number {
-  return Object.keys(counters ?? {}).reduce((n, count) => n + Number(count), 0);
+function counterList(counters: Record<number, number> | undefined): CounterView[] {
+  return Object.entries(counters ?? {}).map(([count, kind]) => ({ kind: Number(kind), count: Number(count) })).filter((c) => c.count > 0);
+}
+
+/** All counters on a card, every kind added up. */
+export function counterTotal(counters: CounterView[]): number {
+  return counters.reduce((n, c) => n + c.count, 0);
 }
 
 function mulberry32(a: number): () => number {

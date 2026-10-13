@@ -5,6 +5,8 @@ import type { CardDb } from "./cardData.ts";
 
 export interface SystemStrings {
   system: Record<string, string>;
+  /** Counter names by counter type (decimal), from strings.conf `!counter`. */
+  counter?: Record<string, string>;
 }
 
 export class DuelText {
@@ -33,6 +35,16 @@ export class DuelText {
     }
     if (!text) return d === 0n ? "" : `#${d}`;
     return cardName ? text.replace(/%ls/g, cardName) : text;
+  }
+
+  /**
+   * A counter type's name ("Spell Counter"). strings.conf lists some types with the 0x1000 flag
+   * (COUNTER_WITHOUT_PERMIT) set, so try both. Unnamed ones ('Counter ("Ancient City")') are just "Counter".
+   */
+  counterName(kind: number): string {
+    const names = this.strings.counter ?? {};
+    const name = names[kind] ?? names[kind | 0x1000] ?? names[kind & 0xfff];
+    return !name || name.startsWith("Counter (") ? "Counter" : name;
   }
 
   name(code: number): string {

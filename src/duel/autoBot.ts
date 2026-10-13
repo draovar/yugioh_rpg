@@ -64,8 +64,11 @@ export function autoRespond(m: OcgMessage, rng: () => number = Math.random, card
       }
       return { type: OcgResponseType.SELECT_SUM, indicies: picked };
     }
-    case OcgMessageType.SELECT_COUNTER:
-      return { type: OcgResponseType.SELECT_COUNTER, counters: m.cards.map((_, i) => (i === 0 ? m.count : 0)) };
+    case OcgMessageType.SELECT_COUNTER: {
+      // Take them from the first cards, as many as each has.
+      let left = m.count;
+      return { type: OcgResponseType.SELECT_COUNTER, counters: m.cards.map((c) => { const n = Math.min(c.count, left); left -= n; return n; }) };
+    }
     case OcgMessageType.SORT_CARD:
     case OcgMessageType.SORT_CHAIN:
       return { type: OcgResponseType.SORT_CARD, order: null };

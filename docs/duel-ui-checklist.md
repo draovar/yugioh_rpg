@@ -52,6 +52,7 @@ picker dialog when a choice is in the Graveyard, Deck, etc. Try the board versio
 | # | Prompt | Shows | Style | How to see it | Tested |
 |---|---|---|---|---|---|
 | 14 | Zone choice (`SELECT_PLACE`, `SELECT_DISFIELD`) | Free zones in semi-transparent yellow (more opaque on hover / picked) + prompt in the field strip | Yellow for now | Summon or set any card | [ ] |
+| 16 | Remove counters (`SELECT_COUNTER`) | On the board like tributing: cards with counters outlined, each click takes one more (badge shows what's left; a card that gave all it can, or a click once enough are taken, puts its counters back), CONFIRM n/needed | Runewood | No pool card asks yet (Breaker / Skilled Dark Magician remove their own); `&setup=counters&dialogs` → #16 | [ ] |
 | 15 | Turn banner | Blue/red band, 1px light top / dark bottom edge, "YOUR TURN" with drop shadow, "TURN n" under it | Kept + polished | Every turn; `&anims` → #11 | [ ] |
 
 ## Auto-answered (no UI yet)
@@ -61,6 +62,5 @@ Declarations (#18, #19) have their UI now (see above); the bot picks a legal car
 
 | # | Prompt | Would need |
 |---|---|---|
-| 16 | `SELECT_COUNTER` | Counter removal picker |
 | 17 | `SORT_CARD`, `SORT_CHAIN` | Ordering list |
 | 20 | `ROCK_PAPER_SCISSORS` | RPS buttons |

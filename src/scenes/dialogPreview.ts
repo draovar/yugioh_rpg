@@ -5,7 +5,7 @@
 import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgResponse } from "ocgcore-wasm";
 import type { HumanPrompt } from "../duel/DuelController.ts";
-import type { FieldSnapshot } from "../duel/DuelSession.ts";
+import { counterTotal, type FieldSnapshot } from "../duel/DuelSession.ts";
 
 /** What the preview needs from the duel scene. */
 export interface DialogPreviewHost {
@@ -159,6 +159,17 @@ const PREVIEWS: Preview[] = [
       let mask = 0xffffffff;
       for (let i = 0; i < 5; i++) if (!mine[i]) mask &= ~(1 << i);
       h.prompt(msg({ type: OcgMessageType.SELECT_PLACE, count: 1, field_mask: mask >>> 0 }), BigInt(SKULL));
+    },
+  },
+  {
+    label: "#16 Remove Spell Counters (cards on your field)",
+    run: (h) => {
+      // Each card offers the counters really on it, or 2 if it has none; 3 to remove when they have that many.
+      const p = h.snapshot()?.players[0];
+      const cards = [...(p?.monsters ?? []), ...(p?.spells ?? [])].flatMap((c) => (c ? [{ ...c, count: counterTotal(c.counters) || 2 }] : []));
+      if (!cards.length) return console.warn("#16 needs a card on your field");
+      const count = Math.min(3, cards.reduce((n, c) => n + c.count, 0));
+      h.prompt(msg({ type: OcgMessageType.SELECT_COUNTER, counter_type: 0x1, count, cards }), null);
     },
   },
 ];

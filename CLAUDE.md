@@ -83,7 +83,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   in the canvas = `src/ui/textInput.ts` (card search, lobby room code): an invisible HTML input over the drawn field (phone keyboards, paste); it pauses
   Phaser's global key capture while it exists; the engine's HINT after each one is logged ("You declare
   DARK") and the opponent's declarations pause the duel on a "YOUR OPPONENT DECLARED: …" OK dialog (text only;
-  `AnimHost.notice`). Rare prompts (counters to remove, sort, RPS) are still auto-answered by `autoBot`.
+  `AnimHost.notice`). Removing counters (`SELECT_COUNTER`) is picked on the board like tributes (`fieldPick.counters`: one counter per
+  click, badges count down). Rare prompts (sort, RPS) are still auto-answered by `autoBot`.
 - `src/ui/` — `pixel.ts` (bitmap text, crisp 1px borders), `widgets.ts` (buttons), `duel/` (CardSprite, Modal,
   layout geometry, log text, DuelAnimator).
   Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
@@ -115,8 +116,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Fonts: `tiny5` (our own 3x5, UI + ATK/DEF) and `nerds3` (3x3 Font for Nerds by Norwegian Ink, card names —
   no license found; kept by the owner's choice (non-commercial), don't re-raise). TTFs are converted to BMFont by sampling glyph outlines.
 - Card = 38x56 incl. 1px outline. Frames per type in `public/assets/cards/frames/` (drawn by the user; `token.png` for
-  tokens); counters on a card show as a pile-style number badge (ocgcore-wasm's parser swaps counter
-  kind and count: `DuelSession.counterTotal` reads the counts from the record's keys) on its top-right corner (hidden while animating); regions:
+  tokens); counters on a card show as a pile-style number badge (all kinds added up; ocgcore-wasm's parser swaps counter
+  kind and count: `DuelSession.counterList` reads the counts from the record's keys) on its top-right corner (hidden while animating),
+  and the info panel lists them per kind at the bottom of the type plate ("SPELL CTR 2", names from strings.conf
+  `!counter` via `DuelText.counterName`); regions:
   name bar (2,2) 34x5, stars y 7-10, art window 32x32 at (3,12), bottom bar (2,46) 34x8. Back: `back.png`.
   Coin toss / die roll sprites (not themed): `public/assets/duel/coin_flip.png` (8 frames 32x32, loop; heads = frame 0,
   tails = 4) and `dice.png` (6 frames 16x16, faces 1-6), played at 2x mid-field by `DuelAnimator.toss`.
@@ -202,7 +205,8 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ Animation review pass (#1-#12 reviewed with the user; `&anims` dropdown replays each).
    ✅ Runewood card action menu (on the card) and prompt dialogs.
    ✅ Runewood card pickers; the turn banner stays as it is (owner's choice). Later: chain-link display, deck search UX, sound.
-   Auto-answered prompts (SELECT_COUNTER, SORT_CARD/CHAIN, RPS) and per-kind counter badges wait until a card batch
+   ✅ Counter removal on the board, counters per kind in the info panel.
+   Auto-answered prompts (SORT_CARD/CHAIN, RPS) wait until a card batch
    needs them (none came up in 150 bot duels with the current pool).
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
    ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).
