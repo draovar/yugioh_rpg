@@ -87,11 +87,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
   squash/overshoot; faces swap instantly). Hover effects are suppressed while `animator.busy`.
   `DuelAnimator.play(messages)` tweens the displayed sprites per message (draw, move, summon, flip, activate,
-  attack, LP, turn banner, reveals: hidden cards revealed to you (CONFIRM_CARDS) flip face-up in place and stay up through
-  the prompt that follows, e.g. Confiscation's pick (`animator.revealed`, honoured by the redraw), then flip back before the
-  next action; your own revealed cards just rise); `DuelController` awaits it before the next prompt/AI move, then the scene redraws
-  from the snapshot, so animations only need to *look* right. Speed toggle (1×/2×/4×) and the AUTO/ALL/OFF chain-mode
-  button under LOG are saved in localStorage.
+  attack, LP, turn banner, reveals); `DuelController` awaits it before the next prompt/AI move, then the scene redraws
+  from the snapshot, so animations only need to *look* right. Reveals (CONFIRM_CARDS) flip hidden cards face-up in place;
+  they stay up through the prompt that follows (Confiscation's pick: `animator.revealed`, honoured by the redraw) and flip
+  back before the next action. Your own revealed cards just rise.
 - `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx).
 - `data/pool.json` — the card passcodes the game uses. Source of truth for the card pool.
 - `vendor/` — Project Ignis repos (gitignored, ~130 MB).
@@ -115,7 +114,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   clickable BATTLE / MAIN 2 / END P.), zones are card-sized slots at 58px pitch, piles in the side columns. Banished cards
   have no zone: a `B<n>` badge under the Graveyard, listed when browsing it. Your own Extra Deck can be browsed the
   same way (the opponent's is hidden: `snapshot()` masks face-down cards).
-- Info panel modes (LOG/CARD button under the 1X speed button, field top-right): **card mode** (default) keeps
+- Corner buttons (field top-right, stacked above the mat, all 24px wide, saved in localStorage): speed 1X/2X/4X, LOG/CARD
+  info panel mode, chain mode AUTO/ALL/OFF (`ChainMode`). Info panel **card mode** (default) keeps
   the last hovered card (starts with the first card you draw); **log mode** shows the log and previews cards
   only while hovered. Long names scroll (marquee) after a short hover.
 - Field (`src/ui/duel/field.ts`): cream plank table (the info panel's paper colour) with a dark green felt
@@ -167,7 +167,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 ## Conventions
 
 - TypeScript strict, ES modules, relative imports **with `.ts` extensions** (needed so Node can run the same files).
-- Keep `src/duel/` UI-agnostic; scenes talk to it only through `DuelSession` / future duel controller.
+- Keep `src/duel/` UI-agnostic; scenes talk to it only through `DuelSession` / `DuelController`.
 - Verify engine changes with `npm run smoke`, and UI changes in the browser preview.
 
 ## Licensing
@@ -196,5 +196,5 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.
 7. **Multiplayer**: ✅ peer-to-peer v1 (lockstep over PeerJS, room codes / invite links, each player's chosen deck, leave
-   detection). Later: own decks once the deck editor exists, a "waiting for opponent" indicator, concede button,
-   reconnect, a TURN server for networks that block direct connections, maybe a server (hidden info stays hidden).
+   detection, FORFEIT). Later: own decks once the deck editor exists, a "waiting for opponent" indicator, reconnect,
+   a TURN server for networks that block direct connections, maybe a server (hidden info stays hidden).
