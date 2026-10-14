@@ -32,6 +32,9 @@ export type Slot =
   | { kind: "szone"; seq: number } // seq 5 = field zone
   | { kind: "grave" | "deck" | "extra" | "banished" };
 
+/** Key of the card sprite at a place: `controller:location:sequence` (the board and the animator key sprites by it). */
+export const cardKey = (c: { controller: number; location: number; sequence: number }) => `${c.controller}:${c.location}:${c.sequence}`;
+
 /** `side` 0 = human (bottom), 1 = opponent (top, mirrored). */
 export function slotXY(side: 0 | 1, slot: Slot): { x: number; y: number } {
   const mine = side === 0;

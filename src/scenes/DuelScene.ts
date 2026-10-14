@@ -12,31 +12,28 @@ import {
   type SelectFieldPlace,
 } from "ocgcore-wasm";
 import { loadEngine, type Engine } from "../duel/loadEngine.ts";
-import { DuelSession, counterTotal, type CardView, type CounterView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
+import { DuelSession, counterTotal, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { DECKS } from "../duel/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
 import { CHAIN_MODES, chainMode, setChainMode } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
 import { autoRespond, declarableCards, freePlaces } from "../duel/autoBot.ts";
-import { ATTRIBUTES, COIN_HEADS_STRING, COIN_TAILS_STRING, RACES, raceNames } from "../duel/text.ts";
-import {
-  ATTRIBUTE_INDEX, ATTRIBUTE_SHEET, CardSprite, SPELL_ATTRIBUTE, SPELL_KIND_ICON, SPELL_NORMAL_ICON, SPELL_SHEET, TRAP_ATTRIBUTE,
-  type CardHighlight,
-} from "../ui/duel/CardSprite.ts";
-import { INFO_DEPTH, Modal, type PickerOptions } from "../ui/duel/Modal.ts";
+import { ATTRIBUTES, COIN_HEADS_STRING, COIN_TAILS_STRING, RACES } from "../duel/text.ts";
+import { CardSprite, type CardHighlight } from "../ui/duel/CardSprite.ts";
+import { Modal, type PickerOptions } from "../ui/duel/Modal.ts";
+import { InfoPanel } from "../ui/duel/InfoPanel.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
 import { RpsIntro } from "../ui/duel/RpsIntro.ts";
 import { CardMenu } from "../ui/duel/CardMenu.ts";
 import { drawField } from "../ui/duel/field.ts";
-import { CARD, FIELD, FIELD_CENTER, INFO, INSET, PHASE_COL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
+import { CARD, FIELD, FIELD_CENTER, INSET, PHASE_COL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
 import { INK, WHITE, border, text } from "../ui/pixel.ts";
-import { LIST_BUTTON_H, makeListButton, makeWoodButton, type ListButton, type WoodButton } from "../ui/widgets.ts";
+import { LIST_BUTTON_H, makeListButton, makeWoodButton, type ListButton } from "../ui/widgets.ts";
 import { installAnimPreview } from "./animPreview.ts";
 import { installDialogPreview } from "./dialogPreview.ts";
 import { withDevSetup } from "./devSetups.ts";
-import { LPBar, LP_BAR } from "../ui/duel/LPBar.ts";
 import { THEME, ui, type PhaseState } from "../ui/theme.ts";
 
 export interface DuelSceneData {
@@ -87,46 +84,8 @@ const PHASE_ACTION: Partial<Record<number, PhaseAction>> = { 3: "bp", 4: "m2", 5
  */
 interface CounterPick { need: number; available: number[]; picked: number[]; total: number[] }
 
-/** Info panel geometry: everything sits inside the frame's rim. */
-const LAYOUT = (() => {
-  const r = INSET.board;
-  const x = r + 2, w = INFO.w - 2 * (r + 2);
-  const lpOpp = r, lpMine = 360 - r - LP_BAR.h;
-  return {
-    x, w,
-    bar: { x: r + 1, w: INFO.w - 2 * (r + 1) },
-    lp: { opp: lpOpp, mine: lpMine },
-    /** Content area between the two LP bars. */
-    top: lpOpp + LP_BAR.h + 5,
-    bottom: lpMine - 4,
-  };
-})();
-/** Level stars in the info panel: 7x7 sprite, 3px apart. */
-const STAR_SIZE = 7, STAR_GAP = 3;
 /** How long an LP change ("-1500") stays inside the LP bar. */
 const LP_DELTA_MS = 1200;
-/** Info-panel ATK / DEF plates: height (label: plate.inkSoft, value: plate.ink at 2x). */
-const STAT_PLATE_H = 26;
-
-/** Tiny pixel icons: one string per row, each character a colour key ("." = empty). */
-interface PixelIcon { rows: string[]; colors: Record<string, number> }
-const STAT_ICON: Record<"sword" | "shield", PixelIcon> = {
-  // Upright sword: steel blade with a light edge, gold guard, brown grip and pommel.
-  sword: {
-    rows: ["...b...", "..bw...", "..bw...", "..bw...", "..bw...", "..bw...", "..bw...", "ggggggg", "...h...", "...h...", "..ggg.."],
-    colors: { b: 0x9aa6b4, w: 0xe6edf3, g: 0xe0a040, h: 0x7a4a2c },
-  },
-  // Heater shield: blue face with a light left edge and a gold rim.
-  shield: {
-    rows: ["ggggggg", "gwbbbbg", "gwbbbbg", "gwbbbbg", "gwbbbbg", "gwbbbbg", ".gwbbg.", ".gwbbg.", "..gbg..", "...g..."],
-    colors: { g: 0xe0a040, w: 0x8fb0e8, b: 0x3d5e9e },
-  },
-};
-
-/** Info-panel art: 128px art inside the LP bar's frame (theme rim). */
-const ART_FRAME = 128 + 2 * INSET.lpTrack;
-/** The duel log text starts below its "DUEL LOG" header, inside the paper. */
-const LOG_Y = LAYOUT.top + 13;
 
 export class DuelScene extends Phaser.Scene {
   private engine!: Engine;
@@ -159,24 +118,10 @@ export class DuelScene extends Phaser.Scene {
   private turnPlayer = 0;
   private phase = 0;
 
-  private infoPanel!: Phaser.GameObjects.Container;
-  private infoCode = 0;
-  /** Last card shown in the info panel (the LOG/CARD toggle returns to it). */
-  private lastCode = 0;
-  /** Counters on the last card shown, and its sprite key when it's on the field (redraws refresh them). */
-  private lastCounters: CounterView[] = [];
-  private lastKey: string | null = null;
-  private panelToggle!: WoodButton;
-  /** "card": the panel keeps the last hovered card. "log": shows the log, cards only while hovered. */
-  private panelMode: "card" | "log" = "card";
-  private hoverTimer: Phaser.Time.TimerEvent | null = null;
+  private panel!: InfoPanel;
   /** Declared attack (sprite keys), outlined until the hit or until the attack ends. */
   private attackMarks: [string | null, string | null] = [null, null];
   private attackArrow: Phaser.GameObjects.Image | null = null;
-  private nameScroll: { tween: Phaser.Tweens.Tween; mask: Phaser.GameObjects.Graphics } | null = null;
-  private logText!: Phaser.GameObjects.BitmapText;
-  private logLines: string[] = [];
-  private lpBars!: [LPBar, LPBar];
   private phaseGfx!: Phaser.GameObjects.Container;
   private promptBand!: Phaser.GameObjects.Container;
   /** Counter line on the prompt's button plate ("1/2"), set by refreshFieldPick. */
@@ -199,7 +144,6 @@ export class DuelScene extends Phaser.Scene {
     this.counterBadges.clear();
     this.actions.clear();
     this.phaseActions.clear();
-    this.logLines = [];
     this.menu = null;
     this.placeTargets = [];
     this.fieldPick = null;
@@ -213,14 +157,7 @@ export class DuelScene extends Phaser.Scene {
     this.previewAnswer = null;
     this.turnPlayer = 0;
     this.phase = 0;
-    this.hoverTimer = null;
-    this.nameScroll = null;
     this.attackArrow = null;
-    this.infoCode = 0;
-    this.lastCode = 0;
-    this.lastCounters = [];
-    this.lastKey = null;
-    this.panelMode = "card";
     this.attackMarks = [null, null];
   }
 
@@ -254,7 +191,8 @@ export class DuelScene extends Phaser.Scene {
       const saved = Number(localStorage.getItem("duel.animSpeed"));
       if ([1, 2, 4].includes(saved)) this.animator.speed = saved;
     } catch { /* storage unavailable */ }
-    this.createInfoPanel();
+    this.panel = new InfoPanel(this, this.engine, { startLP: this.startLP, opponentName: this.sceneData.opponentName ?? "Opponent" });
+    this.createCornerButtons();
     this.phaseGfx = this.add.container(0, 0);
     this.drawPhaseColumn();
     this.createPromptBand();
@@ -339,7 +277,7 @@ export class DuelScene extends Phaser.Scene {
       ask: (message, buttons) => new Promise((resolve) => {
         this.modal.dialog(message, buttons.map((label, i) => ({ label, onClick: () => resolve(i) })));
       }),
-      log: (line) => this.log(line),
+      log: (line) => this.panel.log(line),
       active: () => !this.ended,
     });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => rps.destroy());
@@ -424,20 +362,6 @@ export class DuelScene extends Phaser.Scene {
 
   // ---------------------------------------------------------------- info panel, log, LP
 
-  private createInfoPanel() {
-    const L = LAYOUT;
-    // Everything in the panel sits above dialogs' shade (INFO_DEPTH), so it stays bright and shows hovered cards.
-    this.add.nineslice(0, 0, ui("info-frame"), undefined, INFO.w, 360, ...THEME.panel.infoSlice).setOrigin(0).setDepth(INFO_DEPTH);
-    this.lpBars = [
-      new LPBar(this, L.bar.x, L.lp.mine, L.bar.w, "You", this.startLP).set(this.startLP).setDepth(INFO_DEPTH),
-      new LPBar(this, L.bar.x, L.lp.opp, L.bar.w, this.sceneData.opponentName ?? "Opponent", this.startLP).set(this.startLP).setDepth(INFO_DEPTH),
-    ];
-    this.infoPanel = this.add.container(0, 0).setDepth(INFO_DEPTH);
-    this.logText = text(this, L.x + INSET.paper, LOG_Y, "", { color: THEME.panel.paperInk, maxWidth: L.w - INSET.paper * 2 }).setDepth(INFO_DEPTH + 1);
-    this.createCornerButtons();
-    this.showEmpty();
-  }
-
   /**
    * Top-right corner of the field, stacked in the space above the mat (top 59): animation speed
    * (1x/2x/4x), the info panel's LOG/CARD toggle and the chain mode (AUTO/ALL/OFF: when you're asked to
@@ -453,196 +377,19 @@ export class DuelScene extends Phaser.Scene {
       try { localStorage.setItem("duel.animSpeed", String(this.animator.speed)); } catch { /* storage unavailable */ }
     });
     // Switch the info panel between card mode and log mode.
-    this.panelToggle = makeWoodButton(this, x, top + pitch, w, "LOG", () => {
-      this.panelMode = this.panelMode === "card" ? "log" : "card";
-      this.panelToggle.setLabel(this.panelMode === "card" ? "LOG" : "CARD");
-      if (this.panelMode === "card" && this.lastCode) this.showCard(this.lastCode, this.lastCounters);
-      else this.showLog();
+    const panelToggle = makeWoodButton(this, x, top + pitch, w, "LOG", () => {
+      panelToggle.setLabel(this.panel.toggleMode() === "card" ? "LOG" : "CARD");
     });
     const chainLabel = () => chainMode().toUpperCase();
     const chain = makeWoodButton(this, x, top + 2 * pitch, w, chainLabel(), () => {
       setChainMode(CHAIN_MODES[(CHAIN_MODES.indexOf(chainMode()) + 1) % CHAIN_MODES.length]);
       chain.setLabel(chainLabel());
-      this.log({
+      this.panel.log({
         auto: "Chain prompts: only when a card fits the moment",
         all: "Chain prompts: whenever a card can be used",
         off: "Chain prompts: off (forced effects still ask)",
       }[chainMode()]);
     });
-  }
-
-  /** Cream paper inset whose outer edge is the box (x, y, w, h); text goes inside, padded by its rim. */
-  private paper(x: number, y: number, w: number, h: number) {
-    const r = THEME.panel.paperSlice;
-    this.infoPanel.add(this.add.nineslice(x, y, ui("panel-paper"), undefined, w, h, r, r, r, r).setOrigin(0));
-  }
-
-  /**
-   * Pointer entered a card. Card mode: show it and keep it (until another card is hovered).
-   * Log mode: show it only while hovered (`hoverEnd` returns to the log).
-   */
-  private showInfo(code: number, counters: CounterView[] = [], k: string | null = null) {
-    if (!code || !this.engine.cards.records.has(code)) return;
-    this.hoverTimer?.remove();
-    this.lastCode = code;
-    this.lastCounters = counters;
-    this.lastKey = k;
-    this.showCard(code, counters);
-  }
-
-  /** Pointer left a card: in log mode, go back to the log (slightly delayed so moving between cards doesn't flicker). */
-  private hoverEnd() {
-    if (this.panelMode !== "log") return;
-    this.hoverTimer?.remove();
-    this.hoverTimer = this.time.delayedCall(120, () => { if (this.panelMode === "log") this.showLog(); });
-  }
-
-  /** Renders a card's details in the info panel, with the counters on it (a field card's). */
-  private showCard(code: number, counters: CounterView[] = []) {
-    const r = this.engine.cards.records.get(code);
-    if (!r) return;
-    this.infoCode = code;
-    this.logText.setVisible(false);
-    this.stopNameScroll();
-    const p = this.infoPanel.removeAll(true);
-    const L = LAYOUT;
-    const monster = (r.type & 0x1) !== 0;
-
-    // Name at 2x, light with a 1px dark drop shadow, left-aligned; names wider than their space scroll (see
-    // scrollName). Monsters stop before the attribute icon; Spells/Traps (icons sit by the art) get the full width.
-    const nameW = monster ? L.w - 20 : L.w;
-    const nameStr = r.name.toUpperCase();
-    const nameText = text(this, 0, 0, nameStr, { scale: 2, color: THEME.cardName.ink });
-    const name = this.add.container(L.x, L.top, [text(this, 1, 1, nameStr, { scale: 2, color: THEME.cardName.shadow }), nameText]);
-    p.add(name);
-    if (nameText.width > nameW) this.scrollName(name, nameText.width, nameW);
-    const attr = ATTRIBUTE_INDEX[r.attribute];
-    if (monster && attr !== undefined) p.add(this.add.image(L.x + L.w - 16, L.top - 1, ATTRIBUTE_SHEET, attr).setOrigin(0));
-    if (monster) for (let i = 0; i < (r.level & 0xff); i++) p.add(this.add.image(L.x + i * (STAR_SIZE + STAR_GAP), L.top + 14, ui("star")).setOrigin(0));
-    // 128x128 art in a wooden frame (the LP bar's frame, nine-sliced), loaded on first view.
-    const artY = L.top + 24;
-    const artKey = `art128-${code}`;
-    const lpRim = INSET.lpTrack, fs = THEME.lpBar.slice;
-    p.add(this.add.nineslice(L.x, artY, ui("lp-frame"), undefined, ART_FRAME, ART_FRAME, fs, fs, fs, fs).setOrigin(0));
-    const placeArt = () => { if (this.infoCode === code && p.active) p.add(this.add.image(L.x + lpRim, artY + lpRim, artKey).setOrigin(0)); };
-    if (this.textures.exists(artKey)) placeArt();
-    else {
-      this.load.image(artKey, `cards/art128/${code}.png`);
-      this.load.once(`filecomplete-image-${artKey}`, placeArt);
-      this.load.start();
-    }
-    // Column right of the art: monsters get ATK and DEF plates (dark wood); Spells/Traps their SPELL / TRAP
-    // and kind icons in that space. Under them, down to the bottom of the art, the type plate:
-    // race + monster types, or SPELL / TRAP + kind, one per line.
-    const statX = L.x + ART_FRAME + 4, statW = L.x + L.w - statX;
-    const typesY = artY + 2 * (STAT_PLATE_H + 4);
-    let types: string[];
-    if (monster) {
-      const stat = (v: number) => (v < 0 ? "?" : String(v));
-      this.statPlate(p, statX, artY, statW, "ATK", stat(r.atk), STAT_ICON.sword);
-      this.statPlate(p, statX, artY + STAT_PLATE_H + 4, statW, "DEF", stat(r.def), STAT_ICON.shield);
-      types = [raceNames(BigInt(r.race)), ...monsterTypes(r.type)];
-    } else {
-      // SPELL / TRAP icon and the kind icon side by side, 1x, centred where monsters have ATK / DEF.
-      const plateH = 2 * STAT_PLATE_H + 4;
-      const kind = SPELL_KIND_ICON.find(([bit]) => r.type & bit)?.[1] ?? SPELL_NORMAL_ICON;
-      const iconsX = statX + (statW - (16 + 4 + 16)) / 2, iconsY = artY + (plateH - 16) / 2;
-      p.add(this.add.image(iconsX, iconsY, ATTRIBUTE_SHEET, r.type & 0x2 ? SPELL_ATTRIBUTE : TRAP_ATTRIBUTE).setOrigin(0));
-      p.add(this.add.image(iconsX + 20, iconsY, SPELL_SHEET, kind).setOrigin(0));
-      types = [r.type & 0x2 ? "SPELL" : "TRAP", spellTrapKind(r.type)];
-    }
-    const pr = THEME.plate.slice;
-    p.add(this.add.nineslice(statX, typesY, ui("menu-back"), undefined, statW, artY + ART_FRAME - typesY, pr, pr, pr, pr).setOrigin(0));
-    types.forEach((str, i) => p.add(text(this, statX + 5, typesY + 5 + i * 8, str, { color: THEME.plate.ink })));
-    // Counters on the card, listed from the plate's bottom up ("SPELL CTR 2": "COUNTER" doesn't fit).
-    const plateBottom = artY + ART_FRAME - 5;
-    counters.forEach((c, i) => {
-      const line = `${this.engine.text.counterName(c.kind).replace(/counter/i, "Ctr").toUpperCase()} ${c.count}`;
-      p.add(text(this, statX + 5, plateBottom - 5 - i * 8, line, { color: THEME.plate.ink }));
-    });
-    const descY = artY + ART_FRAME + 5;
-    this.paper(L.x, descY, L.w, L.bottom - descY);
-    const pad = INSET.paper + 1;
-    p.add(text(this, L.x + pad, descY + pad, r.desc, { maxWidth: L.w - pad * 2, color: THEME.panel.paperInk }));
-  }
-
-  /**
-   * One stat in the info panel: a dark wood plate (Frame01a, as the card menu) with a pixel icon on the
-   * left, a small label ("ATK") over the value in 2x light text.
-   */
-  private statPlate(p: Phaser.GameObjects.Container, x: number, y: number, w: number, label: string, value: string, icon: PixelIcon) {
-    const pr = THEME.plate.slice;
-    p.add(this.add.nineslice(x, y, ui("menu-back"), undefined, w, STAT_PLATE_H, pr, pr, pr, pr).setOrigin(0));
-    const g = this.add.graphics();
-    const iconY = y + Math.floor((STAT_PLATE_H - icon.rows.length) / 2);
-    icon.rows.forEach((row, iy) => [...row].forEach((ch, ix) => {
-      const color = icon.colors[ch];
-      if (color !== undefined) g.fillStyle(color).fillRect(x + 5 + ix, iconY + iy, 1, 1);
-    }));
-    p.add(g);
-    const tx = x + 5 + icon.rows[0].length + 4;
-    p.add(text(this, tx, y + 5, label, { color: THEME.plate.inkSoft }));
-    p.add(text(this, tx, y + 12, value, { scale: 2, color: THEME.plate.ink }));
-  }
-
-  /**
-   * Marquee for long card names: wait, scroll left until the end is visible, pause, jump back to the
-   * start, pause, repeat. The name (text + shadow, `nameWidth` wide) is clipped to `width` by a Mask filter
-   * (Phaser 4; the mask rectangle is in world coordinates, so it stays put while the name scrolls).
-   */
-  private scrollName(name: Phaser.GameObjects.Container, nameWidth: number, width: number) {
-    const mask = this.make.graphics({}, false);
-    mask.fillStyle(0xffffff).fillRect(name.x, name.y - 1, width, 2 * 7 + 3);
-    name.enableFilters().filters!.internal.addMask(mask);
-    const overflow = nameWidth - width;
-    this.nameScroll = {
-      mask,
-      tween: this.tweens.add({
-        targets: name, x: name.x - overflow,
-        delay: 900, duration: overflow * 40, hold: 1000, repeat: -1, repeatDelay: 900,
-      }),
-    };
-  }
-
-  private stopNameScroll() {
-    this.nameScroll?.tween.remove();
-    this.nameScroll?.mask.destroy();
-    this.nameScroll = null;
-  }
-
-  /** Nothing to show yet (before the opening hand is drawn): just the wooden board. */
-  private showEmpty() {
-    this.infoCode = 0;
-    this.stopNameScroll();
-    this.infoPanel.removeAll(true);
-    this.logText.setVisible(false);
-  }
-
-  /** Renders the duel log in the info panel. */
-  private showLog() {
-    this.infoCode = 0;
-    this.stopNameScroll();
-    this.infoPanel.removeAll(true);
-    const L = LAYOUT;
-    this.logText.setVisible(true);
-    this.infoPanel.add(text(this, L.x + 1, L.top, "DUEL LOG", { color: THEME.panel.inkSoft }));
-    this.paper(L.x, LOG_Y - INSET.paper - 1, L.w, L.bottom - LOG_Y + INSET.paper + 1);
-    this.renderLog();
-  }
-
-  private log(line: string) {
-    this.logLines.push(line.toUpperCase());
-    while (this.logLines.length > 200) this.logLines.shift();
-    this.renderLog();
-  }
-
-  private renderLog() {
-    // Show as many recent lines as fit above the speed button.
-    const room = LAYOUT.bottom - INSET.paper - this.logText.y;
-    for (let n = Math.min(this.logLines.length, 45); n >= 0; n--) {
-      this.logText.setText(this.logLines.slice(this.logLines.length - n).join("\n"));
-      if (this.logText.height <= room) break;
-    }
   }
 
   // ---------------------------------------------------------------- engine events
@@ -657,13 +404,9 @@ export class DuelScene extends Phaser.Scene {
     if (messages.length) for (const b of this.counterBadges.values()) b.setVisible(false);
     await this.animator.play(messages, (m) => {
       if (m.type === OcgMessageType.NEW_TURN) this.turnPlayer = m.player;
-      // Card mode starts empty; the first card you draw fills it.
-      if (m.type === OcgMessageType.DRAW && m.player === this.me && !this.lastCode && m.drawn[0]?.code) {
-        this.lastCode = m.drawn[0].code;
-        if (this.panelMode === "card") this.showCard(this.lastCode);
-      }
+      if (m.type === OcgMessageType.DRAW && m.player === this.me) this.panel.drew(m.drawn[0]?.code ?? 0);
       const line = describeMessage(m, this.engine.text, this.me);
-      if (line) this.log(line);
+      if (line) this.panel.log(line);
     });
     this.snapshot = snapshot;
     this.renderBoard(snapshot);
@@ -675,11 +418,11 @@ export class DuelScene extends Phaser.Scene {
     const from = this.lpValue[i];
     const to = Math.max(0, lp);
     this.lpValue[i] = to;
-    if (delta) this.lpBars[i].showDelta(delta, LP_DELTA_MS / this.animator.speed);
+    if (delta) this.panel.lpBars[i].showDelta(delta, LP_DELTA_MS / this.animator.speed);
     return new Promise((resolve) => {
       this.tweens.addCounter({
         from, to, duration: 450 / this.animator.speed,
-        onUpdate: (t) => this.lpBars[i].set(t.getValue() ?? to),
+        onUpdate: (t) => this.panel.lpBars[i].set(t.getValue() ?? to),
         onComplete: () => resolve(),
       });
     });
@@ -743,7 +486,7 @@ export class DuelScene extends Phaser.Scene {
       const s = this.side(player);
       this.handCount[s] = p.hand.length;
       this.lpValue[s] = p.lp;
-      this.lpBars[s].set(p.lp);
+      this.panel.lpBars[s].set(p.lp);
       p.monsters.forEach((c, seq) => c && this.placeCard(c, slotXY(s, { kind: "mzone", seq })));
       p.spells.forEach((c, seq) => c && this.placeCard(c, slotXY(s, { kind: "szone", seq })));
       this.drawPile(s, { kind: "deck" }, p.deckCount, null);
@@ -754,17 +497,7 @@ export class DuelScene extends Phaser.Scene {
     });
     this.linkEquips(snap);
     this.applyHighlights();
-    this.refreshInfoCounters(snap);
-  }
-
-  /** The info panel shows a field card whose counters changed since: show the new ones. */
-  private refreshInfoCounters(snap: FieldSnapshot) {
-    if (!this.lastKey) return;
-    const c = snap.players.flatMap((p) => [...p.monsters, ...p.spells]).find((v) => v && key(v.controller, v.location, v.sequence) === this.lastKey);
-    if (!c || c.code !== this.lastCode) { this.lastKey = null; return; }
-    if (JSON.stringify(c.counters) === JSON.stringify(this.lastCounters)) return;
-    this.lastCounters = c.counters;
-    if (this.infoCode === c.code) this.showCard(c.code, c.counters);
+    this.panel.refreshCounters(snap);
   }
 
   private placeCard(c: CardView, at: { x: number; y: number }) {
@@ -822,8 +555,8 @@ export class DuelScene extends Phaser.Scene {
       sp.setInteractive({ useHandCursor: !!contents || ownDeck });
       if (ownDeck) sp.on("pointerup", () => this.openDeckMenu(sp));
       if (top) {
-        sp.on("pointerover", () => this.showInfo(top.code));
-        sp.on("pointerout", () => this.hoverEnd());
+        sp.on("pointerover", () => this.panel.showInfo(top.code));
+        sp.on("pointerout", () => this.panel.hoverEnd());
       }
       if (contents) sp.on("pointerup", () => this.browsePile(side, contents, banished, slot.kind === "extra" ? "extra" : "grave"));
       this.board.add([sp, this.badge(x + 19, y - 28, String(count), 1)]);
@@ -871,10 +604,10 @@ export class DuelScene extends Phaser.Scene {
       atk: onField ? c.attack : undefined, def: onField ? c.defense : undefined,
     });
     sp.setInteractive({ useHandCursor: true });
-    // Field cards: the info panel lists their counters and keeps them current (see refreshInfoCounters).
+    // Field cards: the info panel lists their counters and keeps them current (see InfoPanel.refreshCounters).
     const fieldKey = c.location === OcgLocation.HAND ? null : k;
-    sp.on("pointerover", () => code && this.showInfo(code, c.counters, fieldKey));
-    sp.on("pointerout", () => this.hoverEnd());
+    sp.on("pointerover", () => code && this.panel.showInfo(code, c.counters, fieldKey));
+    sp.on("pointerout", () => this.panel.hoverEnd());
     sp.on("pointerup", () => this.onCardClick(k));
     this.sprites.set(k, sp);
     this.board.add(sp);
@@ -902,8 +635,8 @@ export class DuelScene extends Phaser.Scene {
         this.previewing = false;
         if (pending) this.onPrompt(pending, this.lastHint);
       } }],
-      onHover: (code) => this.showInfo(code),
-      onHoverEnd: () => this.hoverEnd(),
+      onHover: (code) => this.panel.showInfo(code),
+      onHoverEnd: () => this.panel.hoverEnd(),
     });
   }
 
@@ -925,7 +658,7 @@ export class DuelScene extends Phaser.Scene {
   private answer(response: OcgResponse) {
     if (this.previewing) {
       this.previewing = false;
-      this.log(`(preview) answer: ${JSON.stringify(response, (_k, v) => (typeof v === "bigint" ? String(v) : v))}`);
+      this.panel.log(`(preview) answer: ${JSON.stringify(response, (_k, v) => (typeof v === "bigint" ? String(v) : v))}`);
       this.clearInteraction();
       const next = this.previewAnswer;
       this.previewAnswer = null;
@@ -1114,8 +847,8 @@ export class DuelScene extends Phaser.Scene {
           mode: "single",
           onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: i }),
           buttons: m.forced ? [] : [{ label: "Don't chain", onClick: () => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: null }) }],
-          onHover: (code) => this.showInfo(code),
-          onHoverEnd: () => this.hoverEnd(),
+          onHover: (code) => this.panel.showInfo(code),
+          onHoverEnd: () => this.panel.hoverEnd(),
         });
         return;
       case OcgMessageType.SELECT_EFFECTYN: {
@@ -1158,8 +891,8 @@ export class DuelScene extends Phaser.Scene {
           max: m.max,
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_CARD, indicies: sel }),
           buttons: m.can_cancel ? [{ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_CARD, indicies: null }) }] : [],
-          onHover: (code) => this.showInfo(code),
-          onHoverEnd: () => this.hoverEnd(),
+          onHover: (code) => this.panel.showInfo(code),
+          onHoverEnd: () => this.panel.hoverEnd(),
         });
         return;
       case OcgMessageType.SELECT_TRIBUTE:
@@ -1179,8 +912,8 @@ export class DuelScene extends Phaser.Scene {
           max: m.max,
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_TRIBUTE, indicies: sel }),
           buttons: m.can_cancel ? [{ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_TRIBUTE, indicies: null }) }] : [],
-          onHover: (code) => this.showInfo(code),
-          onHoverEnd: () => this.hoverEnd(),
+          onHover: (code) => this.panel.showInfo(code),
+          onHoverEnd: () => this.panel.hoverEnd(),
         });
         return;
       case OcgMessageType.SELECT_UNSELECT_CARD: {
@@ -1204,8 +937,8 @@ export class DuelScene extends Phaser.Scene {
           mode: "single",
           buttons: [button],
           onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_UNSELECT_CARD, index: entries[i].index }),
-          onHover: (code) => this.showInfo(code),
-          onHoverEnd: () => this.hoverEnd(),
+          onHover: (code) => this.panel.showInfo(code),
+          onHoverEnd: () => this.panel.hoverEnd(),
         });
         return;
       }
@@ -1231,8 +964,8 @@ export class DuelScene extends Phaser.Scene {
             of: m.amount,
           },
           onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_SUM, indicies: sel.filter((i) => i >= must.length).map((i) => i - must.length) }),
-          onHover: (code) => this.showInfo(code),
-          onHoverEnd: () => this.hoverEnd(),
+          onHover: (code) => this.panel.showInfo(code),
+          onHoverEnd: () => this.panel.hoverEnd(),
         });
         return;
       }
@@ -1250,8 +983,8 @@ export class DuelScene extends Phaser.Scene {
           isValid: () => sum() === need,
           counter: { value: sum, of: need },
           onConfirm: () => this.answer({ type: OcgResponseType.SELECT_COUNTER, counters: [...cp.picked] }),
-          onHover: (code) => this.showInfo(code),
-          onHoverEnd: () => this.hoverEnd(),
+          onHover: (code) => this.panel.showInfo(code),
+          onHoverEnd: () => this.panel.hoverEnd(),
         });
         const fp = this.fieldPick;
         if (!fp) { this.modal.close(); break; } // not on the board after all: the bot answers
@@ -1269,8 +1002,8 @@ export class DuelScene extends Phaser.Scene {
           title: title("Click the cards in their new order (1 = top)"),
           codes: m.cards.map((c) => c.code),
           onConfirm: (order) => this.answer({ type: OcgResponseType.SORT_CARD, order }),
-          onHover: (code) => this.showInfo(code),
-          onHoverEnd: () => this.hoverEnd(),
+          onHover: (code) => this.panel.showInfo(code),
+          onHoverEnd: () => this.panel.hoverEnd(),
         });
         return;
       case OcgMessageType.SELECT_PLACE:
@@ -1303,13 +1036,13 @@ export class DuelScene extends Phaser.Scene {
           title: title("Declare a card name"),
           codes,
           onPick: (card) => this.answer({ type: OcgResponseType.ANNOUNCE_CARD, card }),
-          onHover: (code) => this.showInfo(code),
+          onHover: (code) => this.panel.showInfo(code),
         });
         return;
       }
     }
     // Anything not handled above (rare in the GOAT pool: counters to remove, sorting, RPS): the bot answers.
-    this.log(`(auto-answered ${OcgMessageType[m.type] ?? m.type})`);
+    this.panel.log(`(auto-answered ${OcgMessageType[m.type] ?? m.type})`);
     this.answer(autoRespond(m, Math.random, this.engine.cards));
   }
 
@@ -1429,32 +1162,6 @@ function locationName(location: number, controller: number, me: number): string 
   return `${owner}${names[location] ?? "?"}`;
 }
 
-
-/**
- * A monster's types in card type-line order (after the race): special kinds, Flip, then Effect or Normal.
- * Man-Eater Bug: FLIP, EFFECT.
- */
-function monsterTypes(type: number): string[] {
-  const kinds: [number, string][] = [
-    [0x40, "FUSION"], [0x80, "RITUAL"], [0x2000, "SYNCHRO"], [0x200, "SPIRIT"], [0x400, "UNION"],
-    [0x800, "GEMINI"], [0x400000, "TOON"], [0x1000, "TUNER"], [0x200000, "FLIP"],
-  ];
-  const out = kinds.filter(([bit]) => type & bit).map(([, name]) => name);
-  if (type & 0x4000) out.push("TOKEN");
-  else if (type & 0x20) out.push("EFFECT");
-  else if (type & 0x10) out.push("NORMAL");
-  return out;
-}
-
-function spellTrapKind(type: number): string {
-  if (type & 0x10000) return "QUICK-PLAY";
-  if (type & 0x20000) return "CONTINUOUS";
-  if (type & 0x40000) return "EQUIP";
-  if (type & 0x80000) return "FIELD";
-  if (type & 0x100000) return "COUNTER";
-  if (type & 0x80) return "RITUAL";
-  return "NORMAL";
-}
 
 /**
  * SELECT_SUM check. Each amount packs two alternative values (low/high 16 bits, e.g. level
