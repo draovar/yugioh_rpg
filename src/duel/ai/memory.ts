@@ -43,7 +43,7 @@ export class AiMemory {
   chain: ChainLink[] = [];
   /** Attacks declared this turn, in order. */
   attacks: Attack[] = [];
-  /** The latest summon, attack or activation (cleared at each new phase). */
+  /** The latest summon, attack or activation (cleared at each new phase, and once an attack is over). */
   lastAction: LastAction | null = null;
   /**
    * Card codes each player has shown this duel (cards on the field, in the GY, revealed, activated), mostly by owner:
@@ -109,6 +109,11 @@ export class AiMemory {
       case OcgMessageType.ATTACK:
         this.attacks.push({ attacker: m.card, target: m.target });
         this.lastAction = { kind: "attack", player: m.card.controller, code: 0 };
+        break;
+      case OcgMessageType.DAMAGE_STEP_END:
+      case OcgMessageType.ATTACK_DISABLED:
+        // The attack is over (damage dealt, or negated): later windows answer nothing, else a replay plays it again.
+        if (this.lastAction?.kind === "attack") this.lastAction = null;
         break;
       case OcgMessageType.SUMMONING:
       case OcgMessageType.SPSUMMONING:
