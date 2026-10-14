@@ -1,11 +1,12 @@
 # Duel UI checklist
 
 Every prompt and overlay the duel screen shows, with its current look and how to reach it with the current
-20-card pool (`data/pool.json`). Tick **Tested** once you've seen it in a real duel.
+card pool (`data/pool.json`). Tick **Tested** once you've seen it in a real duel.
 
-Style: **Runewood** = new look · **Old** = blue panel / dark strip, still to redo.
+Style: **Runewood** = the finished look (the Hologram theme reskins the same layout). The prompts are set up in
+`src/scenes/duelPrompts.ts`; on-board choices in `src/ui/duel/BoardPick.ts`.
 
-To see any of #3–#14 without setting it up in a duel, open `/?duel&dialogs` and pick it from the dropdown
+To see any of #3–#17 without setting it up in a duel, open `/?duel&dialogs` and pick it from the dropdown
 (top-left). It uses sample cards; your answer goes to the duel log instead of the engine.
 
 ## Card menu (on the card)
@@ -31,8 +32,8 @@ To see any of #3–#14 without setting it up in a duel, open `/?duel&dialogs` an
 ## Card pickers (`Modal.picker`)
 
 #9, #10 and #11 happen **on the board** when every choice is a card on the field or in your hand (attack
-targets, tributes, Man-Eater Bug...): choices get a dark green 1px outline, picked ones a bright green 2px
-one, and the prompt + CONFIRM / CANCEL / FINISH sit in the strip across the field. They fall back to the
+targets, tributes, Man-Eater Bug...): choices get a yellow 1px outline, picked ones an orange 2px one, and the
+prompt + CONFIRM / CANCEL / FINISH sit in the strip across the field. They fall back to the
 picker dialog when a choice is in the Graveyard, Deck, etc. Try the board version with
 `&dialogs` → "#9 On the field".
 
@@ -54,6 +55,7 @@ picker dialog when a choice is in the Graveyard, Deck, etc. Try the board versio
 |---|---|---|---|---|---|
 | 14 | Zone choice (`SELECT_PLACE`, `SELECT_DISFIELD`) | Free zones in semi-transparent yellow (more opaque on hover / picked) + prompt in the field strip | Yellow for now | Summon or set any card | [ ] |
 | 16 | Remove counters (`SELECT_COUNTER`) | On the board like tributing: cards with counters outlined, each click takes one more (badge shows what's left; a card that gave all it can, or a click once enough are taken, puts its counters back), CONFIRM n/needed | Runewood | No pool card asks yet (Breaker / Skilled Dark Magician remove their own); `&setup=counters&dialogs` → #16 | [ ] |
+| 21 | Rock-paper-scissors before the duel | Both draw ROCK / PAPER / SCISSORS, set one in the middle Monster Zone, both flip; the loser's card flashes red, the winner gets FIRST / SECOND (a draw: pick again) | Runewood | Any duel without `&first`, `&seed` or `&setup` | [ ] |
 | 15 | Turn banner | Blue/red band, 1px light top / dark bottom edge, "YOUR TURN" with drop shadow, "TURN n" under it | Kept + polished | Every turn; `&anims` → #11 | [ ] |
 
 ## Auto-answered (no UI yet)
@@ -64,4 +66,4 @@ Declarations (#18, #19) have their UI now (see above); the bot picks a legal car
 | # | Prompt | Would need |
 |---|---|---|
 | 17b | `SORT_CHAIN` | Ordering list (could reuse #17's dialog) |
-| 20 | `ROCK_PAPER_SCISSORS` | RPS buttons |
+| 20 | `ROCK_PAPER_SCISSORS` (from a card) | Could reuse the pre-duel rock-paper-scissors cards (#21, `RpsIntro`) |
