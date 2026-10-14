@@ -13,7 +13,8 @@ import { DuelSession, counterTotal, type CardView, type FieldSnapshot, type Deck
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { AiSeat } from "../duel/ai/AiSeat.ts";
 import { BRAINS, DEFAULT_BRAIN, type BrainName } from "../duel/ai/brains.ts";
-import { formatTrace, type TraceEntry } from "../duel/ai/trace.ts";
+import { formatTrace, phaseLabel, type TraceEntry } from "../duel/ai/trace.ts";
+import { formatBoard, fullBoard } from "../duel/boardText.ts";
 import { AiWorkerClient } from "../duel/ai/worker/AiWorkerClient.ts";
 import { DECKS, deckNameOf, type DeckName } from "../duel/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
@@ -109,6 +110,8 @@ export class DuelScene extends Phaser.Scene {
   private lpValue: [number, number] = [8000, 8000];
   private startLP = 8000;
   private turnPlayer = 0;
+  /** Turns started so far (the traces' T number). */
+  private turnCount = 0;
   /** Testing aid: the AI's hand and set cards are shown (world menu "AI CARDS", or `&reveal`); never in multiplayer. */
   private revealOpponent = false;
   private phase = 0;
@@ -145,6 +148,7 @@ export class DuelScene extends Phaser.Scene {
     this.previewing = false;
     this.previewAnswer = null;
     this.turnPlayer = 0;
+    this.turnCount = 0;
     this.revealOpponent = false;
     this.phase = 0;
     this.attackArrow = null;
@@ -236,7 +240,14 @@ export class DuelScene extends Phaser.Scene {
     session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
     // `&aitrace` prints every AI decision to the console (also in the deployed game, for reporting misplays).
     const trace = new URLSearchParams(location.search).has("aitrace");
-    if (trace && !net) console.log(this.replayInfo(seedNumber, mine, theirs));
+    if (trace && !net) {
+      console.log(this.replayInfo(seedNumber, mine, theirs));
+      // L logs the whole board, both hands and set cards included (not while typing in a text field).
+      this.input.keyboard?.on("keydown-L", () => {
+        if (document.activeElement instanceof HTMLInputElement) return;
+        this.logBoard(seedNumber);
+      });
+    }
     this.revealOpponent = !net && (revealAiCards() || new URLSearchParams(location.search).has("reveal"));
     // The AI thinks in a Web Worker (`&noworker`: on the main thread, as before).
     const aiSeat = (1 - this.me) as 0 | 1;
@@ -288,6 +299,16 @@ export class DuelScene extends Phaser.Scene {
     }
   }
 
+  /** For `&aitrace` (L key): the whole board with both hands and every set card, for misplay reports. */
+  private logBoard(seed: number): void {
+    const session = this.controller.session;
+    const board = fullBoard([session.snapshot(0), session.snapshot(1)]);
+    const labels: [string, string] = this.me === 0 ? ["P0 (you)", "P1 (AI)"] : ["P0 (AI)", "P1 (you)"];
+    const header = `[board] T${this.turnCount} ${phaseLabel(this.phase)}, P${this.turnPlayer}'s turn, seed ${seed}`;
+    console.log(`${header}
+${formatBoard(board, this.engine.cards, labels, this.me)}`);
+  }
+
   /**
    * For `&aitrace`: the seed, who went first, the decks and the brain, plus a dev URL that replays the same duel (your
    * own moves must be repeated by hand). Decks that aren't prebuilt are listed as passcodes.
@@ -308,6 +329,7 @@ export class DuelScene extends Phaser.Scene {
       `[AI] duel seed ${seed}: ${this.me === 0 ? "you" : "the AI"} went first, AI brain ${brain}`,
       `     your deck: ${deckText(mine, named[0])}`,
       `     AI deck: ${deckText(theirs, named[1])}`,
+      `     press L to log the whole board`,
       `     replay: ${location.origin}${location.pathname}?duel&${params}&aitrace${named[0] && named[1] ? "" : " (with the decks above)"}`,
     ].join("\n");
   }
@@ -454,7 +476,7 @@ export class DuelScene extends Phaser.Scene {
     }
     if (messages.length) for (const b of this.counterBadges.values()) b.setVisible(false);
     await this.animator.play(messages, (m) => {
-      if (m.type === OcgMessageType.NEW_TURN) this.turnPlayer = m.player;
+      if (m.type === OcgMessageType.NEW_TURN) { this.turnPlayer = m.player; this.turnCount++; }
       if (m.type === OcgMessageType.DRAW && m.player === this.me) this.panel.drew(m.drawn[0]?.code ?? 0);
       const line = describeMessage(m, this.engine.text, this.me);
       if (line) this.panel.log(line);

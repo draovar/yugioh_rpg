@@ -39,8 +39,13 @@ const PHASES: [number, string][] = [
   [0x01, "DP"], [0x02, "SP"], [0x04, "M1"], [0xf8, "BP"], [0x100, "M2"], [0x200, "EP"],
 ];
 
+/** A phase's short name as the traces print it (DP, SP, M1, BP, M2, EP). */
+export function phaseLabel(phase: number): string {
+  return PHASES.find(([bits]) => phase & bits)?.[1] ?? "-";
+}
+
 export function formatTrace(e: TraceEntry): string {
-  const phase = PHASES.find(([bits]) => e.phase & bits)?.[1] ?? "-";
+  const phase = phaseLabel(e.phase);
   const time = e.ms !== undefined && e.ms >= 1 ? ` [${Math.round(e.ms)} ms]` : "";
   const lines = [`[AI P${e.seat} ${e.brain} T${e.turn} ${phase}] ${e.prompt}: ${e.choice}${e.reason ? ` (${e.reason})` : ""}${time}`];
   for (const o of e.options ?? []) lines.push(`    ${o.score.toFixed(2).padStart(7)}  ${o.label}`);

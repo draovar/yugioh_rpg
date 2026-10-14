@@ -51,7 +51,8 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&noworker` makes the AI think on the main thread instead of its Web Worker, `&reveal` shows the AI's hand and set cards
 (also the world menu's AI CARDS toggle), `&aitrace` prints every AI decision
 to the console (also in the deployed game, for misplay reports), after a first line with the duel seed, who went first,
-the decks and brain and a `?duel&seed=…&first=…` URL that replays the same duel (duels vs the AI always use a seed that fits `&seed=N`),
+the decks and brain and a `?duel&seed=…&first=…` URL that replays the same duel (duels vs the AI always use a seed that fits `&seed=N`); with it, the L key logs the whole board, both hands and set
+cards included (`src/duel/boardText.ts`),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
 choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
