@@ -26,7 +26,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
 | `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--wa W.json] [--wb W.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders), on all CPU cores (worker threads); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened inside each simulated copy |
 | `npm run tune -- [--brain sim] [--rounds 20] [--quick 10] [--long 30] [--seed S]` | tune the AI's `Weights` by self-play: random 1-3 weight changes vs the current best, kept at ≥ 53.5% over 720 duels; writes `vendor/tune/best.json` (resumed) + `log.jsonl`; winners are copied into `DEFAULT_WEIGHTS` by hand |
-| `npm run ai-bench [-- --brain sim] [-- --show]` | fixed positions with a known right/wrong main-phase choice (`tools/ai-bench.ts`); every reported misplay becomes one |
+| `npm run ai-bench [-- --brain NAME] [-- --show]` | fixed positions with a known right/wrong main-phase choice (`tools/ai-bench.ts`); every reported misplay becomes one |
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
@@ -47,7 +47,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`; cards placed in hand/on the field first),
-`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `sim` (default), `replay`, `generic`, `autobot`), `&aitrace` prints every AI decision
+`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `replay` (default, `DEFAULT_BRAIN`), `sim`, `generic`, `autobot`), `&aitrace` prints every AI decision
 to the console (also in the deployed game, for misplay reports),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
@@ -281,9 +281,10 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    Duelist / Expert, Expert as strong as possible, with lookahead later; no cheating by default).
    ✅ M0 plumbing: `AiSeat` / `redact` / `AiMemory` / brains / trace, `arena`, `test-ai`.
    ✅ M1 generic brain: ~82% vs autobot over 1008 duels.
-   ✅ M2 `sim` brain (default opponent): main-phase activations judged by playing them on a rebuilt copy of the board
+   ✅ M2 `sim` brain: main-phase activations judged by playing them on a rebuilt copy of the board
    (`docs/ai-plan.md` §6a); 54% vs generic, 84% vs autobot.
-   M3 in progress: `replay` brain (chain responses by replaying the opponent's action), 53% ± 3 vs sim.
+   M3 in progress: `replay` brain (chain responses by replaying the opponent's action), 53% ± 3 vs sim; the default
+   opponent since 2026-10-14 (the user's first test duel showed the simple chain rule Shrinking its own monster).
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.

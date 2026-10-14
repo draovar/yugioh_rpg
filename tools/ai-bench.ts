@@ -1,11 +1,11 @@
 // Fixed test positions with a known right (or wrong) main-phase decision: every misplay found in play becomes one, so
 // it stays fixed. Each position is a board (cards placed before the duel starts, the AI going first) and a check on
 // the AI's first main-phase choice (its trace text, e.g. "summon Zaborg the Thunder Monarch").
-// Usage: npm run ai-bench [-- --brain sim] [-- --show]
+// Usage: npm run ai-bench [-- --brain NAME (default: the game's)] [-- --show]
 import { OcgLocation, OcgMessageType, OcgPosition, OcgResponseType } from "ocgcore-wasm";
 import { autoRespond } from "../src/duel/autoBot.ts";
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
-import { BRAINS, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
+import { BRAINS, DEFAULT_BRAIN, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
 import { formatTrace, type TraceEntry } from "../src/duel/ai/trace.ts";
 import type { Deck, StartCard } from "../src/duel/DuelSession.ts";
 import { cards, core, newDuel, readScript, seedFrom } from "./lib/engine.ts";
@@ -49,7 +49,7 @@ const POSITIONS: Position[] = [
 ];
 
 const args = process.argv.slice(2);
-const brainName = (args.includes("--brain") ? args[args.indexOf("--brain") + 1] : "sim") as BrainName;
+const brainName = (args.includes("--brain") ? args[args.indexOf("--brain") + 1] : DEFAULT_BRAIN) as BrainName;
 if (!isBrainName(brainName)) throw new Error(`unknown brain ${brainName}`);
 const show = args.includes("--show");
 const filler = (): Deck["main"] => Array<number>(30).fill(C.mysticalElf);
