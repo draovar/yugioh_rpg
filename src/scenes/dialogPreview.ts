@@ -6,10 +6,13 @@ import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgResponse } from "ocgcore-wasm";
 import type { HumanPrompt } from "../duel/DuelController.ts";
 import { counterTotal, type FieldSnapshot } from "../duel/DuelSession.ts";
+import { swapSeats } from "./previewSeats.ts";
 
 /** What the preview needs from the duel scene. */
 export interface DialogPreviewHost {
   readonly scene: Phaser.Scene;
+  /** Your seat (the previews below are written for seat 0). */
+  me(): 0 | 1;
   snapshot(): FieldSnapshot | null;
   /**
    * Shows `prompt` as if the engine had asked it. Answers are logged, not sent, then passed to `onAnswer`
@@ -207,7 +210,14 @@ function myHand(h: DialogPreviewHost) {
 }
 
 /** Adds the dropdown + Show button (plain HTML above the game). Call once the duel has started. */
-export function installDialogPreview(host: DialogPreviewHost) {
+export function installDialogPreview(real: DialogPreviewHost) {
+  const swapped = () => real.me() === 1;
+  const host: DialogPreviewHost = {
+    ...real,
+    snapshot: () => { const s = real.snapshot(); return s && swapped() ? swapSeats(s) : s; },
+    prompt: (prompt, hint, onAnswer) => real.prompt(swapped() ? swapSeats(prompt) : prompt, hint, onAnswer),
+    end: (winner) => real.end(winner === null || !swapped() ? winner : 1 - winner),
+  };
   const box = document.createElement("div");
   box.style.cssText = "position:fixed;left:6px;top:32px;z-index:10;display:flex;gap:4px;font:12px monospace";
   const select = document.createElement("select");

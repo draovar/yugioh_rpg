@@ -296,12 +296,15 @@ export class DuelScene extends Phaser.Scene {
     this.controller.start();
     // Dev: `&anims` adds a dropdown to replay single animations (see animPreview.ts).
     if (import.meta.env.DEV && new URLSearchParams(location.search).has("anims")) {
-      installAnimPreview({ scene: this, animator: this.animator, snapshot: () => this.snapshot, renderBoard: (snap) => this.renderBoard(snap) });
+      installAnimPreview({
+        scene: this, animator: this.animator, me: () => this.me, snapshot: () => this.snapshot, renderBoard: (snap) => this.renderBoard(snap),
+      });
     }
     // Dev: `&dialogs` adds a dropdown to open every prompt UI with sample cards (see dialogPreview.ts).
     if (import.meta.env.DEV && new URLSearchParams(location.search).has("dialogs")) {
       installDialogPreview({
         scene: this,
+        me: () => this.me,
         snapshot: () => this.snapshot,
         prompt: (prompt, hint, onAnswer) => this.previewPrompt(() => this.onPrompt(prompt, hint), onAnswer),
         end: (winner) => this.previewPrompt(() => this.endDialog(winner, () => this.answer({ type: OcgResponseType.SELECT_YESNO, yes: true }))),

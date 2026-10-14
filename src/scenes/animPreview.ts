@@ -5,11 +5,14 @@ import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgMessage } from "ocgcore-wasm";
 import { REASON, type FieldSnapshot } from "../duel/DuelSession.ts";
 import type { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
+import { swapSeats } from "./previewSeats.ts";
 
 /** What the preview needs from the duel scene. */
 export interface PreviewHost {
   readonly scene: Phaser.Scene;
-  readonly animator: DuelAnimator;
+  readonly animator: Pick<DuelAnimator, "play">;
+  /** Your seat (the previews below are written for seat 0). */
+  me(): 0 | 1;
   /** The real board as last reported by the engine. */
   snapshot(): FieldSnapshot | null;
   renderBoard(snap: FieldSnapshot): void;
@@ -326,7 +329,14 @@ function drawMsg(codes: number[]): OcgMessage {
 }
 
 /** Adds the dropdown + Play button (plain HTML above the game). Call once the duel has started. */
-export function installAnimPreview(host: PreviewHost) {
+export function installAnimPreview(real: PreviewHost) {
+  const swapped = () => real.me() === 1;
+  const host: PreviewHost = {
+    ...real,
+    animator: { play: (messages, onMessage) => real.animator.play(swapped() ? swapSeats(messages) : messages, onMessage) },
+    snapshot: () => { const s = real.snapshot(); return s && swapped() ? swapSeats(s) : s; },
+    renderBoard: (snap) => real.renderBoard(swapped() ? swapSeats(snap) : snap),
+  };
   const box = document.createElement("div");
   box.style.cssText = "position:fixed;left:6px;top:6px;z-index:10;display:flex;gap:4px;font:12px monospace";
   const select = document.createElement("select");
