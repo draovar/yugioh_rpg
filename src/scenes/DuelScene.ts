@@ -15,7 +15,7 @@ import { AiSeat } from "../duel/ai/AiSeat.ts";
 import { BRAINS, DEFAULT_BRAIN, type BrainName } from "../duel/ai/brains.ts";
 import { formatTrace, type TraceEntry } from "../duel/ai/trace.ts";
 import { AiWorkerClient } from "../duel/ai/worker/AiWorkerClient.ts";
-import { DECKS } from "../duel/decks.ts";
+import { DECKS, deckNameOf, type DeckName } from "../duel/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
 import { ANIM_SPEEDS, CHAIN_MODES, animSpeed, chainMode, revealAiCards, setAnimSpeed, setChainMode } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
@@ -230,11 +230,13 @@ export class DuelScene extends Phaser.Scene {
     const theirs = net ? net.opponentDeck : this.sceneData.opponentDeck ?? DECKS.kaiba.deck;
     const bySeat: [Deck, Deck] = this.me === 0 ? [mine, theirs] : [theirs, mine];
     const decks = net ? bySeat : withDevSetup(bySeat, this.sceneData.setup);
-    const seed = net ? net.seed
-      : this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as DuelSeed) : undefined;
+    // Duels vs the AI always get a seed that fits `&seed=N`, so a traced one can be replayed.
+    const seedNumber = this.sceneData.seed ?? Math.floor(Math.random() * 2 ** 31);
+    const seed = net ? net.seed : ([BigInt(seedNumber), 0n, 0n, 0n] as DuelSeed);
     session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
     // `&aitrace` prints every AI decision to the console (also in the deployed game, for reporting misplays).
     const trace = new URLSearchParams(location.search).has("aitrace");
+    if (trace && !net) console.log(this.replayInfo(seedNumber, mine, theirs));
     this.revealOpponent = !net && (revealAiCards() || new URLSearchParams(location.search).has("reveal"));
     // The AI thinks in a Web Worker (`&noworker`: on the main thread, as before).
     const aiSeat = (1 - this.me) as 0 | 1;
@@ -284,6 +286,30 @@ export class DuelScene extends Phaser.Scene {
         graveyard: (side, codes, banished) => this.previewPrompt(() => this.browsePile(side, codes.map((code) => ({ code }) as CardView), banished.map((code) => ({ code }) as CardView))),
       });
     }
+  }
+
+  /**
+   * For `&aitrace`: the seed, who went first, the decks and the brain, plus a dev URL that replays the same duel (your
+   * own moves must be repeated by hand). Decks that aren't prebuilt are listed as passcodes.
+   */
+  private replayInfo(seed: number, mine: Deck, theirs: Deck): string {
+    const d = this.sceneData;
+    const brain = d.ai ?? DEFAULT_BRAIN;
+    const named = [deckNameOf(mine), deckNameOf(theirs)] as const;
+    const params = new URLSearchParams({ seed: String(seed), first: this.me === 0 ? "you" : "opp" });
+    if (named[0]) params.set("deck", named[0]);
+    if (named[1]) params.set("opp", named[1]);
+    params.set("ai", brain);
+    if (d.startingLP !== undefined) params.set("lp", String(d.startingLP));
+    if (d.setup) params.set("setup", d.setup);
+    const deckText = (deck: Deck, name: DeckName | null) =>
+      name ?? `main [${deck.main.join(",")}]${deck.extra?.length ? ` extra [${deck.extra.join(",")}]` : ""}`;
+    return [
+      `[AI] duel seed ${seed}: ${this.me === 0 ? "you" : "the AI"} went first, AI brain ${brain}`,
+      `     your deck: ${deckText(mine, named[0])}`,
+      `     AI deck: ${deckText(theirs, named[1])}`,
+      `     replay: ${location.origin}${location.pathname}?duel&${params}&aitrace${named[0] && named[1] ? "" : " (with the decks above)"}`,
+    ].join("\n");
   }
 
   /**

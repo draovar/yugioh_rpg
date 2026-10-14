@@ -92,6 +92,11 @@ export function deckByName(name: string | null | undefined, fallback: DeckName):
   return (DECKS[name as DeckName] ?? DECKS[fallback]).deck;
 }
 
+/** The name of a prebuilt deck (the same object, as passed around by the scenes), or null for any other deck. */
+export function deckNameOf(deck: Deck): DeckName | null {
+  return (Object.keys(DECKS) as DeckName[]).find((name) => DECKS[name].deck === deck) ?? null;
+}
+
 /** Why a deck isn't legal: 40-60 main, up to 15 extra, max 3 copies, every card known (tokens excluded). */
 export function deckProblems(deck: Deck, cards: CardDb): string[] {
   const out: string[] = [];
