@@ -484,7 +484,7 @@ export class DuelScene extends Phaser.Scene {
   private hoverEnd() {
     if (this.panelMode !== "log") return;
     this.hoverTimer?.remove();
-    this.hoverTimer = this.time.delayedCall(120, () => this.showLog());
+    this.hoverTimer = this.time.delayedCall(120, () => { if (this.panelMode === "log") this.showLog(); });
   }
 
   /** Renders a card's details in the info panel, with the counters on it (a field card's). */
