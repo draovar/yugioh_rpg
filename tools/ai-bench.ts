@@ -16,7 +16,7 @@ const C = {
   darkHole: 53129443, jinzo: 77585513, lordOfD: 17985575, darkMagicianGirl: 38033121, sangan: 26202165,
   potOfGreed: 55144522, compulsory: 94192409, darkMagician: 46986414, magicianOfFaith: 31560081,
   flute: 43973174, heavyStorm: 19613556, dnaTransplant: 56769674, fissure: 66788016, magicCylinder: 62279055,
-  kuriboh: 40640057, gaia: 6368038,
+  kuriboh: 40640057, gaia: 6368038, blueEyes: 89631139, smashingGround: 97169186,
 } as const;
 
 interface Position {
@@ -82,6 +82,15 @@ const POSITIONS: Position[] = [
     aiSecond: true,
     lp: [1600, 7200],
     expect: /activate Fissure/,
+  },
+  {
+    name: "keep-a-tribute-for-jinzo",
+    why: "user report 2026-10-14: turn 1 with Jinzo + Blue-Eyes in hand ended with an empty field instead of Compulsory Evacuation Device + Lord of D. (1600 LP looked cheaper than risking Lord)",
+    ai: [hand(C.jinzo), hand(C.compulsory), hand(C.lordOfD), hand(C.blueEyes), hand(C.smashingGround)],
+    opponent: [hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiDeck: DECKS.kaiba.deck.main,
+    seeds: 4,
+    forbid: /end turn/,
   },
   {
     name: "monarch-with-target",

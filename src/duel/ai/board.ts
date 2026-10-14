@@ -40,6 +40,12 @@ export const tributesFor = (view: AiView, code: number): number => {
   return level >= 7 ? 2 : level >= 5 ? 1 : 0;
 };
 
+/** Tributes this card needs to reach the field from the hand (0 for non-monsters and Special Summon-only / Ritual ones). */
+const needsTributes = (view: AiView, code: number): number => {
+  const type = cardType(view, code);
+  return type & TYPE.MONSTER && !(type & (TYPE.SPSUMMON | TYPE.RITUAL)) ? tributesFor(view, code) : 0;
+};
+
 /** A monster's battle numbers as far as the viewer knows them (hidden face-down monsters: guessed DEF). */
 export function monsterStats(c: CardView): { atk: number; def: number; known: boolean; attackPos: boolean } {
   const known = c.code !== 0;
@@ -79,6 +85,11 @@ export interface Weights {
   handTrap: number;
   handMonsterBase: number;
   handMonsterFactor: number;
+  /**
+   * A monster in hand needing more Tributes than we have monsters on the field: its value times this (stuck there).
+   * Not for monsters that never Tribute Summon (Special Summon only, Ritual).
+   */
+  stuckMonster: number;
   /** Per card short of 5 left in the Deck. */
   deckLowPenalty: number;
   /** Main phase: a simulated activation is used when it gains more than this. */
@@ -89,7 +100,7 @@ export const DEFAULT_WEIGHTS: Readonly<Weights> = {
   lpScale: 6, lpHalf: 2500,
   monsterBase: 0.4, atkDivisor: 1200, defFactor: 0.8, hiddenMonster: 1.3, token: 0.4,
   setCard: 1, hiddenSetCard: 1.2, continuous: 1.2, equip: 0.6, faceUpSpell: 0.5,
-  handUnknown: 1.2, handSpell: 1.3, handTrap: 1.1, handMonsterBase: 0.3, handMonsterFactor: 0.7,
+  handUnknown: 1.2, handSpell: 1.3, handTrap: 1.1, handMonsterBase: 0.3, handMonsterFactor: 0.7, stuckMonster: 0.8,
   deckLowPenalty: 0.5,
   activateMin: 0.05,
 };
@@ -163,7 +174,13 @@ function sideValue(view: AiView, p: PlayerView): number {
   let v = lpValue(p.lp, w);
   for (const c of p.monsters) if (c) v += monsterValue(view, c);
   for (const c of p.spells) if (c) v += spellTrapValue(view, c);
-  for (const c of p.hand) v += c.code ? codeValue(view, c.code) : w.handUnknown;
+  // Monsters we could tribute (tokens can't be Tributed for a Tribute Summon in GOAT).
+  const fodder = p.monsters.filter((c) => c && !(c.code && cardType(view, c.code) & TYPE.TOKEN)).length;
+  for (const c of p.hand) {
+    if (!c.code) { v += w.handUnknown; continue; }
+    const value = codeValue(view, c.code);
+    v += needsTributes(view, c.code) > fodder ? value * w.stuckMonster : value;
+  }
   if (p.deckCount < 5) v -= (5 - p.deckCount) * w.deckLowPenalty;
   return v;
 }
