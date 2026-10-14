@@ -21,8 +21,8 @@ export interface Deck {
   main: number[];
   extra?: number[];
   /**
-   * Cards placed before the duel starts (dev test setups): in the hand, or face-up on the field
-   * (`sequence` = zone). The opening hand is still drawn from `main` on top of these.
+   * Cards placed before the duel starts (dev test setups): in the hand, or on the field (`sequence` = zone; face-up
+   * unless `position` says otherwise). The opening hand is still drawn from `main` on top of these.
    */
   start?: StartCard[];
 }

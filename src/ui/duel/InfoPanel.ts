@@ -163,7 +163,7 @@ export class InfoPanel {
     const attr = ATTRIBUTE_INDEX[r.attribute];
     if (monster && attr !== undefined) p.add(s.add.image(L.x + L.w - 16, L.top - 1, ATTRIBUTE_SHEET, attr).setOrigin(0));
     if (monster) for (let i = 0; i < (r.level & 0xff); i++) p.add(s.add.image(L.x + i * (STAR_SIZE + STAR_GAP), L.top + 14, ui("star")).setOrigin(0));
-    // 128x128 art in a wooden frame (the LP bar's frame, nine-sliced), loaded on first view.
+    // 128x128 art in the LP bar's frame (nine-sliced), loaded on first view.
     const artY = L.top + 24;
     const artKey = `art128-${code}`;
     const lpRim = INSET.lpTrack, fs = THEME.lpBar.slice;
@@ -175,7 +175,7 @@ export class InfoPanel {
       s.load.once(`filecomplete-image-${artKey}`, placeArt);
       s.load.start();
     }
-    // Column right of the art: monsters get ATK and DEF plates (dark wood); Spells/Traps their SPELL / TRAP
+    // Column right of the art: monsters get ATK and DEF plates; Spells/Traps their SPELL / TRAP
     // and kind icons in that space. Under them, down to the bottom of the art, the type plate:
     // race + monster types, or SPELL / TRAP + kind, one per line.
     const statX = L.x + ART_FRAME + 4, statW = L.x + L.w - statX;
@@ -211,7 +211,7 @@ export class InfoPanel {
   }
 
   /**
-   * One stat: a dark wood plate (Frame01a, as the card menu) with a pixel icon on the left, a small label ("ATK")
+   * One stat: a plate (the theme's "menu-back", as the button plate) with a pixel icon on the left, a small label ("ATK")
    * over the value in 2x light text.
    */
   private statPlate(p: Phaser.GameObjects.Container, x: number, y: number, w: number, label: string, value: string, icon: PixelIcon) {
@@ -229,7 +229,7 @@ export class InfoPanel {
     p.add(text(s, tx, y + 12, value, { scale: 2, color: THEME.plate.ink }));
   }
 
-  /** Cream paper inset whose outer edge is the box (x, y, w, h); text goes inside, padded by its rim. */
+  /** Paper inset ("panel-paper") whose outer edge is the box (x, y, w, h); text goes inside, padded by its rim. */
   private paper(x: number, y: number, w: number, h: number) {
     const r = THEME.panel.paperSlice;
     this.content.add(this.scene.add.nineslice(x, y, ui("panel-paper"), undefined, w, h, r, r, r, r).setOrigin(0));
@@ -260,7 +260,7 @@ export class InfoPanel {
     this.nameScroll = null;
   }
 
-  /** Nothing to show yet (before the opening hand is drawn): just the wooden board. */
+  /** Nothing to show yet (before the opening hand is drawn): just the panel's frame. */
   private showEmpty() {
     this.shownCode = 0;
     this.stopNameScroll();

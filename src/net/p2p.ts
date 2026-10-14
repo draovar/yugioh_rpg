@@ -6,8 +6,9 @@
 // "reject". Decks travel as passcode lists, not names, so both machines build the duel from exactly the same cards.
 // Then rock-paper-scissors: each side sends its "rps" hand every round until one wins, and the winner sends
 // "order" (whether it goes first), which sets the seats. After that both sides send "answer" packets (see
-// DuelController), a "ping" every few seconds, "surrender" when a player forfeits, and "bye" when leaving. WebRTC itself takes very long
-// (or forever) to notice a closed tab, so silence for HEARTBEAT.timeoutMs also counts as the other player leaving.
+// DuelController), a "ping" every few seconds, "surrender" when a player forfeits, and "bye" when leaving.
+// WebRTC itself takes very long (or forever) to notice a closed tab, so silence for HEARTBEAT.timeoutMs also counts
+// as the other player leaving.
 import { Peer, type DataConnection, type PeerError } from "peerjs";
 import type { OcgResponse } from "ocgcore-wasm";
 import type { RemotePeer } from "../duel/DuelController.ts";

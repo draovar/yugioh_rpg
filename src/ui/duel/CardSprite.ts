@@ -50,7 +50,7 @@ export type CardHighlight = "none" | "choice" | "selected" | "attacker" | "attac
 const highlightColor = (kind: CardHighlight): number => ({
   none: 0, choice: THEME.pick.choice, selected: THEME.pick.selected, attacker: 0xff4136, attacked: 0xff4136,
 } satisfies Record<CardHighlight, number>)[kind];
-/** Attack declarations and pickable cards use a thin 1px outline; other highlights 2px. */
+/** Attack declarations and pickable cards use a thin 1px outline; picked cards 2px. */
 const HIGHLIGHT_WIDTH: Partial<Record<CardHighlight, number>> = { choice: 1, attacker: 1, attacked: 1 };
 
 const LEFT = -CARD.w / 2, TOP = -CARD.h / 2;

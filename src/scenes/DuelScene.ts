@@ -339,7 +339,7 @@ export class DuelScene extends Phaser.Scene {
     this.promptBand.add(this.add.rectangle(FIELD.left, top, FIELD.right - FIELD.left, LIST_BUTTON_H, THEME.prompt.strip, THEME.prompt.stripAlpha).setOrigin(0));
     this.promptBand.add(text(this, FIELD_CENTER.x, top + 3, label.toUpperCase(), { color: THEME.prompt.text, originX: 0.5 }));
     if (!buttons.length) return none;
-    // Plate: Frame01a (3px rim) + 2px padding around the buttons, 1px between them.
+    // Plate: the theme's "menu-back" (INSET.plate rim) + 2px padding around the buttons, 1px between them.
     const { x: cx, y: cy } = slotXY(0, { kind: "extra" });
     const rim = INSET.plate, pad = 2, ps = THEME.plate.slice;
     const w = BUTTON_PLATE_W, btnW = w - 2 * (rim + pad);
@@ -361,7 +361,7 @@ export class DuelScene extends Phaser.Scene {
     };
   }
 
-  // ---------------------------------------------------------------- info panel, log, LP
+  // ---------------------------------------------------------------- corner buttons
 
   /**
    * Top-right corner of the field, stacked in the space above the mat (top 59): animation speed
@@ -684,7 +684,7 @@ export class DuelScene extends Phaser.Scene {
   }
 
   /**
-   * Red Runewood arrow (8x6) on the declared attacker's edge facing the opponent, pointing toward it:
+   * Red arrow (8x6, the theme's "attack-up" / "attack-down") on the declared attacker's edge facing the opponent:
    * up on your monster's top edge, down on the opponent's bottom edge. It straddles the edge because the
    * gap between the two monster rows (6px) can't fit it.
    */

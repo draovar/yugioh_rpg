@@ -1,4 +1,5 @@
-// Modal overlays used by duel prompts: button dialogs and a (paged) card picker.
+// Modal overlays used by duel prompts: button dialogs, a (paged) card picker, the coin call, card ordering and the
+// card-name search.
 // They cover the field but not the info panel, so hovering a card in a modal still shows it.
 import Phaser from "phaser";
 import type { CardDb } from "../../duel/cardData.ts";
@@ -115,8 +116,8 @@ export class Modal {
   }
 
   /**
-   * Runewood dialog: light wood board (rim 9, like the info panel) with the message as plain text on the
-   * wood and list-row buttons. With a card: the card (at 2x) on the left; to its right the message on top
+   * Dialog: the theme's board (rim INSET.board, like the info panel) with the message as plain text on it
+   * and list-row buttons. With a card: the card (at 2x) on the left; to its right the message on top
    * and the buttons at the bottom, the message wrapped to the buttons' width, as tall as the card. Without:
    * message above the buttons. The board is STANDARD_W wide (WIDE_W if a button label needs it), content
    * centred, except the card, which sits at the left edge.
@@ -263,7 +264,7 @@ export class Modal {
   }
 
   /**
-   * Card picker on the same wood board as the dialogs: title, one row of up to 9 cards with a caption under
+   * Card picker on the same board as the dialogs: title, one row of up to 9 cards with a caption under
    * each, then a row of list-row buttons (CONFIRM in multi mode, the caller's buttons, < > for pages). More
    * than 9 cards make more pages, never more rows, and every page has the first page's size (the board
    * doesn't jump when paging). Single mode: clicking a card picks it (cards lift a little on hover). Multi mode: clicked

@@ -50,7 +50,7 @@ export interface Theme {
   phase: Record<PhaseState, PhaseLook>;
   /** Current-phase label colour by whose turn it is. */
   turnText: { mine: number; theirs: number };
-  /** Small raised buttons (speed, LOG/CARD) made from the phase sprites: slices + label top per state. */
+  /** Small raised buttons (speed, LOG/CARD, chain mode) made from the phase sprites: slices + label top per state. */
   woodButton: { raised: { slice: Slice; textY: number }; pressed: { slice: Slice; textY: number }; ink: number };
   /**
    * Boards and paper: nine-slice insets of the info panel's frame ("info-frame"), the dialog / picker board

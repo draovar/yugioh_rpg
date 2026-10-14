@@ -311,7 +311,7 @@ export class DuelAnimator {
     if (toHand) this.rekeyHand(to.controller);
   }
 
-  /** #3 Destroy: red flash on the card before it leaves for the GY. */
+  /** Red flash on a destroyed card before it leaves for the GY. */
   private async destroyFlash(sp: CardSprite): Promise<void> {
     await this.flash(sp, 0xff4444);
   }
