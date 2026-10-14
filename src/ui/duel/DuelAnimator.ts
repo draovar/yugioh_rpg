@@ -9,7 +9,8 @@ import { coinCallText, declarationText } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
 import { THEME } from "../theme.ts";
 import { CardSprite } from "./CardSprite.ts";
-import { CARD, FIELD, FIELD_CENTER, ROWS, handXY, slotXY } from "./layout.ts";
+import { pause, playTween } from "./tweens.ts";
+import { CARD, FIELD, FIELD_CENTER, ROWS, cardKey, handXY, slotXY } from "./layout.ts";
 
 export interface AnimHost {
   readonly scene: Phaser.Scene;
@@ -43,7 +44,6 @@ interface Loc {
 const FACEDOWN = OcgPosition.FACEDOWN_ATTACK | OcgPosition.FACEDOWN_DEFENSE;
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
 const ON_FIELD = OcgLocation.MZONE | OcgLocation.SZONE;
-const key = (l: Loc) => `${l.controller}:${l.location}:${l.sequence}`;
 
 /** Coin toss sheet: 8 frames 32x32, a looping flip; frame 0 = heads, 4 = tails. */
 export const COIN_SHEET = "coin-flip";
@@ -164,7 +164,7 @@ export class DuelAnimator {
     // The prompt ending the batch (e.g. Confiscation's card choice) is asked with them face-up.
     if (/^(SELECT|ANNOUNCE|SORT)_/.test(OcgMessageType[m.type] ?? "")) return;
     if (m.type === OcgMessageType.MOVE) {
-      const sp = this.host.sprites.get(key(m.from));
+      const sp = this.host.sprites.get(cardKey(m.from));
       if (sp && this.revealedSprites.delete(sp)) return;
     }
     await this.hideRevealed();
@@ -207,7 +207,7 @@ export class DuelAnimator {
       case OcgMessageType.SPSUMMONING:
       case OcgMessageType.FLIPSUMMONING:
         // A Flip Summon's flip already flashed (see posChange); don't flash twice.
-        if (m.type === OcgMessageType.FLIPSUMMONING && this.justFlipped === key(m)) return;
+        if (m.type === OcgMessageType.FLIPSUMMONING && this.justFlipped === cardKey(m)) return;
         return this.summonBurst(m, m.type === OcgMessageType.SPSUMMONING ? 0x5aa8ff : 0xfff2a8);
       case OcgMessageType.POS_CHANGE:
         return this.posChange(m, m.code, m.prev_position, m.position);
@@ -219,7 +219,7 @@ export class DuelAnimator {
         return this.activate(m, m.code);
       case OcgMessageType.ATTACK:
         // Declaration: only mark attacker and target; the lunge plays at the hit (BATTLE).
-        this.attackKeys = [key(m.card), m.target ? key(m.target) : null];
+        this.attackKeys = [cardKey(m.card), m.target ? cardKey(m.target) : null];
         h.markAttack(...this.attackKeys);
         return this.wait(T.declare);
       case OcgMessageType.BATTLE: {
@@ -264,7 +264,7 @@ export class DuelAnimator {
     const flights = codes.map((code, i) => {
       const target = handXY(side, first + i, finalCount);
       const sp = this.tempSprite(deck.x, deck.y, 0);
-      h.sprites.set(key({ controller: player, location: OcgLocation.HAND, sequence: first + i }), sp);
+      h.sprites.set(cardKey({ controller: player, location: OcgLocation.HAND, sequence: first + i }), sp);
       return this.wait(i * T.drawStagger).then(async () => {
         await this.tween({ targets: sp, x: target.x, y: target.y, duration: T.draw, ease: EASE });
         if (player === h.me) this.reveal(sp, code);
@@ -277,10 +277,10 @@ export class DuelAnimator {
     const h = this.host;
     const dest = this.locXY(to);
     if (!dest) return;
-    if (this.attackKeys.includes(key(from))) this.clearAttack();
+    if (this.attackKeys.includes(cardKey(from))) this.clearAttack();
     let sp = this.findSprite(from, code);
     if (sp) {
-      h.sprites.delete(key(from));
+      h.sprites.delete(cardKey(from));
     } else {
       const src = this.locXY(from);
       if (!src) return;
@@ -307,7 +307,7 @@ export class DuelAnimator {
     await this.tween({ targets: sp, x: target.x, y: target.y, angle, duration: T.move, ease: EASE });
     // Becoming visible (e.g. a monster summoned face-up from the hand of the opponent): reveal on landing.
     if (showCode !== sp.code) this.reveal(sp, showCode);
-    h.sprites.set(key(to), sp);
+    h.sprites.set(cardKey(to), sp);
     if (toHand) this.rekeyHand(to.controller);
   }
 
@@ -318,7 +318,7 @@ export class DuelAnimator {
 
   /** Summoned card flashes (white for Normal/Flip, blue for Special Summons). */
   private async summonBurst(l: Loc, color: number): Promise<void> {
-    const sp = this.host.sprites.get(key(l));
+    const sp = this.host.sprites.get(cardKey(l));
     if (sp) await this.flash(sp, color);
   }
 
@@ -327,7 +327,7 @@ export class DuelAnimator {
    * or a set monster that got attacked) then flashes white, like a summon.
    */
   private async posChange(l: Loc, code: number, prevPosition: number, position: number): Promise<void> {
-    const sp = this.host.sprites.get(key(l));
+    const sp = this.host.sprites.get(cardKey(l));
     if (!sp) return;
     // Only monsters have attack/defense orientation; Spell/Trap cards stay upright (their position bits
     // still say "defense" while set, e.g. when a set card is flipped up to be activated).
@@ -342,7 +342,7 @@ export class DuelAnimator {
     }
     // A monster flipped face-up flashes like a summon; Spells/Traps flash when they activate instead.
     if (monster && prevPosition & FACEDOWN && !(position & FACEDOWN)) {
-      this.justFlipped = key(l);
+      this.justFlipped = cardKey(l);
       await this.flash(sp, 0xfff2a8);
     }
   }
@@ -350,7 +350,7 @@ export class DuelAnimator {
   /** The activated card is shown at exactly 2x in the middle of the field for a moment. */
   private async activate(l: Loc, code: number): Promise<void> {
     const h = this.host;
-    const src = h.sprites.get(key(l));
+    const src = h.sprites.get(cardKey(l));
     if (src && src.code !== code) await this.flipReveal(src, code); // face-down card being activated
     if (src) await this.flash(src, 0xffffff);
     const big = new CardSprite(h.scene, FIELD_CENTER.x, FIELD_CENTER.y).show(code, h.cards.records.get(code)).setScale(2).setDepth(600);
@@ -403,7 +403,7 @@ export class DuelAnimator {
     for (const c of cards) {
       // Only what this screen's player may see: cards revealed to you, or your own.
       if (viewer !== h.me && c.controller !== h.me) continue;
-      const sp = h.sprites.get(key(c));
+      const sp = h.sprites.get(cardKey(c));
       if (!sp) offBoard.push(c.code);
       else if (viewer === h.me && sp.code === 0 && c.code) {
         this.revealedSprites.add(sp);
@@ -443,7 +443,7 @@ export class DuelAnimator {
     const h = this.host;
     const side = this.side(player);
     const n = h.handCount[side];
-    const handKey = (i: number) => key({ controller: player, location: OcgLocation.HAND, sequence: i });
+    const handKey = (i: number) => cardKey({ controller: player, location: OcgLocation.HAND, sequence: i });
     const sprites = Array.from({ length: n }, (_, i) => h.sprites.get(handKey(i))).filter((sp): sp is CardSprite => !!sp);
     if (sprites.length < 2) return;
     const center = handXY(side, 0, 1);
@@ -466,7 +466,7 @@ export class DuelAnimator {
 
   private async attack(card: Loc, target: Loc | null): Promise<void> {
     const h = this.host;
-    const sp = h.sprites.get(key(card));
+    const sp = h.sprites.get(cardKey(card));
     if (!sp) return;
     const to = target ? this.locXY(target) : { x: FIELD_CENTER.x, y: card.controller === h.me ? ROWS.oppHand : ROWS.myHand };
     if (!to) return;
@@ -474,7 +474,7 @@ export class DuelAnimator {
     const sx = sp.x, sy = sp.y;
     await this.tween({ targets: sp, x: sx + (to.x - sx) * 0.7, y: sy + (to.y - sy) * 0.7, duration: T.lunge, ease: "Quad.easeIn" });
     if (target) {
-      const victim = h.sprites.get(key(target));
+      const victim = h.sprites.get(cardKey(target));
       if (victim) void this.flash(victim, 0xffffff);
     }
     await this.tween({ targets: sp, x: sx, y: sy, duration: T.lunge, ease: EASE });
@@ -534,12 +534,12 @@ export class DuelAnimator {
 
   /** Finds the sprite for a moving card; for hands, falls back to matching by passcode. */
   private findSprite(l: Loc, code: number): CardSprite | undefined {
-    const sp = this.host.sprites.get(key(l));
+    const sp = this.host.sprites.get(cardKey(l));
     if (l.location !== OcgLocation.HAND || !code || sp?.code === code) return sp;
     for (const [k, s] of this.host.sprites) {
       if (k.startsWith(`${l.controller}:${OcgLocation.HAND}:`) && s.code === code) {
         this.host.sprites.delete(k);
-        this.host.sprites.set(key(l), s);
+        this.host.sprites.set(cardKey(l), s);
         return s;
       }
     }
@@ -590,22 +590,10 @@ export class DuelAnimator {
   }
 
   private tween(config: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> {
-    // The animation takes over its target: stop anything else moving it (e.g. the hand hover lift).
-    this.host.scene.tweens.killTweensOf(config.targets);
-    return new Promise((resolve) => {
-      const onComplete = config.onComplete;
-      this.host.scene.tweens.add({
-        ...config,
-        duration: ((config.duration as number) ?? 200) / this.speed,
-        onComplete: (...args: unknown[]) => {
-          (onComplete as ((...a: unknown[]) => void) | undefined)?.(...args);
-          resolve();
-        },
-      });
-    });
+    return playTween(this.host.scene, config, this.speed);
   }
 
   private wait(ms: number): Promise<void> {
-    return new Promise((resolve) => this.host.scene.time.delayedCall(ms / this.speed, resolve));
+    return pause(this.host.scene, ms, this.speed);
   }
 }

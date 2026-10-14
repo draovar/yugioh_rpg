@@ -33,3 +33,19 @@ export function chainMode(): ChainMode {
 export function setChainMode(mode: ChainMode): void {
   try { localStorage.setItem(CHAIN_KEY, mode); } catch { /* storage unavailable */ }
 }
+
+const SPEED_KEY = "duel.animSpeed";
+export const ANIM_SPEEDS = [1, 2, 4];
+
+/** Duel animation speed (the duel screen's 1X/2X/4X button). */
+export function animSpeed(): number {
+  try {
+    const saved = Number(localStorage.getItem(SPEED_KEY));
+    if (ANIM_SPEEDS.includes(saved)) return saved;
+  } catch { /* storage unavailable */ }
+  return 1;
+}
+
+export function setAnimSpeed(speed: number): void {
+  try { localStorage.setItem(SPEED_KEY, String(speed)); } catch { /* storage unavailable */ }
+}

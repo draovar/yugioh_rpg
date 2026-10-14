@@ -13,7 +13,7 @@ import { DuelSession, counterTotal, type CardView, type FieldSnapshot, type Deck
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { DECKS } from "../duel/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
-import { CHAIN_MODES, chainMode, setChainMode } from "../ui/prefs.ts";
+import { ANIM_SPEEDS, CHAIN_MODES, animSpeed, chainMode, setAnimSpeed, setChainMode } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
 import { CardSprite } from "../ui/duel/CardSprite.ts";
 import { Modal } from "../ui/duel/Modal.ts";
@@ -24,7 +24,7 @@ import { RpsIntro } from "../ui/duel/RpsIntro.ts";
 import { CardMenu } from "../ui/duel/CardMenu.ts";
 import { BoardPick, type PromptButton } from "../ui/duel/BoardPick.ts";
 import { drawField } from "../ui/duel/field.ts";
-import { CARD, FIELD, FIELD_CENTER, INSET, PHASE_COL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
+import { CARD, FIELD, FIELD_CENTER, INSET, PHASE_COL, cardKey, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
 import { INK, WHITE, text } from "../ui/pixel.ts";
 import { LIST_BUTTON_H, makeListButton, makeWoodButton, type ListButton } from "../ui/widgets.ts";
 import { installAnimPreview } from "./animPreview.ts";
@@ -59,8 +59,6 @@ interface CardAction {
 
 /** Button plate on the Extra Deck slot: as wide as fits left of the Spell/Trap zones; light counter text. */
 const BUTTON_PLATE_W = 56;
-const key = (controller: number, location: number, sequence: number) => `${controller}:${location}:${sequence}`;
-const locKey = (c: OcgCardLoc) => key(c.controller, c.location, c.sequence);
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
 
 /** Phase column boxes, top to bottom, with the engine phase bits each one covers. */
@@ -179,10 +177,7 @@ export class DuelScene extends Phaser.Scene {
         this.modal.dialog(message.toUpperCase(), [{ label: "OK", onClick: resolve }]);
       }),
     });
-    try {
-      const saved = Number(localStorage.getItem("duel.animSpeed"));
-      if ([1, 2, 4].includes(saved)) this.animator.speed = saved;
-    } catch { /* storage unavailable */ }
+    this.animator.speed = animSpeed();
     this.panel = new InfoPanel(this, this.engine, { startLP: this.startLP, opponentName: this.sceneData.opponentName ?? "Opponent" });
     this.createCornerButtons();
     this.prompts = {
@@ -376,11 +371,10 @@ export class DuelScene extends Phaser.Scene {
   private createCornerButtons() {
     const top = 1, pitch = 18 + 1, w = 24;
     const x = 614 + CARD.w / 2 - w;
-    const speeds = [1, 2, 4];
     const speed = makeWoodButton(this, x, top, w, `${this.animator.speed}X`, () => {
-      this.animator.speed = speeds[(speeds.indexOf(this.animator.speed) + 1) % speeds.length];
+      this.animator.speed = ANIM_SPEEDS[(ANIM_SPEEDS.indexOf(this.animator.speed) + 1) % ANIM_SPEEDS.length];
       speed.setLabel(`${this.animator.speed}X`);
-      try { localStorage.setItem("duel.animSpeed", String(this.animator.speed)); } catch { /* storage unavailable */ }
+      setAnimSpeed(this.animator.speed);
     });
     // Switch the info panel between card mode and log mode.
     const panelToggle = makeWoodButton(this, x, top + pitch, w, "LOG", () => {
@@ -511,7 +505,7 @@ export class DuelScene extends Phaser.Scene {
     const sideways = c.location === OcgLocation.MZONE && (c.position & DEFENSE) !== 0;
     if (sideways) sp.setAngle(90);
     const total = counterTotal(c.counters);
-    if (total) this.counterBadge(key(c.controller, c.location, c.sequence), total);
+    if (total) this.counterBadge(cardKey(c), total);
   }
 
   /**
@@ -539,8 +533,8 @@ export class DuelScene extends Phaser.Scene {
       for (const c of [...p.monsters, ...p.spells]) {
         if (!c?.equipTarget) continue;
         const t = c.equipTarget;
-        const equip = this.sprites.get(key(c.controller, c.location, c.sequence));
-        const target = this.sprites.get(key(t.controller, t.location, t.sequence));
+        const equip = this.sprites.get(cardKey(c));
+        const target = this.sprites.get(cardKey(t));
         if (!equip || !target) continue;
         link(equip, target);
         link(target, equip);
@@ -587,7 +581,7 @@ export class DuelScene extends Phaser.Scene {
       if (side === 0) {
         // Hover lift. Skipped while animating, and for a sprite that has since left the hand (an
         // animation may be flying it to the field), so it never fights an animation.
-        const k = key(c.controller, c.location, c.sequence);
+        const k = cardKey(c);
         const lift = (dy: number) => {
           if (this.animator.busy || this.sprites.get(k) !== sp) return;
           this.tweens.add({ targets: sp, y: y - dy, duration: 80 });
@@ -600,7 +594,7 @@ export class DuelScene extends Phaser.Scene {
 
   private cardSprite(c: CardView, x: number, y: number): CardSprite {
     const onField = c.location === OcgLocation.MZONE;
-    const k = key(c.controller, c.location, c.sequence);
+    const k = cardKey(c);
     // A hidden card revealed to you (e.g. by Confiscation) stays face-up until the animator flips it back.
     const revealed = this.animator.revealed.get(k);
     const code = revealed ?? c.code;
@@ -729,7 +723,7 @@ export class DuelScene extends Phaser.Scene {
   }
 
   private addAction(c: OcgCardLoc, label: string, response: OcgResponse) {
-    const k = locKey(c);
+    const k = cardKey(c);
     const list = this.actions.get(k) ?? [];
     list.push({ label, response });
     this.actions.set(k, list);

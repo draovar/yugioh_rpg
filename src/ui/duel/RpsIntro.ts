@@ -7,6 +7,7 @@ import { RPS_HANDS, RPS_NAMES, rpsWinner, type RpsHand, type RpsOpponent } from 
 import { CardSprite } from "./CardSprite.ts";
 import { T } from "./DuelAnimator.ts";
 import { handXY, slotXY } from "./layout.ts";
+import { pause, playTween } from "./tweens.ts";
 
 /** Card art for the three hands: 3 frames 32x32 (rock, paper, scissors), shown in a token frame. */
 export const RPS_SHEET = "rps";
@@ -225,22 +226,10 @@ export class RpsIntro {
   }
 
   private tween(config: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> {
-    const scene = this.host.scene;
-    scene.tweens.killTweensOf(config.targets);
-    return new Promise((resolve) => {
-      const onComplete = config.onComplete;
-      scene.tweens.add({
-        ...config,
-        duration: ((config.duration as number) ?? 200) / this.host.speed(),
-        onComplete: (...args: unknown[]) => {
-          (onComplete as ((...a: unknown[]) => void) | undefined)?.(...args);
-          resolve();
-        },
-      });
-    });
+    return playTween(this.host.scene, config, this.host.speed());
   }
 
   private wait(ms: number): Promise<void> {
-    return new Promise((resolve) => this.host.scene.time.delayedCall(ms / this.host.speed(), resolve));
+    return pause(this.host.scene, ms, this.host.speed());
   }
 }
