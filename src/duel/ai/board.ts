@@ -63,9 +63,10 @@ export function monsterValue(view: AiView, c: CardView): number {
   return statValue(c.attack, c.defense);
 }
 
-/** A Spell/Trap on the field. */
+/** A Spell/Trap on the field. Ones we can't see are a threat (a Mirror Force?), worth a bit more than a known one. */
 export function spellTrapValue(view: AiView, c: CardView): number {
-  if (c.faceDown || !c.code) return 1;
+  if (!c.code) return 1.2;
+  if (c.faceDown) return 1;
   const type = cardType(view, c.code);
   if (type & TYPE.EQUIP) return 0.6; // most of its worth is in the monster it's attached to
   return type & (TYPE.CONTINUOUS | TYPE.FIELD) ? 1.2 : 0.5;

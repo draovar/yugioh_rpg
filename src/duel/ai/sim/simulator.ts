@@ -22,7 +22,8 @@ import { AiSeat, type AiView } from "../AiSeat.ts";
 import { evaluate } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
 import { formatTrace } from "../trace.ts";
-import { layoutFrom, withBlankScripts, withBlanks } from "./world.ts";
+import { replayResponses, situationOf, type ResponseOutcome, type Situation } from "./replay.ts";
+import { layoutFrom, withBlankScripts, withBlanks, type SimLayout } from "./world.ts";
 
 /** The rules engine (not a duel): what the simulator needs to build copies. Holds no hidden information. */
 export interface SimEngine {
@@ -39,6 +40,7 @@ export interface SimOutcome {
 }
 
 type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
+type ChainMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_CHAIN }>;
 
 /** ocgcore duel mode flag: the first turn may attack (the copy always starts on turn 1). */
 const ATTACK_FIRST_TURN = 0x2n;
@@ -53,6 +55,7 @@ export class Simulator {
   private readonly cards: CardDb;
   private readonly readScript: (name: string) => string | null;
   private readonly cache = new Map<number, SimOutcome | null>();
+  private readonly responseCache = new Map<number, ResponseOutcome[] | null>();
   /** Copies built so far (for the arena's statistics). */
   builds = 0;
 
@@ -75,12 +78,44 @@ export class Simulator {
     return outcome;
   }
 
-  private play(layout: ReturnType<typeof layoutFrom>, option: OcgCardLocActive): SimOutcome | null {
+  /**
+   * How each answer to a chain prompt works out: the opponent's action that opened it (attack, summon, activation,
+   * phase) is replayed in a copy where they move first, the AI answers with each candidate or passes, and the board
+   * is scored once that action is over. Null when the situation isn't one the copy can replay.
+   */
+  responses(view: AiView, prompt: ChainMessage): { situation: Situation; outcomes: ResponseOutcome[] } | null {
+    const situation = situationOf(view);
+    if (!situation) return null;
+    const key = fnv1a(JSON.stringify([layoutFrom(view), situation, prompt.selects], (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+    if (!this.responseCache.has(key)) {
+      if (this.responseCache.size > 2000) this.responseCache.clear();
+      this.responseCache.set(key, replayResponses(this, view, prompt, situation));
+    }
+    const outcomes = this.responseCache.get(key)!;
+    return outcomes ? { situation, outcomes } : null;
+  }
+
+  /** Where copies report what happens inside them (`Simulator.debug`), for code that only holds an instance. */
+  get debugSink(): ((line: string) => void) | null {
+    return Simulator.debug;
+  }
+
+  /** The cards the copies use (the game's plus the stand-ins). */
+  get cardDb(): CardDb {
+    return this.cards;
+  }
+
+  /** A fresh duel laid out as `layout`; team 0 moves first, on a turn 1 that may attack. */
+  build(layout: SimLayout): DuelSession {
     this.builds++;
-    const duel = new DuelSession({
+    return new DuelSession({
       core: this.core, cards: this.cards, readScript: this.readScript, decks: layout.decks, startingLP: layout.lp,
       draws: { opening: 0, perTurn: 0 }, extraFlags: ATTACK_FIRST_TURN, seed: SIM_SEED, onCoreLog: () => {},
     });
+  }
+
+  private play(layout: SimLayout, option: OcgCardLocActive): SimOutcome | null {
+    const duel = this.build(layout);
     try {
       const debug = Simulator.debug;
       const ai = new AiSeat({ seat: 0, brain: createGenericBrain(), duel, onTrace: debug ? (e) => debug(`    (copy) ${formatTrace(e)}`) : undefined });

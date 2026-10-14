@@ -1,6 +1,6 @@
 // The generic brain: plays any deck from card data alone (types, ATK/DEF, levels), the engine's legality and timing
 // signals, and the selection hints (M1). With a Simulator it judges main-phase activations by playing them on a copy
-// of the board (M2).
+// of the board (M2), and with `replayChains` it answers the opponent's moves by replaying them there (M3).
 import { OcgMessageType, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
 import { autoRespond } from "../../autoBot.ts";
 import type { AiView, Brain, Decision } from "../AiSeat.ts";
@@ -12,8 +12,8 @@ import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.t
 import { SELECT_HINT, chooseCards, pickUtility, purposeOf } from "./select.ts";
 import type { Simulator } from "../sim/simulator.ts";
 
-export function createGenericBrain(opts: { simulator?: Simulator; name?: string } = {}): Brain {
-  const state = new BrainState(opts.simulator ?? null);
+export function createGenericBrain(opts: { simulator?: Simulator; replayChains?: boolean; name?: string } = {}): Brain {
+  const state = new BrainState(opts.simulator ?? null, opts.replayChains ?? false);
   return {
     name: opts.name ?? "generic",
     decide(prompt: OcgMessage, view: AiView): Decision {
@@ -30,7 +30,7 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
     case OcgMessageType.SELECT_BATTLECMD:
       return decideBattle(m, view, state);
     case OcgMessageType.SELECT_CHAIN:
-      return decideChain(m, view);
+      return decideChain(m, view, state);
     case OcgMessageType.SELECT_CARD: {
       if (view.hint !== null && Number(view.hint) === SELECT_HINT.ATTACK_TARGET)
         return { response: { type: OcgResponseType.SELECT_CARD, indicies: [pickAttackTarget(m.selects, view, state)] }, reason: "planned attack target" };

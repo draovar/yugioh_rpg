@@ -24,6 +24,8 @@ export function best(options: Option[], reason: (o: Option) => string = () => ""
 export class BrainState {
   /** Plays main-phase activations on a copy of the board to judge them (M2); null = judge by card type (M1). */
   readonly simulator: Simulator | null;
+  /** Answers the opponent's moves by replaying them in a copy (M3); needs the simulator. */
+  readonly replayChains: boolean;
   turn = -1;
   /** Main-phase decisions this turn (a safety stop against loops). */
   idleSteps = 0;
@@ -34,8 +36,9 @@ export class BrainState {
   /** The monster the battle plan wants the current attack to hit. */
   attackTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
 
-  constructor(simulator: Simulator | null = null) {
+  constructor(simulator: Simulator | null = null, replayChains = false) {
     this.simulator = simulator;
+    this.replayChains = replayChains;
   }
 
   /** Resets the per-turn state when a new turn has started. */

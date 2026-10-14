@@ -1,7 +1,7 @@
 # Opponent AI: plan (roadmap #3)
 
 Status: agreed 2026-10-14 (user's answers in §9). M0, M1 and M2 done (branch `ai-m0`). Plan changed after M1 (§6a):
-M2 = one-move simulation instead of a hand-written card table. Next: M3 (chain responses).
+M2 = one-move simulation instead of a hand-written card table. M3 in progress (chain replay built, gain small).
 
 M1 result: the generic brain beats autobot 81.6% ± 2.4% (1008 duels, seeds 5000+, 0 errors), short of the 90% target.
 Its losses are card-knowledge mistakes a generic brain can't avoid: Heavy Storm with no opposing Spells/Traps, Breaker /
@@ -183,6 +183,18 @@ Book of Moon, Shrink, Waboku, Mind Crush held in the main phase; Graceful Charit
 quality. Why the gain is small: main-phase activations are a small share of the decisions that decide duels. The
 generic chain rule fires far more often (72 duels: MST 31×, Asura Priest 19, Call of the Haunted 15, Book of Moon 15,
 Mirror Force 14, Magic Cylinder 12, ...) → M3.
+
+**M3 status (2026-10-14):** chain responses by replay are built (`sim/replay.ts`, brain `replay`). The opponent's
+action (attack, summon, activation, or just the phase) is replayed in a copy where they move first; the AI tries each
+candidate or passes during that action, then the copy plays on to the end of their turn (opponent: generic brain with
+stand-ins, AI: its usual chain rule) and the boards are compared. Timing rule instead of card knowledge: answer an
+action if it gains (> 0.15), in their End Phase unless it loses (> -0.15), in other quiet phases only if big (> 1.5).
+Findings: their set traps really can be used in a copy; attack replays work well (Mirror Force +2.6, used 10/11;
+Sakuretsu / Waboku / Compulsory when they stop lethal). Result vs `sim`: 51.9% ± 3.0 when scoring right after the
+action, 53.0% ± 3.0 when playing on to the end of their turn (1080 duels each). The replay disagrees with the simple rule
+in ~11% of chain prompts, mostly passing where the rule uses Book of Moon / MST / Enemy Controller / Magic Cylinder;
+whether those passes are right depends on `evaluate()`, which now limits both M2 and M3 (tempo and LP are valued by
+hand-picked constants). 6.8 ms per decision on average, 210 ms slowest. The arena now runs on all CPU cores.
 
 ## 7. Milestones
 

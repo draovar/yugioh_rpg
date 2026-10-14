@@ -29,6 +29,8 @@ export interface LastAction {
   kind: "summon" | "flip summon" | "special summon" | "attack" | "activate";
   player: 0 | 1;
   code: number;
+  /** Where the card was: the summoned monster's zone, or the activated card's place (attacks: see `attacks`). */
+  place?: OcgLocPos;
 }
 
 export class AiMemory {
@@ -83,7 +85,10 @@ export class AiMemory {
         break;
       case OcgMessageType.CHAINING:
         this.see(m.controller, m.code);
-        this.lastAction = { kind: "activate", player: m.controller, code: m.code };
+        this.lastAction = {
+          kind: "activate", player: m.controller, code: m.code,
+          place: { controller: m.controller, location: m.location, sequence: m.sequence, position: m.position },
+        };
         this.chain.push({
           code: m.code, controller: m.controller, place: { location: m.location, sequence: m.sequence },
           description: m.description, targets: [], negated: false,
@@ -110,7 +115,10 @@ export class AiMemory {
       case OcgMessageType.FLIPSUMMONING: {
         this.see(m.controller, m.code);
         const kind = m.type === OcgMessageType.SUMMONING ? "summon" : m.type === OcgMessageType.SPSUMMONING ? "special summon" : "flip summon";
-        this.lastAction = { kind, player: m.controller, code: m.code };
+        this.lastAction = {
+          kind, player: m.controller, code: m.code,
+          place: { controller: m.controller, location: m.location, sequence: m.sequence, position: m.position },
+        };
         break;
       }
       // Everything below only records which cards were seen.

@@ -21,6 +21,9 @@ export const BRAINS = {
   generic: () => createGenericBrain(),
   /** M2: generic + main-phase activations judged by simulating them (needs the engine, else plays like generic). */
   sim: (ctx: BrainContext) => createGenericBrain({ simulator: ctx.engine ? new Simulator(ctx.engine) : undefined, name: "sim" }),
+  /** M3: sim + answers the opponent's attacks, summons, activations and phases by replaying them in a copy. */
+  replay: (ctx: BrainContext) =>
+    createGenericBrain({ simulator: ctx.engine ? new Simulator(ctx.engine) : undefined, replayChains: true, name: "replay" }),
 } satisfies Record<string, (ctx: BrainContext) => Brain>;
 
 export type BrainName = keyof typeof BRAINS;
