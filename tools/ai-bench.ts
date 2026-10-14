@@ -8,11 +8,13 @@ import { AiSeat } from "../src/duel/ai/AiSeat.ts";
 import { BRAINS, DEFAULT_BRAIN, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
 import { formatTrace, type TraceEntry } from "../src/duel/ai/trace.ts";
 import type { Deck, StartCard } from "../src/duel/DuelSession.ts";
+import { DECKS } from "../src/duel/decks.ts";
 import { cards, core, newDuel, readScript, seedFrom } from "./lib/engine.ts";
 
 const C = {
   zaborg: 51945556, mobius: 4929256, vorseRaider: 14898066, mysticalElf: 15025844, celticGuardian: 91152256,
   darkHole: 53129443, jinzo: 77585513, lordOfD: 17985575, darkMagicianGirl: 38033121, sangan: 26202165,
+  potOfGreed: 55144522, compulsory: 94192409, darkMagician: 46986414, magicianOfFaith: 31560081,
 } as const;
 
 interface Position {
@@ -24,6 +26,10 @@ interface Position {
   opponent: StartCard[];
   /** The opponent goes first and just ends their turn, so the AI is on turn 2 and may attack. */
   aiSecond?: boolean;
+  /** Play it with this many duel seeds (different deck orders and AI randomness); every one must pass. Default 1. */
+  seeds?: number;
+  /** The AI's whole decklist (its Main Deck = this minus its placed cards); default filler. */
+  aiDeck?: readonly number[];
   /** The AI's first main-phase choice must match this... */
   expect?: RegExp;
   /** ...and must not match this. */
@@ -51,6 +57,16 @@ const POSITIONS: Position[] = [
     forbid: /activate Dark Hole/,
   },
   {
+    name: "pot-before-position-change",
+    why: "user report 2026-10-14: turned Dark Magician to defense (no attack on a set Magician of Faith) because that plan's copy drew better from Pot of Greed",
+    ai: [hand(C.potOfGreed), hand(C.jinzo), hand(C.compulsory), monster(C.darkMagician)],
+    opponent: [monster(C.magicianOfFaith, 2, OcgPosition.FACEDOWN_DEFENSE)],
+    aiSecond: true,
+    aiDeck: DECKS.kaiba.deck.main,
+    seeds: 8,
+    expect: /activate Pot of Greed/,
+  },
+  {
     name: "monarch-with-target",
     why: "control for the above: with an opposing monster, Zaborg's effect pays off",
     ai: [hand(C.zaborg), monster(C.celticGuardian)],
@@ -66,18 +82,23 @@ const show = args.includes("--show");
 const filler = (): Deck["main"] => Array<number>(30).fill(C.mysticalElf);
 
 let failed = 0;
-for (const p of POSITIONS) {
+let runs = 0;
+for (const p of POSITIONS) for (let run = 1; run <= (p.seeds ?? 1); run++) {
+  runs++;
   // No opening hand and no draws: only the placed cards. Seat 0 goes first.
   const aiSeat = p.aiSecond ? 1 : 0;
-  const sides = [{ main: filler(), start: p.ai }, { main: filler(), start: p.opponent }];
+  const aiDeck = p.aiDeck ? [...p.aiDeck] : filler();
+  const aiMain = [...aiDeck];
+  for (const c of p.ai) { const i = aiMain.indexOf(c.code); if (i >= 0) aiMain.splice(i, 1); }
+  const sides = [{ main: p.aiDeck ? aiMain : filler(), start: p.ai }, { main: filler(), start: p.opponent }];
   const duel = newDuel({
-    decks: p.aiSecond ? [sides[1], sides[0]] : [sides[0], sides[1]], seed: seedFrom(1),
+    decks: p.aiSecond ? [sides[1], sides[0]] : [sides[0], sides[1]], seed: seedFrom(run),
     draws: { opening: 0, perTurn: 0 }, onCoreLog: () => {},
   });
   const traces: TraceEntry[] = [];
   const ai = new AiSeat({
     seat: aiSeat, brain: BRAINS[brainName]({ engine: { core, cards, readScript } }), duel,
-    deck: filler(), onTrace: (e) => traces.push(e),
+    deck: aiDeck, onTrace: (e) => traces.push(e),
   });
   let choice: TraceEntry | null = null;
   for (let steps = 0; steps < 50 && !choice; steps++) {
@@ -100,8 +121,8 @@ for (const p of POSITIONS) {
   const text = choice?.choice ?? "(no main-phase decision)";
   const ok = !!choice && (!p.expect || p.expect.test(text)) && (!p.forbid || !p.forbid.test(text));
   if (!ok) failed++;
-  console.log(`${ok ? "ok  " : "FAIL"} ${p.name}: ${text}${ok ? "" : `   (${p.expect ? `expected ${p.expect}` : ""}${p.forbid ? ` forbidden ${p.forbid}` : ""}; ${p.why})`}`);
+  console.log(`${ok ? "ok  " : "FAIL"} ${p.name}${p.seeds ? ` #${run}` : ""}: ${text}${ok ? "" : `   (${p.expect ? `expected ${p.expect}` : ""}${p.forbid ? ` forbidden ${p.forbid}` : ""}; ${p.why})`}`);
   if (show || !ok) if (choice) console.log(formatTrace(choice).split("\n").slice(1).join("\n"));
 }
-console.log(failed ? `${failed} of ${POSITIONS.length} positions failed` : `all ${POSITIONS.length} positions passed (${brainName})`);
+console.log(failed ? `${failed} of ${runs} runs failed` : `all ${runs} runs of ${POSITIONS.length} positions passed (${brainName})`);
 if (failed) process.exit(1);

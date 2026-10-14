@@ -107,7 +107,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     copy's prompt (`idleList`, `findSame`).
     `sim/planner.ts` = the turn planner (brain `planner`): `planTurn` beam-searches move sequences (root moves from the
     real prompt, deeper ones from each copy's `next`), scoring each plan by playing it, then a battle phase with the
-    generic battle logic (`battleAfter`), then the opponent's turn; plans reaching the same board merge; budgets
+    generic battle logic (`battleAfter`), then the opponent's turn; plans reaching the same board merge; all copies of one search share one order
+    for the AI's unknown Deck (else a luckier Pot of Greed draw, not the better move, wins a comparison); budgets
     `DEFAULT_PLAN_SETTINGS` (beam 3, depth 6, 8 children, 60 copies, 2 s). It enforces what copies don't know (Normal
     Summon used, monsters that attacked, no battle on turn 1 / after Main 2). `generic/plan.ts` follows the plan step by
     step while the real board matches the plan's `checkpoints` (`boardDigest`), replans otherwise, battles with the

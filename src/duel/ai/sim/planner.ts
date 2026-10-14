@@ -17,6 +17,7 @@ import {
   type OcgMessage,
 } from "ocgcore-wasm";
 import type { FieldSnapshot } from "../../DuelSession.ts";
+import { mulberry32 } from "../../rng.ts";
 import type { AiView } from "../AiSeat.ts";
 import { boardDigest, nextSteps, type PlanStep } from "./sequence.ts";
 import type { Simulator } from "./simulator.ts";
@@ -118,10 +119,13 @@ export function planTurn(
     return true;
   };
 
+  // Every copy gets the same order for our unknown Deck: otherwise each plan draws different cards (Pot of Greed) and
+  // the luckiest draw, not the best move, wins the comparison.
+  const deckSeed = Math.floor(view.rng() * 2 ** 32);
   let nodes = 0;
   const evaluate = (steps: PlanStep[]): Node | null => {
     nodes++;
-    const r = sim.sequence(view, [...prefix, ...steps], { opponentTurn: true, battleAfter: canBattle });
+    const r = sim.sequence({ ...view, rng: mulberry32(deckSeed) }, [...prefix, ...steps], { opponentTurn: true, battleAfter: canBattle });
     if (!r || r.done < prefix.length + steps.length) return null;
     return { steps, value: r.value, next: r.next, checkpoints: r.checkpoints.slice(prefix.length) };
   };
