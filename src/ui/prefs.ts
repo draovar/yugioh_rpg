@@ -18,6 +18,32 @@ export function setChosenDeck(name: DeckName): void {
   try { localStorage.setItem(DECK_KEY, name); } catch { /* storage unavailable */ }
 }
 
+const AI_DECK_KEY = "aiDeck";
+
+/** The prebuilt deck the Rival (the AI) uses, picked in the world menu. */
+export function aiDeck(): DeckName {
+  try {
+    const name = localStorage.getItem(AI_DECK_KEY);
+    if (name && name in DECKS) return name as DeckName;
+  } catch { /* storage unavailable */ }
+  return "kaiba";
+}
+
+export function setAiDeck(name: DeckName): void {
+  try { localStorage.setItem(AI_DECK_KEY, name); } catch { /* storage unavailable */ }
+}
+
+const REVEAL_KEY = "duel.revealAi";
+
+/** Testing aid from the world menu: show the AI's hand and set cards during duels. */
+export function revealAiCards(): boolean {
+  try { return localStorage.getItem(REVEAL_KEY) === "1"; } catch { return false; }
+}
+
+export function setRevealAiCards(on: boolean): void {
+  try { localStorage.setItem(REVEAL_KEY, on ? "1" : "0"); } catch { /* storage unavailable */ }
+}
+
 const CHAIN_KEY = "duel.chainMode";
 export const CHAIN_MODES: ChainMode[] = ["auto", "all", "off"];
 

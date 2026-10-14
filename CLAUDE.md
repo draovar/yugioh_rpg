@@ -47,7 +47,9 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`; cards placed in hand/on the field first),
-`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `replay` (default, `DEFAULT_BRAIN`), `planner`, `sim`, `generic`, `autobot`), `&aitrace` prints every AI decision
+`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `planner` (default, `DEFAULT_BRAIN`), `replay`, `sim`, `generic`, `autobot`),
+`&noworker` makes the AI think on the main thread instead of its Web Worker, `&reveal` shows the AI's hand and set cards
+(also the world menu's AI CARDS toggle), `&aitrace` prints every AI decision
 to the console (also in the deployed game, for misplay reports),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
@@ -108,6 +110,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     Summon used, monsters that attacked, no battle on turn 1 / after Main 2). `generic/plan.ts` follows the plan step by
     step while the real board matches the plan's `checkpoints` (`boardDigest`), replans otherwise, battles with the
     usual logic after a finished plan and plans Main Phase 2 afresh.
+    `worker/` = the AI in a Web Worker (the game's default): `AiWorkerClient` (main thread, an `AiPlayer` like `AiSeat`)
+    redacts messages and masks the board before posting them, so hidden info never leaves the main thread; `aiWorker.ts`
+    runs an AiSeat with its own engine and fills its copy pool between decisions; a shadow AiSeat on the main thread
+    sees the same messages and answers if the worker can't start or fails. `DuelController` takes any `AiPlayer` and
+    awaits its decision (started at once, answered after `aiDelayMs` at the earliest).
     `sim/replay.ts` = M3 (brain `replay`): a chain prompt in the opponent's turn is answered by replaying what they did
     (`situationOf`: their chain link, attack, summon, or the phase) in a copy where they move first, trying each
     candidate during that action, playing on to the end of their turn, and comparing; timing margins per situation in
@@ -126,7 +133,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; bottom bar: deck choice
   saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; THEME buttons (switch in place);
-  MULTIPLAYER button / M key) → `Duel` (`DuelScene`,
+  MULTIPLAYER button / M key; second row (testing aids): AI DECK = the Rival's deck, AI CARDS = show the AI's hand and
+  set cards in duels (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards
+  drawn face-up at 60% alpha)) → `Duel` (`DuelScene`,
   takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   Before the engine starts, `DuelScene.decideFirst` plays rock-paper-scissors on the board (`src/ui/duel/RpsIntro.ts`:

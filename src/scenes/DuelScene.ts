@@ -13,10 +13,11 @@ import { DuelSession, counterTotal, type CardView, type FieldSnapshot, type Deck
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { AiSeat } from "../duel/ai/AiSeat.ts";
 import { BRAINS, DEFAULT_BRAIN, type BrainName } from "../duel/ai/brains.ts";
-import { formatTrace } from "../duel/ai/trace.ts";
+import { formatTrace, type TraceEntry } from "../duel/ai/trace.ts";
+import { AiWorkerClient } from "../duel/ai/worker/AiWorkerClient.ts";
 import { DECKS } from "../duel/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
-import { ANIM_SPEEDS, CHAIN_MODES, animSpeed, chainMode, setAnimSpeed, setChainMode } from "../ui/prefs.ts";
+import { ANIM_SPEEDS, CHAIN_MODES, animSpeed, chainMode, revealAiCards, setAnimSpeed, setChainMode } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
 import { CardSprite } from "../ui/duel/CardSprite.ts";
 import { Modal } from "../ui/duel/Modal.ts";
@@ -108,6 +109,8 @@ export class DuelScene extends Phaser.Scene {
   private lpValue: [number, number] = [8000, 8000];
   private startLP = 8000;
   private turnPlayer = 0;
+  /** Testing aid: the AI's hand and set cards are shown (world menu "AI CARDS", or `&reveal`); never in multiplayer. */
+  private revealOpponent = false;
   private phase = 0;
 
   private panel!: InfoPanel;
@@ -142,6 +145,7 @@ export class DuelScene extends Phaser.Scene {
     this.previewing = false;
     this.previewAnswer = null;
     this.turnPlayer = 0;
+    this.revealOpponent = false;
     this.phase = 0;
     this.attackArrow = null;
     this.attackMarks = [null, null];
@@ -231,17 +235,25 @@ export class DuelScene extends Phaser.Scene {
     session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
     // `&aitrace` prints every AI decision to the console (also in the deployed game, for reporting misplays).
     const trace = new URLSearchParams(location.search).has("aitrace");
-    const ai = net ? undefined : new AiSeat({
-      seat: (1 - this.me) as 0 | 1, brain: BRAINS[this.sceneData.ai ?? DEFAULT_BRAIN]({ engine: { core, cards, readScript } }), duel: session,
-      deck: theirs.main, strict: import.meta.env.DEV,
-      onTrace: trace ? (e) => console.log(formatTrace(e)) : undefined,
-    });
+    this.revealOpponent = !net && (revealAiCards() || new URLSearchParams(location.search).has("reveal"));
+    // The AI thinks in a Web Worker (`&noworker`: on the main thread, as before).
+    const aiSeat = (1 - this.me) as 0 | 1;
+    const brain = this.sceneData.ai ?? DEFAULT_BRAIN;
+    const onTrace = trace ? (e: TraceEntry) => console.log(formatTrace(e)) : undefined;
+    const ai = net ? undefined
+      : typeof Worker !== "undefined" && !new URLSearchParams(location.search).has("noworker")
+        ? new AiWorkerClient({ seat: aiSeat, brain, duel: session, engine: { core, cards, readScript }, deck: theirs.main, onTrace })
+        : new AiSeat({
+          seat: aiSeat, brain: BRAINS[brain]({ engine: { core, cards, readScript } }), duel: session,
+          deck: theirs.main, strict: import.meta.env.DEV, onTrace,
+        });
     this.controller = new DuelController({
       session,
       me: this.me,
       remote: net?.remote,
       ai,
       chainMode,
+      revealOpponent: this.revealOpponent,
       schedule: (ms, fn) => this.time.delayedCall(ms, fn),
       events: {
         onUpdate: (messages, snapshot) => this.onUpdate(messages, snapshot),
@@ -613,11 +625,14 @@ export class DuelScene extends Phaser.Scene {
     // A hidden card revealed to you (e.g. by Confiscation) stays face-up until the animator flips it back.
     const revealed = this.animator.revealed.get(k);
     const code = revealed ?? c.code;
+    // The AI's set cards with "AI CARDS" shown: face-up but faded, so they still read as set.
+    const peek = this.revealOpponent && c.controller !== this.me && c.faceDown && c.code !== 0;
     const sp = new CardSprite(this, x, y).show(code, this.engine.cards.records.get(code), {
       // Face-down cards show the back, yours too; hovering your own still shows it in the info panel.
-      back: !revealed && (c.code === 0 || c.faceDown),
+      back: !revealed && !peek && (c.code === 0 || c.faceDown),
       atk: onField ? c.attack : undefined, def: onField ? c.defense : undefined,
     });
+    if (peek) sp.setAlpha(0.6);
     sp.setInteractive({ useHandCursor: true });
     // Field cards: the info panel lists their counters and keeps them current (see InfoPanel.refreshCounters).
     const fieldKey = c.location === OcgLocation.HAND ? null : k;

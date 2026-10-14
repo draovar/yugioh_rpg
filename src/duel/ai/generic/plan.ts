@@ -22,7 +22,7 @@ type BattleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_BATTLECMD
 const describePlan = (steps: readonly PlanStep[], view: AiView, battle: boolean) =>
   [...steps.map((s) => describeStep(s, view.cards)), battle ? "battle" : "end turn"].join(" → ");
 
-export function decideByPlan(m: IdleMessage | BattleMessage, view: AiView, state: BrainState): Decision | null {
+export function decideByPlan(m: IdleMessage | BattleMessage, view: AiView, state: BrainState, retry = true): Decision | null {
   if (!state.simulator || !state.planTurns || view.memory.turnPlayer !== view.seat) return null;
   // A finished plan went on to the battle phase: battle with the usual logic, then plan Main Phase 2 afresh.
   if (state.plan && state.plan.at > state.plan.plan.steps.length) {
@@ -44,7 +44,11 @@ export function decideByPlan(m: IdleMessage | BattleMessage, view: AiView, state
   let response: OcgResponse | null;
   if (step) {
     response = responseFor(m, step);
-    if (!response) { state.plan = null; return null; } // not offered after all: score single moves instead
+    if (!response) {
+      // Refused by the real duel (something the copy didn't know): plan again from here, once.
+      state.plan = null;
+      return retry ? decideByPlan(m, view, state, false) : null;
+    }
   } else if (m.type === OcgMessageType.SELECT_IDLECMD) {
     // The plan's moves are done: battle (as the plans were scored) or end the turn.
     const battle = plan.battleAfter && m.to_bp;

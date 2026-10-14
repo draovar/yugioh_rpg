@@ -4,8 +4,11 @@
 // what we can't see), so set traps, blockers and attacks earn what they're worth there. Plans that reach the same
 // board are merged. Budgets cap the work: nodes (copies) and milliseconds.
 //
-// What the copies can't know is enforced here: no second Normal Summon after one was used, monsters that already
-// attacked don't attack again, no battle phase when the real prompt doesn't allow it (turn 1, after Main Phase 2).
+// What the copies can't know is enforced here, mostly by trusting the real prompt over the copy: no Normal Summon when
+// the real prompt offers none (already used, or forbidden this turn, e.g. after Scapegoat), no position change for a
+// monster the real prompt won't let change (summoned or set this turn), no effect of a card already on the field that
+// the real prompt doesn't offer (used this turn), monsters that already attacked don't attack again, no battle phase
+// when the real prompt doesn't allow it (turn 1, after Main Phase 2).
 import {
   OcgMessageType,
   OcgPhase,
@@ -93,11 +96,23 @@ export function planTurn(
     : phase === OcgPhase.MAIN2 ? [{ kind: "idle", action: SelectIdleCMDAction.TO_BP }, { kind: "battle", action: SelectBattleCMDAction.TO_M2 }]
     : [];
   const canBattle = prompt.type === OcgMessageType.SELECT_BATTLECMD || (phase === OcgPhase.MAIN1 && prompt.to_bp);
+  // What the real main-phase prompt doesn't offer now stays off for cards already in play (the copy may allow more).
+  const idle = prompt.type === OcgMessageType.SELECT_IDLECMD ? prompt : null;
+  const summonBlocked = ctx.normalSummonUsed || (!!idle && !idle.summons.length && !idle.monster_sets.length);
+  const key = (c: { code: number; location: number; sequence: number }) => `${c.code}:${c.location}:${c.sequence}`;
+  const fieldNow = new Set([...view.board.players[view.seat].monsters, ...view.board.players[view.seat].spells]
+    .filter((c) => c !== null).map((c) => key(c!)));
+  const posOk = new Set(idle?.pos_changes.map(key) ?? []);
+  const activateOk = new Set(idle?.activates.map(key) ?? []);
   const allowed = (s: PlanStep, steps: readonly PlanStep[]) => {
+    if (idle && s.kind === "idle" && s.card && fieldNow.has(key(s.card))) {
+      if (s.action === SelectIdleCMDAction.SELECT_POS_CHANGE && !posOk.has(key(s.card))) return false;
+      if (s.action === SelectIdleCMDAction.SELECT_ACTIVATE && !activateOk.has(key(s.card))) return false;
+    }
     if (s.kind === "idle" && s.action === SelectIdleCMDAction.TO_EP) return false; // ending the turn is every plan's last move
     if (s.kind === "battle" && s.action === SelectBattleCMDAction.TO_EP) return false;
     if (s.kind === "idle" && s.action === SelectIdleCMDAction.TO_BP && !canBattle) return false;
-    const summoned = ctx.normalSummonUsed || steps.some((p) => p.kind === "idle" && (p.action === SelectIdleCMDAction.SELECT_SUMMON || p.action === SelectIdleCMDAction.SELECT_MONSTER_SET));
+    const summoned = summonBlocked || steps.some((p) => p.kind === "idle" && (p.action === SelectIdleCMDAction.SELECT_SUMMON || p.action === SelectIdleCMDAction.SELECT_MONSTER_SET));
     if (s.kind === "idle" && summoned && (s.action === SelectIdleCMDAction.SELECT_SUMMON || s.action === SelectIdleCMDAction.SELECT_MONSTER_SET)) return false;
     if (s.kind === "attack" && ctx.attacked.has(s.attacker.sequence)) return false;
     return true;

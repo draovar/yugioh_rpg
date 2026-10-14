@@ -46,6 +46,18 @@ export interface Brain {
   dispose?(): void;
 }
 
+/** What DuelController needs from an AI player: one in this thread (AiSeat) or in a Web Worker (AiWorkerClient). */
+export interface AiPlayer {
+  readonly seat: 0 | 1;
+  /** Every engine step's raw messages (the player filters them itself). */
+  observe(messages: readonly OcgMessage[]): void;
+  /** Its answer to a prompt addressed to it; a worker answers later. */
+  decide(prompt: OcgMessage): OcgResponse | Promise<OcgResponse>;
+  /** A little preparation while the opponent thinks; whether there's more. */
+  idle(): boolean;
+  dispose(): void;
+}
+
 /** What AiSeat needs from the duel. */
 export interface AiDuel {
   readonly cards: CardDb;
@@ -65,7 +77,7 @@ export interface AiSeatOptions {
   onTrace?: (entry: TraceEntry) => void;
 }
 
-export class AiSeat {
+export class AiSeat implements AiPlayer {
   readonly seat: 0 | 1;
   readonly brain: Brain;
   readonly memory: AiMemory;

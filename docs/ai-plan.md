@@ -254,6 +254,15 @@ and it now sets traps and blockers and flips Magician of Faith. Not clearly stro
 The copies still assume the opponent's set cards never fire and their hand holds exactly one 1600 monster: the next
 lever is sampling what their hidden cards could be (the M5 "sampled worlds" idea), not more search.
 
+## 6g. The AI in a Web Worker (2026-10-14)
+
+`src/duel/ai/worker/`: the AI thinks in a Web Worker with its own engine; the game posts it redacted messages and the
+masked board (hidden info stays on the main thread), the worker fills its copy pool between decisions, and a shadow
+AiSeat on the main thread answers if the worker fails. Checked in dev and in the production build: the planner thinks
+~1 s per new plan in the worker, the main thread shows no long tasks. Planner fixes from watching it play: trust the
+real prompt over the copy (no Normal Summon / position change / used effect the real game doesn't offer now, e.g.
+after Scapegoat) and replan at once when a planned move is refused. The planner is the default opponent for testing.
+
 ## 7. Milestones
 
 | # | Milestone | Done when |

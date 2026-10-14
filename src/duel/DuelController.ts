@@ -12,7 +12,7 @@ import {
   type OcgResponse,
 } from "ocgcore-wasm";
 import { DuelSession, type FieldSnapshot } from "./DuelSession.ts";
-import { AiSeat } from "./ai/AiSeat.ts";
+import { AiSeat, type AiPlayer } from "./ai/AiSeat.ts";
 import { autoBotBrain } from "./ai/brains.ts";
 
 const HINT_SELECTMSG = 3;
@@ -61,10 +61,15 @@ export interface DuelControllerOptions {
   me?: 0 | 1;
   /** The other seat is a player on another machine; without it, the built-in AI plays it. */
   remote?: RemotePeer;
-  /** The built-in AI for the other seat (ignored with `remote`). Default: autoBot. */
-  ai?: AiSeat;
+  /** The built-in AI for the other seat (ignored with `remote`): an AiSeat or a worker-backed player. Default: autoBot. */
+  ai?: AiPlayer;
   /** The human's chain mode, read at every chain prompt (it can change mid-duel). Default "auto". */
   chainMode?: () => ChainMode;
+  /**
+   * Testing aid: the human is also shown the opponent's hidden cards (hand, set cards). Only what the human sees
+   * changes, never what the AI knows; ignored in peer-to-peer duels.
+   */
+  revealOpponent?: boolean;
 }
 
 export class DuelController {
@@ -74,8 +79,9 @@ export class DuelController {
   private readonly aiDelayMs: number;
   readonly me: 0 | 1;
   private readonly remote: RemotePeer | null;
-  private readonly ai: AiSeat | null;
+  private readonly ai: AiPlayer | null;
   private readonly chainMode: () => ChainMode;
+  private readonly revealOpponent: boolean;
   /** Peer answers that arrived before our duel reached their prompt. */
   private inbox: { response: OcgResponse; checksum: number }[] = [];
   private awaitingRemote = false;
@@ -93,6 +99,7 @@ export class DuelController {
     this.ai = this.remote ? null : opts.ai ?? new AiSeat({ seat: (1 - this.me) as 0 | 1, brain: autoBotBrain, duel: this.session });
     if (this.ai && this.ai.seat === this.me) throw new Error("DuelController: the AI can't play the local player's seat");
     this.chainMode = opts.chainMode ?? (() => "auto");
+    this.revealOpponent = !this.remote && !!opts.revealOpponent;
     this.remote?.onResponse((response, checksum) => {
       this.inbox.push({ response, checksum });
       if (this.awaitingRemote) this.takeRemote();
@@ -127,15 +134,22 @@ export class DuelController {
     this.ai?.dispose();
   }
 
+  /** The board as the human sees it (with the opponent's hidden cards if `revealOpponent`). */
   snapshot(): FieldSnapshot {
-    return this.session.snapshot(this.me);
+    const mine = this.session.snapshot(this.me);
+    if (!this.revealOpponent) return mine;
+    // Their side as they see it themselves: hand and set cards included.
+    const opp = (1 - this.me) as 0 | 1;
+    const players = [...mine.players] as FieldSnapshot["players"];
+    players[opp] = this.session.snapshot(opp).players[opp];
+    return { players };
   }
 
   private async step(): Promise<void> {
     const result = this.session.advance();
     for (const m of result.messages) this.track(m);
     this.ai?.observe(result.messages);
-    await this.events.onUpdate(result.messages, this.session.snapshot(this.me));
+    await this.events.onUpdate(result.messages, this.snapshot());
     if (this.destroyed) return;
 
     if (result.ended) {
@@ -157,11 +171,14 @@ export class DuelController {
         this.takeRemote();
         return;
       }
-      // The AI "thinks" a moment before each real choice.
+      // The AI starts thinking now (in a worker, in the background) and answers after at least its "thinking" pause.
+      const answer = Promise.resolve(this.ai!.decide(prompt));
       this.schedule(this.aiDelayMs, () => {
-        if (this.destroyed) return;
-        this.session.respond(this.ai!.decide(prompt));
-        void this.step();
+        void answer.then((response) => {
+          if (this.destroyed) return;
+          this.session.respond(response);
+          void this.step();
+        });
       });
       return;
     }

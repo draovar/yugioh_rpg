@@ -41,7 +41,7 @@ export const BRAINS = {
 export type BrainName = keyof typeof BRAINS;
 
 /** The opponent the game uses unless told otherwise (`&ai=NAME`), and the one `npm run ai-bench` checks. */
-export const DEFAULT_BRAIN: BrainName = "replay";
+export const DEFAULT_BRAIN: BrainName = "planner";
 
 export function isBrainName(name: string): name is BrainName {
   return name in BRAINS;
