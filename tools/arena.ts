@@ -1,11 +1,12 @@
 // Brain vs brain: plays seeded duels for every deck pairing, with each brain going first and second, and reports win
 // rates. Every claim about AI strength comes from here.
 // Usage: npm run arena -- [--a autobot] [--b autobot] [--n 10] [--decks yugi,kaiba,goat] [--seed 1] [--lp 8000]
-//        [--only K] [--trace]
+//        [--only K] [--trace] [--losses]
 //   --n      duels per deck pairing and seat order (so 3 decks = 9 pairings x 2 orders x n)
 //   --seed   base seed: duel k uses seed (base + k), so a run is repeatable
 //   --only K play only duel k (with --trace: replay one duel's decisions)
 //   --trace  print every decision of both brains
+//   --losses list the duels A lost (replay one with --only K --trace)
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
 import { BRAINS, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
 import { formatTrace } from "../src/duel/ai/trace.ts";
@@ -30,6 +31,8 @@ const baseSeed = Number(args.get("seed") ?? 1);
 const lp = args.has("lp") ? Number(args.get("lp")) : undefined;
 const only = args.has("only") ? Number(args.get("only")) : null;
 const trace = args.has("trace");
+const listLosses = args.has("losses");
+const losses: string[] = [];
 const deckNames = (args.get("decks") ?? Object.keys(DECKS).join(",")).split(",") as DeckName[];
 for (const d of deckNames) if (!(d in DECKS)) throw new Error(`unknown deck "${d}"`);
 
@@ -59,7 +62,7 @@ for (const aDeck of deckNames) for (const bDeck of deckNames) for (const aFirst 
       row.turns += run.turns;
       if (run.winner === null) row.draws++;
       else if (run.winner === aSeat) row.aWins++;
-      else row.bWins++;
+      else { row.bWins++; losses.push(`${k} (${aDeck} ${aFirst ? "first" : "second"} vs ${bDeck}, ${run.turns} turns)`); }
       think.a += run.thinkMs[aSeat]; think.b += run.thinkMs[1 - aSeat];
       decisions.a += run.decisions[aSeat]; decisions.b += run.decisions[1 - aSeat];
       if (trace) console.log(`--- winner: ${run.winner === null ? "draw" : run.winner === aSeat ? `A (${A})` : `B (${B})`}`);
@@ -88,4 +91,6 @@ console.log(`\nA won ${aWins}/${total} = ${(100 * p).toFixed(1)}% (±${margin.to
 const ms = (t: number, d: number) => (d ? (t / d).toFixed(3) : "-");
 console.log(`think time: A ${ms(think.a, decisions.a)} ms/decision, B ${ms(think.b, decisions.b)} ms/decision; ` +
   `${(total / ((performance.now() - started) / 1000)).toFixed(1)} duels/s`);
+if (listLosses) console.log(`
+A lost: ${losses.join(", ") || "none"}`);
 if (errors) process.exit(1);

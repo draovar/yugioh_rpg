@@ -1,6 +1,12 @@
 # Opponent AI: plan (roadmap #3)
 
-Status: agreed 2026-10-14 (user's answers in §9). M0 done (branch `ai-m0`); next: M1.
+Status: agreed 2026-10-14 (user's answers in §9). M0 and M1 done (branch `ai-m0`); next: M2.
+
+M1 result: the generic brain beats autobot 81.6% ± 2.4% (1008 duels, seeds 5000+, 0 errors), short of the 90% target.
+Its losses are card-knowledge mistakes a generic brain can't avoid: Heavy Storm with no opposing Spells/Traps, Breaker /
+Tribe-Infecting Virus effects with no useful target (target prompts can't be cancelled; on an empty opposing field it
+now waits), Solemn Judgment / Ring of Destruction paying LP at bad moments, Shrink on a 900 ATK monster, discarding
+its best card to a cost. M2's card table is aimed at exactly these.
 
 ## 1. Where we start
 

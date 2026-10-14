@@ -24,7 +24,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession` (bots in `AiSeat`s); fails on RETRY/crash |
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
-| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--only K] [--trace]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders); `--only K --trace` replays one duel's decisions |
+| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--only K] [--trace] [--losses]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions |
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
@@ -45,7 +45,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`; cards placed in hand/on the field first),
-`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`; default `autobot`), `&aitrace` prints every AI decision
+`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `generic` (default), `autobot`), `&aitrace` prints every AI decision
 to the console (also in the deployed game, for misplay reports),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
@@ -73,6 +73,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     memory, hint, seeded rng) for a `Brain`, which returns a `Decision` (response + reason + scored options). Brains never
     get the session or raw messages. `trace.ts` turns decisions into lines (`&aitrace`, `arena --trace`). Brains by name
     in `brains.ts`. A boss that peeks at your hand would be an explicit `AiSeat` option, never a brain reading the session.
+    `board.ts`: card values in "cards", `evaluate()`, finding cards in the snapshot. `generic/` = the M1 brain from card
+    data alone: `idle` scores every main-phase action (summon vs set by survival, tribute cost, sets wait for Main 2 when
+    attacking), `battle` (best killable target, weakest attacker that kills it, target remembered for the 549 prompt),
+    `chain` (responds only to the opponent and only when `spe_count` > 0, never to its own link), `select` (the
+    HINT_SELECTMSG purpose: bad for the owner → their best / our worst, good → best), `misc` (position, declarations).
   - `rng.ts` — `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
   - `hash.ts` — `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).
@@ -200,6 +205,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   registered mid-chain. Only move the pin with an ocgcore-wasm update; afterwards `smoke` must print no `[ocgcore]` errors.
 - Tokens (e.g. Scapegoat's Sheep Tokens, its code + 1..4) are separate cards the engine looks up: `build-data` exports
   every TYPE_TOKEN card a pool script creates. A pool card without its tokens breaks when it resolves.
+- ocgcore-wasm 0.1.2 misreads MSG_SHUFFLE_SET_CARD (u32 count, interleaved places; the core writes a u8 count and two
+  lists) and throws "eof", killing the duel (Cyber Jar summoning face-down). `tools/patch-ocgcore.mjs` fixes the dist
+  file as npm's `postinstall`; it fails loudly if the package changes.
 - ocgcore-wasm's MOVE parser drops the move reason; `DuelSession` re-adds it (`MoveMessage.reason`, REASON_*
   bits) by querying the card at its destination right after each batch. Used to flash only real destructions.
 - ocgcore does **not** shuffle decks at start (EDOPro does it client-side); `DuelSession` shuffles with a PRNG seeded from the duel seed.
@@ -246,7 +254,8 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    brought up to date.
 3. **Opponent AI** (`docs/ai-plan.md`: one universal brain + per-card knowledge + trainer profiles; levels Rookie /
    Duelist / Expert, Expert as strong as possible, with lookahead later; no cheating by default).
-   ✅ M0 plumbing: `AiSeat` / `redact` / `AiMemory` / brains / trace, `arena`, `test-ai`. Next: M1 generic brain.
+   ✅ M0 plumbing: `AiSeat` / `redact` / `AiMemory` / brains / trace, `arena`, `test-ai`.
+   ✅ M1 generic brain (default opponent): ~82% vs autobot over 1008 duels; the rest needs card knowledge (M2).
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.

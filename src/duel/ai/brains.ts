@@ -1,6 +1,7 @@
 // The available brains by name (arena, URL options, later trainer profiles).
 import { autoRespond } from "../autoBot.ts";
 import type { Brain } from "./AiSeat.ts";
+import { createGenericBrain } from "./generic/index.ts";
 
 /** autoBot behind the Brain interface: the first legal option. The baseline every real brain must beat. */
 export const autoBotBrain: Brain = {
@@ -10,6 +11,8 @@ export const autoBotBrain: Brain = {
 
 export const BRAINS = {
   autobot: () => autoBotBrain,
+  /** M1: plays from card data alone (no card-specific knowledge yet). */
+  generic: createGenericBrain,
 } satisfies Record<string, () => Brain>;
 
 export type BrainName = keyof typeof BRAINS;

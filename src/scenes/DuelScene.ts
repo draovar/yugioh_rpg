@@ -53,7 +53,7 @@ export interface DuelSceneData {
   goFirst?: boolean;
   /** Peer-to-peer duel against a player on another machine (decks come from the handshake). */
   net?: NetDuel;
-  /** The opponent AI's brain (ignored with `net`). Default: autobot. */
+  /** The opponent AI's brain (ignored with `net`). Default: generic. */
   ai?: BrainName;
 }
 
@@ -232,7 +232,7 @@ export class DuelScene extends Phaser.Scene {
     // `&aitrace` prints every AI decision to the console (also in the deployed game, for reporting misplays).
     const trace = new URLSearchParams(location.search).has("aitrace");
     const ai = net ? undefined : new AiSeat({
-      seat: (1 - this.me) as 0 | 1, brain: BRAINS[this.sceneData.ai ?? "autobot"](), duel: session, strict: import.meta.env.DEV,
+      seat: (1 - this.me) as 0 | 1, brain: BRAINS[this.sceneData.ai ?? "generic"](), duel: session, strict: import.meta.env.DEV,
       onTrace: trace ? (e) => console.log(formatTrace(e)) : undefined,
     });
     this.controller = new DuelController({

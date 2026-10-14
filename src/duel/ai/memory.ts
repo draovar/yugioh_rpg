@@ -24,6 +24,13 @@ export interface Attack {
   target: OcgLocPos | null;
 }
 
+/** The last thing a player did that others may respond to. */
+export interface LastAction {
+  kind: "summon" | "flip summon" | "special summon" | "attack" | "activate";
+  player: 0 | 1;
+  code: number;
+}
+
 export class AiMemory {
   /** Turns started so far (1 = the first turn). */
   turn = 0;
@@ -34,6 +41,8 @@ export class AiMemory {
   chain: ChainLink[] = [];
   /** Attacks declared this turn, in order. */
   attacks: Attack[] = [];
+  /** The latest summon, attack or activation (cleared at each new phase). */
+  lastAction: LastAction | null = null;
   /**
    * Card codes each player has shown this duel (cards on the field, in the GY, revealed, activated), mostly by owner:
    * a card moving to or from a pile counts for that pile's player, but one seen only while stolen counts for whoever
@@ -67,12 +76,14 @@ export class AiMemory {
         break;
       case OcgMessageType.NEW_PHASE:
         this.phase = m.phase;
+        this.lastAction = null;
         break;
       case OcgMessageType.HINT:
         if (m.hint_type === OcgHintType.SELECTMSG && m.player === this.seat) this.hint = m.hint;
         break;
       case OcgMessageType.CHAINING:
         this.see(m.controller, m.code);
+        this.lastAction = { kind: "activate", player: m.controller, code: m.code };
         this.chain.push({
           code: m.code, controller: m.controller, place: { location: m.location, sequence: m.sequence },
           description: m.description, targets: [], negated: false,
@@ -92,7 +103,16 @@ export class AiMemory {
         break;
       case OcgMessageType.ATTACK:
         this.attacks.push({ attacker: m.card, target: m.target });
+        this.lastAction = { kind: "attack", player: m.card.controller, code: 0 };
         break;
+      case OcgMessageType.SUMMONING:
+      case OcgMessageType.SPSUMMONING:
+      case OcgMessageType.FLIPSUMMONING: {
+        this.see(m.controller, m.code);
+        const kind = m.type === OcgMessageType.SUMMONING ? "summon" : m.type === OcgMessageType.SPSUMMONING ? "special summon" : "flip summon";
+        this.lastAction = { kind, player: m.controller, code: m.code };
+        break;
+      }
       // Everything below only records which cards were seen.
       case OcgMessageType.DRAW:
         for (const d of m.drawn) this.see(m.player, d.code);
@@ -104,9 +124,6 @@ export class AiMemory {
         break;
       }
       case OcgMessageType.SET:
-      case OcgMessageType.SUMMONING:
-      case OcgMessageType.SPSUMMONING:
-      case OcgMessageType.FLIPSUMMONING:
       case OcgMessageType.POS_CHANGE:
         this.see(m.controller, m.code);
         break;
