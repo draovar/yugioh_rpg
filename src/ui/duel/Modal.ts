@@ -66,6 +66,23 @@ export interface PickerOptions {
   onHoverEnd?: () => void;
 }
 
+/** The CONFIRM counter of a multi pick: `opts.counter`, or picked/max. Null when there's neither. */
+export function pickCounter(opts: PickerOptions): { value: (selected: number[]) => number; of: number } | null {
+  return opts.counter ?? (opts.max ? { value: (sel) => sel.length, of: opts.max } : null);
+}
+
+/**
+ * A click on card `i` in a multi pick (dialog or board): toggles it; when `max` are picked, a click on another
+ * card swaps the one pick if `max` is 1, else does nothing (unpick one first). Returns whether anything changed.
+ */
+export function togglePick(selected: Set<number>, i: number, max: number | undefined): boolean {
+  if (selected.has(i)) selected.delete(i);
+  else if (!max || selected.size < max) selected.add(i);
+  else if (max === 1) { selected.clear(); selected.add(i); }
+  else return false;
+  return true;
+}
+
 export interface SearchOptions {
   title: string;
   /** The cards that may be picked. */
@@ -274,7 +291,7 @@ export class Modal {
       if (opts.mode === "multi") buttons.push({ label: "Confirm", confirm: true, onClick: () => { this.close(); opts.onConfirm(confirmed()); } });
       for (const b of opts.buttons ?? []) buttons.push({ label: b.label, enabled: b.enabled, onClick: () => { this.close(); b.onClick(); } });
       if (pages > 1) buttons.push({ label: ">", narrow: true, onClick: () => render((page + 1) % pages) });
-      const count = opts.counter ?? (opts.max ? { value: (sel: number[]) => sel.length, of: opts.max } : null);
+      const count = pickCounter(opts);
       const confirmLabel = () => (count ? `Confirm ${count.value(confirmed())}/${count.of}` : "Confirm");
       // Wide enough for the counter at its longest too.
       const longest = (b: { label: string; confirm?: boolean }) => (b.confirm && count ? `Confirm ${count.of}/${count.of}` : b.label);
@@ -327,11 +344,7 @@ export class Modal {
         sp.on("pointerup", () => {
           if (c.locked) return;
           if (opts.mode === "single") { this.close(); opts.onConfirm([i]); return; }
-          if (selected.has(i)) selected.delete(i);
-          else if (!opts.max || selected.size < opts.max) selected.add(i);
-          else if (opts.max === 1) { selected.clear(); selected.add(i); } // swap the one pick
-          else return; // full: unpick one first
-          refresh();
+          if (togglePick(selected, i, opts.max)) refresh();
         });
         sprites.set(i, sp);
         baseY.set(i, y);
