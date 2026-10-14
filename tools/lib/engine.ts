@@ -19,6 +19,8 @@ export interface NewDuel {
   decks: [Deck, Deck];
   seed?: DuelSeed;
   startingLP?: number;
+  /** Opening hand and draws per turn (default 5 and 1). */
+  draws?: { opening: number; perTurn: number };
   /** Engine warnings (script errors); default: printed. */
   onCoreLog?: (type: number, text: string) => void;
 }

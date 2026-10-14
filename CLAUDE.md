@@ -26,6 +26,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
 | `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--wa W.json] [--wb W.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders), on all CPU cores (worker threads); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened inside each simulated copy |
 | `npm run tune -- [--brain sim] [--rounds 20] [--quick 10] [--long 30] [--seed S]` | tune the AI's `Weights` by self-play: random 1-3 weight changes vs the current best, kept at ≥ 53.5% over 720 duels; writes `vendor/tune/best.json` (resumed) + `log.jsonl`; winners are copied into `DEFAULT_WEIGHTS` by hand |
+| `npm run ai-bench [-- --brain sim] [-- --show]` | fixed positions with a known right/wrong main-phase choice (`tools/ai-bench.ts`); every reported misplay becomes one |
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
@@ -85,8 +86,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     HINT_SELECTMSG purpose: bad for the owner → their best / our worst, good → best), `misc` (position, declarations).
     `sim/` = M2: `world.ts` lays the AiView out as a fresh duel (AI = team 0; the opponent's hidden cards and Decks
     become blank stand-ins, codes 1-3 with empty scripts; the AI's Deck = its decklist minus the cards it can see),
-    `simulator.ts` plays one main-phase activation there (follow-up prompts by the generic brain, the opponent passes)
-    and returns `evaluate(after) − evaluate(before)`; the `sim` brain scores activations by it. Brains are built with a
+    `simulator.ts` plays one main-phase action there (`idleAction`: activations, summons, special/flip summons; follow-up
+    prompts by the generic brain, the opponent passes) and returns `evaluate(after) − evaluate(before)`; the `sim` brain
+    scores activations by it, and adds to its summon scores the "surprise": what the copy shows beyond the rule of thumb
+    (a Monarch's effect, with no other target, destroying itself; a flip effect). Brains are built with a
     `BrainContext` holding the rules engine (`core`, `cards`, `readScript`), never the duel. The copy loses
     once-per-turn uses, equip links, counters and the turn number; such moves fall back to the M1 score.
     Copies are fast: `copyScripts` skips the rule files GOAT never uses (Synchro, Xyz, Pendulum, Link, Skill, Rush;

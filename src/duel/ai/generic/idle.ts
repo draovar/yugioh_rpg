@@ -11,7 +11,7 @@ import {
 } from "ocgcore-wasm";
 import { TYPE } from "../../cardData.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
-import { bestAtk, cardAt, cardType, mine, monsterStats, monsterValue, statValue, theirs, tributesFor, weightsOf } from "../board.ts";
+import { bestAtk, cardAt, cardType, codeValue, mine, monsterStats, monsterValue, statValue, theirs, tributesFor, weightsOf } from "../board.ts";
 import { best, type BrainState, type Option } from "./common.ts";
 
 type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
@@ -36,20 +36,36 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
   if (++state.idleSteps > MAX_IDLE_STEPS)
     return { response: act(SelectIdleCMDAction.TO_EP, null), reason: "too many actions this turn" };
 
-  // Our monsters, cheapest first: what a tribute summon would cost.
+  const w = weightsOf(view);
+  // Our monsters, cheapest first: what a tribute summon gives up (at full value: swapping a monster for an equal one
+  // gains nothing).
   const fodder = me.monsters.filter((c) => c !== null).map((c) => monsterValue(view, c)).sort((a, b) => a - b);
-  const tributeCost = (code: number) => fodder.slice(0, tributesFor(view, code)).reduce((s, v) => s + v, 0) * 0.7;
+  const tributeCost = (code: number) => fodder.slice(0, tributesFor(view, code)).reduce((s, v) => s + v, 0);
+  /**
+   * What the simulation shows beyond what the rules of thumb here assume (`expected`: the monster goes from hand to
+   * field, the cheapest tributes go): a Monarch's effect hitting a card (or, with nothing else to hit, itself), a flip
+   * effect, a trigger. 0 without a simulator or when the copy can't play it.
+   */
+  const surprise = (action: SelectIdleCMDAction, i: number, expected: number): { value: number; label: string } => {
+    const sim = state.simulator?.idleAction(view, m, action, i) ?? null;
+    if (!sim) return { value: 0, label: "" };
+    const value = sim.delta - expected;
+    return { value, label: Math.abs(value) >= 0.05 ? ` (sim ${value >= 0 ? "+" : ""}${value.toFixed(2)})` : "" };
+  };
+  const fromHand = (code: number, atk: number, def: number) => statValue(atk, def, w) - codeValue(view, code) - tributeCost(code);
 
-  // Normal Summon (face-up attack): worth it when the monster survives their best attacker.
+  // Normal Summon (face-up attack): worth it when the monster survives their best attacker; a tribute summon only for
+  // what it adds over its tributes.
   m.summons.forEach((c, i) => {
     const r = view.cards.records.get(c.code);
     if (!r) return;
     const survives = r.atk > theirBest;
-    let score = statValue(r.atk, r.def, weightsOf(view)) * (survives ? 1.3 : 0.6) - tributeCost(c.code);
+    let score = (statValue(r.atk, r.def, w) - tributeCost(c.code)) * (survives ? 1.3 : 0.6);
     if (!survives) score -= (theirBest - r.atk) / 2000; // they'll run it over for damage
     if (r.type & TYPE.FLIP) score -= 1; // flip effects want to be set
     if (!theyHaveMonsters && !inMain2) score += 0.3; // a direct hit this turn
-    options.push({ label: `summon ${name(c.code)}`, score, response: act(SelectIdleCMDAction.SELECT_SUMMON, i) });
+    const s = surprise(SelectIdleCMDAction.SELECT_SUMMON, i, fromHand(c.code, r.atk, r.def));
+    options.push({ label: `summon ${name(c.code)}${s.label}`, score: score + s.value, response: act(SelectIdleCMDAction.SELECT_SUMMON, i) });
   });
 
   // Set a monster (face-down defense): a wall against stronger monsters, or a flip effect waiting.
@@ -65,8 +81,9 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
   // Special Summons from the hand (no Normal Summon used): almost always good.
   m.special_summons.forEach((c, i) => {
     const r = view.cards.records.get(c.code);
-    const score = r ? statValue(r.atk, r.def, weightsOf(view)) * 1.3 + 0.5 : 1;
-    options.push({ label: `special summon ${name(c.code)}`, score, response: act(SelectIdleCMDAction.SELECT_SPECIAL_SUMMON, i) });
+    const score = r ? statValue(r.atk, r.def, w) * 1.3 + 0.5 : 1;
+    const s = r ? surprise(SelectIdleCMDAction.SELECT_SPECIAL_SUMMON, i, statValue(r.atk, r.def, w) - codeValue(view, c.code)) : { value: 0, label: "" };
+    options.push({ label: `special summon ${name(c.code)}${s.label}`, score: score + s.value, response: act(SelectIdleCMDAction.SELECT_SPECIAL_SUMMON, i) });
   });
 
   // Activations. Without card knowledge: spells and effects the engine allows are mostly worth using. But with nothing
@@ -110,16 +127,19 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
     if (!card) return;
     const { atk, def } = monsterStats(card);
     let score = -1;
+    let label = "";
     if (card.faceDown) {
-      // Flip summon: flip effects, or a monster that wins fights.
+      // Flip summon: flip effects, or a monster that wins fights. The copy shows what the flip effect really does.
       if (cardType(view, c.code) & TYPE.FLIP) score = 1.5;
       else if (atk > theirBest && !inMain2) score = 1.2;
+      const s = surprise(SelectIdleCMDAction.SELECT_POS_CHANGE, i, 0);
+      if (s.label) { score = Math.max(score, 0.5) + s.value; label = s.label; }
     } else if (card.position & OcgPosition.FACEUP_DEFENSE) {
       if (atk > theirBest && !inMain2 && m.to_bp) score = 1.4; // go on the attack
     } else if (atk <= theirBest && def > atk && !deferSets) {
       score = 0.7; // can't win fights: brace in defense
     }
-    options.push({ label: `change position of ${name(c.code)}`, score, response: act(SelectIdleCMDAction.SELECT_POS_CHANGE, i) });
+    options.push({ label: `change position of ${name(c.code)}${label}`, score, response: act(SelectIdleCMDAction.SELECT_POS_CHANGE, i) });
   });
 
   if (m.to_bp) options.push({ label: "go to battle phase", score: canAttackLater ? 0.3 : -1, response: act(SelectIdleCMDAction.TO_BP, null) });

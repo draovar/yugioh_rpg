@@ -216,6 +216,17 @@ boards with and without them); (2) a pool of up to 24 copies prepared while the 
 placing the cards, starting and setting LP takes 2.6 ms. In the browser a decision that simulates Heavy Storm took
 12 ms. Next for the planner: replaying a move sequence in a copy, then the turn search itself.
 
+## 6d. First reports from play (2026-10-14)
+
+User report: the AI tributed Mobius to Tribute Summon Zaborg with nothing else on the field; Zaborg's mandatory effect
+destroyed Zaborg. Causes: summons weren't simulated (only activations were), and tributes counted at 70%, so swapping a
+2400 monster for an equal one looked like a gain. Fixed: summons, special and flip summons are simulated too; the
+difference between the copy's result and the rule of thumb is added to their score; tributes count fully. Became the
+first `npm run ai-bench` position (fails on the old code at exactly the reported score, 1.74; passes now). Arena:
+sim 55.0% vs generic, 87.2% vs autobot (was 54.4% / 83.9%). Also seen in the same trace, for later: Shrink chained onto
+its own monster by the simple chain rule (the `replay` brain avoids this), and Dark Hole destroying the monster it
+needed as a tribute for Jinzo the same turn (an ordering mistake only the turn planner fixes).
+
 ## 7. Milestones
 
 | # | Milestone | Done when |

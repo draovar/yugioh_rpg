@@ -9,7 +9,7 @@ import {
   OcgMessageType,
   OcgResponseType,
   SelectIdleCMDAction,
-  type OcgCardLocActive,
+  type OcgCardLoc,
   type OcgCoreSync,
   type OcgMessage,
   type OcgResponse,
@@ -95,13 +95,22 @@ export class Simulator {
 
   /** The board change of activating `prompt.activates[index]` in the main phase, or null if the copy can't play it. */
   activation(view: AiView, prompt: IdleMessage, index: number): SimOutcome | null {
-    const option = prompt.activates[index];
+    return this.idleAction(view, prompt, SelectIdleCMDAction.SELECT_ACTIVATE, index);
+  }
+
+  /**
+   * The board change of one main-phase action (summon, special summon, flip summon / position change, set, activate)
+   * with everything it triggers (a Monarch's effect, a flip effect), or null if the copy can't play it.
+   */
+  idleAction(view: AiView, prompt: IdleMessage, action: SelectIdleCMDAction, index: number): SimOutcome | null {
+    const option = idleList(prompt, action)?.[index];
+    if (!option) return null;
     const layout = layoutFrom(view);
-    const key = fnv1a(JSON.stringify([layout, option.code, option.location, option.sequence, option.description],
+    const key = fnv1a(JSON.stringify([layout, action, option],
       (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
     if (this.cache.has(key)) return this.cache.get(key)!;
     if (this.cache.size > 2000) this.cache.clear();
-    const outcome = this.play(layout, option);
+    const outcome = this.play(layout, action, option);
     this.cache.set(key, outcome);
     return outcome;
   }
@@ -139,7 +148,7 @@ export class Simulator {
     return new DuelSession({ ...this.copyConfig, decks: layout.decks, startingLP: layout.lp, prepared: this.pool.pop() });
   }
 
-  private play(layout: SimLayout, option: OcgCardLocActive): SimOutcome | null {
+  private play(layout: SimLayout, action: SelectIdleCMDAction, option: OcgCardLoc & { description?: bigint }): SimOutcome | null {
     const duel = this.build(layout);
     try {
       const debug = Simulator.debug;
@@ -164,12 +173,12 @@ export class Simulator {
       }
       if (s.ended) return null;
       const idle = s.prompt as IdleMessage;
-      const j = findSame(idle.activates, option);
+      const j = findSame(idleList(idle, action) ?? [], option);
       if (j < 0) return null;
 
       const before = evaluate(view());
       const boardBefore = debug ? this.describe(duel) : "";
-      duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.SELECT_ACTIVATE, index: j });
+      duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action, index: j });
       let steps = 0;
       for (s = step(); !s.ended; s = step()) {
         const p = s.prompt as OcgMessage & { player: number };
@@ -205,8 +214,21 @@ export class Simulator {
   }
 }
 
-/** The same activation in the copy's prompt: same card, place and effect (hand cards: any copy of the card). */
-function findSame(list: OcgCardLocActive[], o: OcgCardLocActive): number {
+/** The main-phase prompt's list for an action (summons, special summons, position changes, sets, activations). */
+function idleList(m: IdleMessage, action: SelectIdleCMDAction): (OcgCardLoc & { description?: bigint })[] | null {
+  switch (action) {
+    case SelectIdleCMDAction.SELECT_SUMMON: return m.summons;
+    case SelectIdleCMDAction.SELECT_SPECIAL_SUMMON: return m.special_summons;
+    case SelectIdleCMDAction.SELECT_POS_CHANGE: return m.pos_changes;
+    case SelectIdleCMDAction.SELECT_MONSTER_SET: return m.monster_sets;
+    case SelectIdleCMDAction.SELECT_SPELL_SET: return m.spell_sets;
+    case SelectIdleCMDAction.SELECT_ACTIVATE: return m.activates;
+    default: return null;
+  }
+}
+
+/** The same option in the copy's prompt: same card, place and effect (hand cards: any copy of the card). */
+function findSame(list: (OcgCardLoc & { description?: bigint })[], o: OcgCardLoc & { description?: bigint }): number {
   const exact = list.findIndex((c) => c.code === o.code && c.location === o.location && c.sequence === o.sequence && c.description === o.description);
   if (exact >= 0) return exact;
   return list.findIndex((c) => c.code === o.code && c.location === o.location && c.description === o.description);
