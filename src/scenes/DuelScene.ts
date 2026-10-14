@@ -885,8 +885,13 @@ export class DuelScene extends Phaser.Scene {
       ],
       mode: "single",
       onConfirm: () => {},
-      // Closing sets the pending prompt up again (and ends a dev preview of this browser).
-      buttons: [{ label: "Close", onClick: () => { this.previewing = false; if (pending) this.onPrompt(pending, this.lastHint); } }],
+      // Browsing leaves the board as it was (e.g. cards already picked for a tribute). Only a dev preview of this
+      // browser cleared it: closing that one sets the pending prompt up again.
+      buttons: [{ label: "Close", onClick: () => {
+        if (!this.previewing) return;
+        this.previewing = false;
+        if (pending) this.onPrompt(pending, this.lastHint);
+      } }],
       onHover: (code) => this.showInfo(code),
       onHoverEnd: () => this.hoverEnd(),
     });
