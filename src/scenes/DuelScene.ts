@@ -4,8 +4,6 @@ import {
   OcgMessageType,
   OcgPosition,
   OcgResponseType,
-  SelectBattleCMDAction,
-  SelectIdleCMDAction,
   type OcgCardLoc,
   type OcgMessage,
   type OcgResponse,
@@ -17,10 +15,8 @@ import { DECKS } from "../duel/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
 import { CHAIN_MODES, chainMode, setChainMode } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
-import { autoRespond, declarableCards } from "../duel/autoBot.ts";
-import { ATTRIBUTES, COIN_HEADS_STRING, COIN_TAILS_STRING, RACES } from "../duel/text.ts";
 import { CardSprite } from "../ui/duel/CardSprite.ts";
-import { Modal, type PickerOptions } from "../ui/duel/Modal.ts";
+import { Modal } from "../ui/duel/Modal.ts";
 import { InfoPanel } from "../ui/duel/InfoPanel.ts";
 import { describeMessage } from "../ui/duel/duelLog.ts";
 import { DuelAnimator } from "../ui/duel/DuelAnimator.ts";
@@ -33,6 +29,7 @@ import { INK, WHITE, text } from "../ui/pixel.ts";
 import { LIST_BUTTON_H, makeListButton, makeWoodButton, type ListButton } from "../ui/widgets.ts";
 import { installAnimPreview } from "./animPreview.ts";
 import { installDialogPreview } from "./dialogPreview.ts";
+import { showPrompt, type PhaseAction, type PromptHost } from "./duelPrompts.ts";
 import { withDevSetup } from "./devSetups.ts";
 import { THEME, ui, type PhaseState } from "../ui/theme.ts";
 
@@ -75,7 +72,6 @@ const PHASES = [
   { label: "MAIN 2", bits: 0x100 },
   { label: "END", bits: 0x200 },
 ] as const;
-type PhaseAction = "bp" | "m2" | "ep";
 const PHASE_ACTION: Partial<Record<number, PhaseAction>> = { 3: "bp", 4: "m2", 5: "ep" };
 
 /** How long an LP change ("-1500") stays inside the LP bar. */
@@ -119,6 +115,8 @@ export class DuelScene extends Phaser.Scene {
   private promptBand!: Phaser.GameObjects.Container;
   /** Choosing cards, counters or zones on the board. */
   private boardPick!: BoardPick;
+  /** What duelPrompts.ts uses to set up each prompt's UI. */
+  private prompts!: PromptHost;
 
   constructor() {
     super("Duel");
@@ -187,6 +185,19 @@ export class DuelScene extends Phaser.Scene {
     } catch { /* storage unavailable */ }
     this.panel = new InfoPanel(this, this.engine, { startLP: this.startLP, opponentName: this.sceneData.opponentName ?? "Opponent" });
     this.createCornerButtons();
+    this.prompts = {
+      engine: this.engine,
+      get me() { return scene.me; },
+      modal: this.modal,
+      boardPick: this.boardPick,
+      snapshot: () => this.snapshot,
+      answer: (response) => this.answer(response),
+      addAction: (card, label, response) => this.addAction(card, label, response),
+      setPhaseAction: (action, response) => this.phaseActions.set(action, response),
+      showInfo: (code) => this.panel.showInfo(code),
+      hoverEnd: () => this.panel.hoverEnd(),
+      log: (line) => this.panel.log(line),
+    };
     this.phaseGfx = this.add.container(0, 0);
     this.drawPhaseColumn();
     this.createPromptBand();
@@ -708,283 +719,13 @@ export class DuelScene extends Phaser.Scene {
     }
   }
 
+  /** Sets up the UI for a prompt you have to answer (duelPrompts.ts). */
   private onPrompt(m: HumanPrompt, hint: bigint | null) {
-    const t = this.engine.text;
-    const title = (fallback: string) => (hint ? t.describe(hint) : fallback);
-    const name = (code: number) => t.name(code);
     this.clearInteraction();
-
-    switch (m.type) {
-      case OcgMessageType.SELECT_IDLECMD: {
-        const add = (cards: OcgCardLoc[], label: string, action: SelectIdleCMDAction) =>
-          cards.forEach((c, index) => this.addAction(c, label, { type: OcgResponseType.SELECT_IDLECMD, action, index }));
-        add(m.summons, "Summon", SelectIdleCMDAction.SELECT_SUMMON);
-        add(m.special_summons, "Sp.Sum", SelectIdleCMDAction.SELECT_SPECIAL_SUMMON);
-        add(m.monster_sets, "Set", SelectIdleCMDAction.SELECT_MONSTER_SET);
-        m.pos_changes.forEach((c, index) => this.addAction(c, this.positionLabel(c), {
-          type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.SELECT_POS_CHANGE, index,
-        }));
-        m.activates.forEach((c, index) => this.addAction(c, "Use", {
-          type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.SELECT_ACTIVATE, index,
-        }));
-        // Last, so a Spell/Trap in hand lists USE before SET.
-        add(m.spell_sets, "Set", SelectIdleCMDAction.SELECT_SPELL_SET);
-        if (m.to_bp) this.phaseActions.set("bp", { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_BP, index: null });
-        if (m.to_ep) this.phaseActions.set("ep", { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null });
-        this.drawPhaseColumn();
-        this.applyHighlights();
-        return;
-      }
-      case OcgMessageType.SELECT_BATTLECMD: {
-        m.attacks.forEach((c, index) => this.addAction(c, "Attack", { type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.SELECT_BATTLE, index }));
-        m.chains.forEach((c, index) => this.addAction(c, "Use", {
-          type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.SELECT_CHAIN, index,
-        }));
-        if (m.to_m2) this.phaseActions.set("m2", { type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.TO_M2, index: null });
-        if (m.to_ep) this.phaseActions.set("ep", { type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.TO_EP, index: null });
-        this.drawPhaseColumn();
-        this.applyHighlights();
-        return;
-      }
-      case OcgMessageType.SELECT_CHAIN:
-        this.modal.picker({
-          title: m.forced ? "You must activate an effect" : "Chain an effect?",
-          // Caption: the effect's own name when it has one, else where the card is (FIELD, HAND, GY...),
-          // except set Spells/Traps: S/T says nothing new. Never the generic "ACTIVATE".
-          cards: m.selects.map((c) => {
-            const effect = this.activateLabel(c.code, c.description);
-            if (effect !== "Activate") return { code: c.code, caption: effect };
-            return { code: c.code, caption: c.location === OcgLocation.SZONE ? "" : locationName(c.location, c.controller, this.me) };
-          }),
-          mode: "single",
-          onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: i }),
-          buttons: m.forced ? [] : [{ label: "Don't chain", onClick: () => this.answer({ type: OcgResponseType.SELECT_CHAIN, index: null }) }],
-          onHover: (code) => this.panel.showInfo(code),
-          onHoverEnd: () => this.panel.hoverEnd(),
-        });
-        return;
-      case OcgMessageType.SELECT_EFFECTYN: {
-        const msg = m.description ? t.describe(m.description, name(m.code)) : t.describe(95, name(m.code));
-        this.yesNo(msg || `Activate the effect of "${name(m.code)}"?`, (yes) => ({ type: OcgResponseType.SELECT_EFFECTYN, yes }), m.code);
-        return;
-      }
-      case OcgMessageType.SELECT_YESNO:
-        this.yesNo(t.describe(m.description), (yes) => ({ type: OcgResponseType.SELECT_YESNO, yes }));
-        return;
-      case OcgMessageType.SELECT_OPTION: {
-        // Calling a coin toss (Duel.AnnounceCoin) is an option prompt between system strings 60 / 61.
-        const heads = m.options.findIndex((o) => Number(o) === COIN_HEADS_STRING);
-        const tails = m.options.findIndex((o) => Number(o) === COIN_TAILS_STRING);
-        if (m.options.length === 2 && heads >= 0 && tails >= 0) {
-          this.modal.coinCall(title("Call the coin toss"), (h) => this.answer({ type: OcgResponseType.SELECT_OPTION, index: h ? heads : tails }));
-          return;
-        }
-        this.modal.dialog(title("Choose an option").toUpperCase(), m.options.map((o, index) => ({
-          label: t.describe(o).toUpperCase(), onClick: () => this.answer({ type: OcgResponseType.SELECT_OPTION, index }),
-        })));
-        return;
-      }
-      case OcgMessageType.SELECT_POSITION: {
-        const choices: [OcgPosition, string][] = [
-          [OcgPosition.FACEUP_ATTACK, "ATTACK"], [OcgPosition.FACEDOWN_ATTACK, "FD ATTACK"],
-          [OcgPosition.FACEUP_DEFENSE, "DEFENSE"], [OcgPosition.FACEDOWN_DEFENSE, "FD DEFENSE"],
-        ];
-        this.modal.dialog(`BATTLE POSITION FOR "${name(m.code).toUpperCase()}"`, choices.filter(([p]) => m.positions & p).map(([position, label]) => ({
-          label, onClick: () => this.answer({ type: OcgResponseType.SELECT_POSITION, position }),
-        })), m.code);
-        return;
-      }
-      case OcgMessageType.SELECT_CARD:
-        this.pickCards(m.selects, {
-          title: title(`Select ${range(m.min, m.max)} card(s)`),
-          cards: m.selects.map((c) => ({ code: c.code, caption: locationName(c.location, c.controller, this.me) })),
-          mode: m.min === 1 && m.max === 1 ? "single" : "multi",
-          isValid: (sel) => sel.length >= m.min && sel.length <= m.max,
-          max: m.max,
-          onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_CARD, indicies: sel }),
-          buttons: m.can_cancel ? [{ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_CARD, indicies: null }) }] : [],
-          onHover: (code) => this.panel.showInfo(code),
-          onHoverEnd: () => this.panel.hoverEnd(),
-        });
-        return;
-      case OcgMessageType.SELECT_TRIBUTE:
-        this.pickCards(m.selects, {
-          title: title("Select monster(s) to Tribute"),
-          // Tributes are normally your own field monsters: caption only the unusual ones (hand, opponent's).
-          cards: m.selects.map((c) => ({
-            code: c.code,
-            caption: c.controller === this.me && c.location === OcgLocation.MZONE ? "" : locationName(c.location, c.controller, this.me),
-          })),
-          mode: "multi",
-          // release_param: how many tributes this card counts as (Double Tribute monsters count 2).
-          isValid: (sel) => {
-            const worth = sel.reduce((n, i) => n + (m.selects[i].release_param || 1), 0);
-            return worth >= m.min && sel.length <= m.max && sel.length > 0;
-          },
-          max: m.max,
-          onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_TRIBUTE, indicies: sel }),
-          buttons: m.can_cancel ? [{ label: "Cancel", onClick: () => this.answer({ type: OcgResponseType.SELECT_TRIBUTE, indicies: null }) }] : [],
-          onHover: (code) => this.panel.showInfo(code),
-          onHoverEnd: () => this.panel.hoverEnd(),
-        });
-        return;
-      case OcgMessageType.SELECT_UNSELECT_CARD: {
-        // The engine asks one card at a time and lists the chosen ones separately. Show all of them in
-        // board order so a card stays put when picked (it just rises, captioned CHOSEN); `index` counts
-        // select_cards first, then unselect_cards.
-        const entries = [
-          ...m.select_cards.map((c, index) => ({ c, index, chosen: false })),
-          ...m.unselect_cards.map((c, index) => ({ c, index: m.select_cards.length + index, chosen: true })),
-        ].sort((a, b) => a.c.controller - b.c.controller || a.c.location - b.c.location || a.c.sequence - b.c.sequence);
-        const chosen = m.unselect_cards.length;
-        const done = { type: OcgResponseType.SELECT_UNSELECT_CARD, index: null } as const;
-        // FINISH and CANCEL send the same answer: FINISH once enough are chosen, CANCEL before that if
-        // allowed, else a faded FINISH that only shows the count.
-        const button = m.can_finish || !m.can_cancel
-          ? { label: `Finish ${chosen}/${m.max}`, enabled: m.can_finish, onClick: () => this.answer(done) }
-          : { label: "Cancel", onClick: () => this.answer(done) };
-        this.pickCards(entries.map((e) => e.c), {
-          title: title(`Select ${range(m.min, m.max)} card(s)`),
-          cards: entries.map((e) => ({ code: e.c.code, caption: e.chosen ? "CHOSEN" : locationName(e.c.location, e.c.controller, this.me), selected: e.chosen })),
-          mode: "single",
-          buttons: [button],
-          onConfirm: ([i]) => this.answer({ type: OcgResponseType.SELECT_UNSELECT_CARD, index: entries[i].index }),
-          onHover: (code) => this.panel.showInfo(code),
-          onHoverEnd: () => this.panel.hoverEnd(),
-        });
-        return;
-      }
-      case OcgMessageType.SELECT_SUM: {
-        // Picker indexes: the "must" cards first (locked, always counted), then the optional ones.
-        const must = m.selects_must.map((c) => c.amount);
-        const value = (amount: number) => amount & 0xffff; // low half; the high half is an alternative value
-        const caption = (amount: number) => `VALUE ${value(amount)}`;
-        this.modal.picker({
-          title: title(`Select cards with a total of ${m.amount}`),
-          cards: [
-            ...m.selects_must.map((c) => ({ code: c.code, locked: true, caption: caption(c.amount) })),
-            ...m.selects.map((c) => ({ code: c.code, caption: caption(c.amount) })),
-          ],
-          mode: "multi",
-          isValid: (sel) => {
-            const chosen = sel.filter((i) => i >= must.length).map((i) => m.selects[i - must.length].amount);
-            return chosen.length >= m.min && chosen.length <= m.max && sumMatches([...must, ...chosen], m.amount, m.select_max !== 0);
-          },
-          // CONFIRM shows the running total against the target ("CONFIRM 6/8").
-          counter: {
-            value: (sel) => sel.reduce((n, i) => n + value(i < must.length ? must[i] : m.selects[i - must.length].amount), 0),
-            of: m.amount,
-          },
-          onConfirm: (sel) => this.answer({ type: OcgResponseType.SELECT_SUM, indicies: sel.filter((i) => i >= must.length).map((i) => i - must.length) }),
-          onHover: (code) => this.panel.showInfo(code),
-          onHoverEnd: () => this.panel.hoverEnd(),
-        });
-        return;
-      }
-      case OcgMessageType.SELECT_COUNTER: {
-        const counterName = this.engine.text.counterName(m.counter_type);
-        const onBoard = this.boardPick.counters(m.cards, m.count, {
-          title: title(`Remove ${m.count} ${counterName}${m.count > 1 ? "s" : ""}`),
-          onConfirm: (counters) => this.answer({ type: OcgResponseType.SELECT_COUNTER, counters }),
-          onHover: (code) => this.panel.showInfo(code),
-          onHoverEnd: () => this.panel.hoverEnd(),
-        });
-        if (!onBoard) break; // not on the board after all: the bot answers
-        return;
-      }
-      case OcgMessageType.SORT_CARD:
-        // Big Eye: the cards come top-first; the one numbered 1 goes on top.
-        this.modal.sortCards({
-          title: title("Click the cards in their new order (1 = top)"),
-          codes: m.cards.map((c) => c.code),
-          onConfirm: (order) => this.answer({ type: OcgResponseType.SORT_CARD, order }),
-          onHover: (code) => this.panel.showInfo(code),
-          onHoverEnd: () => this.panel.hoverEnd(),
-        });
-        return;
-      case OcgMessageType.SELECT_PLACE:
-      case OcgMessageType.SELECT_DISFIELD:
-        // For zone prompts the hint is the passcode of the card being placed, not a string id.
-        this.boardPick.places(m.player, m.field_mask, m.count, hint && this.engine.cards.records.has(Number(hint))
-          ? t.describe(569, name(Number(hint)))
-          : t.describe(m.type === OcgMessageType.SELECT_PLACE ? 560 : 570),
-        (places) => this.answer(m.type === OcgMessageType.SELECT_PLACE
-          ? { type: OcgResponseType.SELECT_PLACE, places }
-          : { type: OcgResponseType.SELECT_DISFIELD, places }));
-        return;
-      // Declarations (Tribe-Infecting Virus, DNA Transplant, Sixth Sense, Mind Crush...).
-      case OcgMessageType.ANNOUNCE_RACE:
-        this.declareFlags(title("Declare a Type"), RACES, BigInt(m.available), m.count,
-          (races) => ({ type: OcgResponseType.ANNOUNCE_RACE, races }) as OcgResponse);
-        return;
-      case OcgMessageType.ANNOUNCE_ATTRIB:
-        this.declareFlags(title("Declare an Attribute"), ATTRIBUTES.map(([bit, n]) => [BigInt(bit), n]), BigInt(m.available), m.count,
-          (picked) => ({ type: OcgResponseType.ANNOUNCE_ATTRIB, attributes: picked.map(Number) }) as OcgResponse);
-        return;
-      case OcgMessageType.ANNOUNCE_NUMBER:
-        // The answer is the option's index, not the number.
-        this.modal.dialog(title("Declare a number").toUpperCase(), m.options.map((value, index) => ({
-          label: String(value), onClick: () => this.answer({ type: OcgResponseType.ANNOUNCE_NUMBER, value: index }),
-        })));
-        return;
-      case OcgMessageType.ANNOUNCE_CARD: {
-        // Typed search over every card the game knows that passes the prompt's filter.
-        const codes = declarableCards(this.engine.cards, m.opcodes);
-        if (!codes.length) break;
-        this.modal.search({
-          title: title("Declare a card name"),
-          codes,
-          onPick: (card) => this.answer({ type: OcgResponseType.ANNOUNCE_CARD, card }),
-          onHover: (code) => this.panel.showInfo(code),
-        });
-        return;
-      }
-    }
-    // Anything not handled above (rare in the GOAT pool: counters to remove, sorting, RPS): the bot answers.
-    this.panel.log(`(auto-answered ${OcgMessageType[m.type] ?? m.type})`);
-    this.answer(autoRespond(m, Math.random, this.engine.cards));
-  }
-
-  /**
-   * Declares `count` of the flags in `available` (Types or Attributes): one button dialog per pick, without
-   * the ones already picked; answers once all are chosen.
-   */
-  private declareFlags(title: string, options: [bigint, string][], available: bigint, count: number,
-    make: (picked: bigint[]) => OcgResponse, picked: bigint[] = []) {
-    const open = options.filter(([bit]) => available & bit && !picked.includes(bit));
-    const step = count > 1 ? ` (${picked.length + 1}/${count})` : "";
-    this.modal.dialog(`${title}${step}`.toUpperCase(), open.map(([bit, name]) => ({
-      label: name,
-      onClick: () => {
-        const next = [...picked, bit];
-        if (next.length >= count) this.answer(make(next));
-        else this.declareFlags(title, options, available, count, make, next);
-      },
-    })));
-  }
-
-  private yesNo(msg: string, make: (yes: boolean) => OcgResponse, code?: number) {
-    this.modal.dialog(msg.toUpperCase(), [
-      { label: "YES", onClick: () => this.answer(make(true)) },
-      { label: "NO", onClick: () => this.answer(make(false)) },
-    ], code);
-  }
-
-  private activateLabel(code: number, desc: bigint): string {
-    const d = this.engine.text.describe(desc, this.engine.text.name(code));
-    return d && !d.startsWith("#") ? d : "Activate";
-  }
-
-  /** Card menu labels fit 6 letters: a set monster can be flipped, a face-up one switched. */
-  private positionLabel(c: OcgCardLoc): string {
-    const pos = this.snapshot?.players[c.controller].monsters[c.sequence]?.position ?? 0;
-    if (pos & (OcgPosition.FACEDOWN_ATTACK | OcgPosition.FACEDOWN_DEFENSE)) return "Flip";
-    return pos & OcgPosition.FACEUP_DEFENSE ? "To Atk" : "To Def";
-  }
-
-  /** Card choice: on the board when every candidate is there (BoardPick), else in the picker dialog. */
-  private pickCards(locs: OcgCardLoc[], opts: PickerOptions) {
-    if (!this.boardPick.cards(locs, opts)) this.modal.picker(opts);
+    showPrompt(this.prompts, m, hint);
+    // Card actions and phase boxes (idle / battle prompts) only take effect once drawn.
+    this.drawPhaseColumn();
+    this.applyHighlights();
   }
 
   private addAction(c: OcgCardLoc, label: string, response: OcgResponse) {
@@ -1010,36 +751,4 @@ export class DuelScene extends Phaser.Scene {
     this.menu = null;
   }
 
-}
-
-function range(min: number, max: number) {
-  return min === max ? String(min) : `${min}-${max}`;
-}
-
-function locationName(location: number, controller: number, me: number): string {
-  const owner = controller === me ? "" : "OPP ";
-  const names: Record<number, string> = {
-    [OcgLocation.DECK]: "DECK", [OcgLocation.HAND]: "HAND", [OcgLocation.MZONE]: "FIELD",
-    [OcgLocation.SZONE]: "S/T", [OcgLocation.GRAVE]: "GY", [OcgLocation.REMOVED]: "BANISHED", [OcgLocation.EXTRA]: "EXTRA",
-  };
-  return `${owner}${names[location] ?? "?"}`;
-}
-
-
-/**
- * SELECT_SUM check. Each amount packs two alternative values (low/high 16 bits, e.g. level
- * modifiers). `atLeast` = the sum may exceed the target, but no chosen card may be unnecessary.
- */
-function sumMatches(amounts: number[], target: number, atLeast: boolean): boolean {
-  const options = amounts.map((a) => [a & 0xffff, a >>> 16].filter((v, i) => i === 0 || v > 0));
-  const sums = new Set<number>([0]);
-  for (const opt of options) {
-    const next = new Set<number>();
-    for (const s of sums) for (const v of opt) next.add(s + v);
-    sums.clear();
-    for (const s of next) sums.add(s);
-  }
-  if (!atLeast) return sums.has(target);
-  const min = Math.min(...amounts.map((a) => a & 0xffff));
-  return [...sums].some((s) => s >= target && s - min < target);
 }
