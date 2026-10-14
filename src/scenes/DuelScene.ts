@@ -496,6 +496,8 @@ export class DuelScene extends Phaser.Scene {
       this.drawHand(s, p.hand);
     });
     this.linkEquips(snap);
+    // Chain links still open (the chain is being built or resolved across several prompts), if 2+ links.
+    this.animator.markedChainLinks.forEach((k, i) => this.sprites.get(k)?.setChainMark(i + 1));
     this.applyHighlights();
     this.panel.refreshCounters(snap);
   }

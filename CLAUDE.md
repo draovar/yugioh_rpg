@@ -136,6 +136,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   tails = 4) and `dice.png` (6 frames 16x16, faces 1-6), played at 2x mid-field by `DuelAnimator.toss`.
   Rock-paper-scissors art: `public/assets/duel/rps.png` (3 frames 32x32: rock, paper, scissors; drawn by the user),
   shown in the token frame via `CardSprite.showPlain`.
+  Chain links: `public/assets/duel/chain.png` (32x32 ring, drawn by the user) over the art window with the link number
+  at 2x in it (`CardSprite.setChainMark`), from CHAINING until that link's CHAIN_SOLVED, only once the chain has 2+ links; `DuelAnimator.chainLinks` keeps
+  the open chain (sprite keys, follows MOVEs) and the redraw re-applies it.
   `attributes.png` = 7 16x16 icons: DARK EARTH FIRE LIGHT WATER WIND DIVINE.
   Equip links (`CardView.equipTarget`, from the EQUIP_CARD query): hovering an equip card or an equipped monster shows
   the semi-transparent Equip Spell icon (`spells.png` #2) over the partner card's art (`CardSprite.setEquipMark`).
@@ -217,7 +220,7 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ 640x360 pixel-art duel screen from the layout sketch, custom frames, downscaled art, bitmap fonts.
    ✅ Animation review pass (#1-#12 reviewed with the user; `&anims` dropdown replays each).
    ✅ Runewood card action menu (on the card) and prompt dialogs.
-   ✅ Runewood card pickers; the turn banner stays as it is (owner's choice). Later: chain-link display, deck search UX, sound.
+   ✅ Runewood card pickers; the turn banner stays as it is (owner's choice). ✅ Chain-link marks on cards. Later: deck search UX, sound.
    ✅ Counter removal on the board, counters per kind in the info panel. ✅ Card ordering dialog (Big Eye, `&setup=sort`).
    Auto-answered prompts (SORT_CHAIN, RPS) wait until a card batch
    needs them (none came up in 150 bot duels with the current pool).

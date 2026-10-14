@@ -2,7 +2,7 @@
 // and name / attribute / level / ATK-DEF drawn on top in pixel fonts. Or the card back.
 import Phaser from "phaser";
 import { TYPE, type CardRecord } from "../../duel/cardData.ts";
-import { FONT_CARD, FONT_UI, INK, INK_SOFT, border, fit, text } from "../pixel.ts";
+import { FONT_CARD, FONT_UI, INK, INK_SOFT, WHITE, border, fit, measure, text } from "../pixel.ts";
 import { THEME } from "../theme.ts";
 import { CARD } from "./layout.ts";
 
@@ -10,6 +10,8 @@ export const CARD_BACK = "card-back";
 export const ART_ATLAS = "art32";
 export const ATTRIBUTE_SHEET = "attributes";
 export const SPELL_SHEET = "spells";
+/** Chain link mark (32x32, public/assets/duel/chain.png): drawn over the art window with the link number inside. */
+export const CHAIN_MARK = "chain-mark";
 
 
 export const FRAMES = ["normal_monster", "effect_monster", "fusion_monster", "ritual_monster", "token", "spell", "trap"] as const;
@@ -70,6 +72,9 @@ export class CardSprite extends Phaser.GameObjects.Container {
   private parts: Phaser.GameObjects.GameObject[] = [];
   private outline: Phaser.GameObjects.Graphics;
   private equipMark: Phaser.GameObjects.Image | null = null;
+  private chainMark: Phaser.GameObjects.Container | null = null;
+  /** The chain sprite of the chain mark (the animator spins it in), or null. */
+  chainRing: Phaser.GameObjects.Image | null = null;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y);
@@ -153,6 +158,27 @@ export class CardSprite extends Phaser.GameObjects.Container {
       this.equipMark.destroy();
       this.equipMark = null;
     }
+    return this;
+  }
+
+  /**
+   * Chain link `n` on this card (null = none): the chain sprite over the art window (the card's centre), the
+   * number at 2x in its middle with a 1px dark outline. Kept upright on a sideways (defense) card.
+   */
+  setChainMark(n: number | null): this {
+    this.chainMark?.destroy();
+    this.chainMark = null;
+    this.chainRing = null;
+    if (n === null) return this;
+    const sc = this.scene;
+    const label = String(n);
+    const left = -Math.round(measure(sc, FONT_UI, label)), top = -5; // 2x: width measure*2, height 10
+    this.chainRing = sc.add.image(0, 0, CHAIN_MARK);
+    const parts: Phaser.GameObjects.GameObject[] = [this.chainRing];
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) parts.push(text(sc, left + dx, top + dy, label, { color: INK, scale: 2 }));
+    parts.push(text(sc, left, top, label, { color: WHITE, scale: 2 }));
+    this.chainMark = sc.add.container(0, 0, parts).setAngle(-this.angle);
+    this.add(this.chainMark);
     return this;
   }
 

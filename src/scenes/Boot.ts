@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { deckByName } from "../duel/decks.ts";
 import { loadEngine } from "../duel/loadEngine.ts";
-import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, FRAMES, SPELL_SHEET, frameKey } from "../ui/duel/CardSprite.ts";
+import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, CHAIN_MARK, FRAMES, SPELL_SHEET, frameKey } from "../ui/duel/CardSprite.ts";
 import { COIN_SHEET, DICE_SHEET } from "../ui/duel/DuelAnimator.ts";
 import { RPS_SHEET } from "../ui/duel/RpsIntro.ts";
 import { FONT_CARD, FONT_UI, WHITE, text } from "../ui/pixel.ts";
@@ -21,6 +21,7 @@ export class Boot extends Phaser.Scene {
     this.load.spritesheet(SPELL_SHEET, "assets/cards/spells.png", { frameWidth: 16, frameHeight: 16 });
     this.load.spritesheet(COIN_SHEET, "assets/duel/coin_flip.png", { frameWidth: 32, frameHeight: 32 });
     this.load.spritesheet(DICE_SHEET, "assets/duel/dice.png", { frameWidth: 16, frameHeight: 16 });
+    this.load.image(CHAIN_MARK, "assets/duel/chain.png");
     this.load.spritesheet(RPS_SHEET, "assets/duel/rps.png", { frameWidth: 32, frameHeight: 32 });
     loadThemeSprites(this.load);
     // Built by `npm run build-art`; cards without art fall back to a grey box.

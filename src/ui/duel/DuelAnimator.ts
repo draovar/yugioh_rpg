@@ -94,6 +94,8 @@ export const T = {
   coinSpin: 700,
   diceSpin: 1000,
   tossHold: 800,
+  /** A chain mark appearing: its ring spins one full turn and slows to a stop (the number stays still). */
+  chainSpin: 450,
 };
 const EASE = "Quad.easeOut";
 
@@ -126,6 +128,17 @@ export class DuelAnimator {
    * shows them face-up too, so e.g. Confiscation's prompt picks from the opponent's open hand.
    */
   readonly revealed = new Map<string, number>();
+  /**
+   * The open chain: sprite key of each link's card (index 0 = chain link 1). Once the chain is longer than one
+   * link, each card shows a chain mark with its link number until that link resolves; a chain of one shows none.
+   */
+  readonly chainLinks: string[] = [];
+  /** The open chain has reached two links: its marks are shown (until CHAIN_END). */
+  private chainMarked = false;
+  /** Links whose marks are shown (the scene's redraw puts them back): none for a chain of one. */
+  get markedChainLinks(): readonly string[] {
+    return this.chainMarked ? this.chainLinks : [];
+  }
   /** The same cards' sprites while animating (sprites survive hand re-keying, positions don't). */
   private revealedSprites = new Set<CardSprite>();
   private readonly host: AnimHost;
@@ -202,6 +215,7 @@ export class DuelAnimator {
       case OcgMessageType.DRAW:
         return this.draw(m.player, m.drawn.map((d) => d.code));
       case OcgMessageType.MOVE:
+        this.followChainLink(cardKey(m.from), cardKey(m.to));
         return this.move(m.card, m.from, m.to, ((m as MoveMessage).reason ?? 0) & REASON.DESTROY ? "destroyed" : null);
       case OcgMessageType.SUMMONING:
       case OcgMessageType.SPSUMMONING:
@@ -216,7 +230,23 @@ export class DuelAnimator {
       case OcgMessageType.SHUFFLE_HAND:
         return this.shuffleHand(m.player, m.cards);
       case OcgMessageType.CHAINING:
-        return this.activate(m, m.code);
+        await this.activate(m, m.code);
+        this.chainLinks.push(cardKey(m));
+        if (this.chainLinks.length > 1) this.chainMarked = true;
+        // The second link also marks the first; marks spin in as they appear.
+        return this.showChainMarks(this.chainLinks.length === 2 ? [0, 1] : [this.chainLinks.length - 1]);
+      case OcgMessageType.CHAIN_SOLVED: {
+        // The link resolved: its mark goes (the card may still be on the field, e.g. a Continuous Trap).
+        const k = this.chainLinks[m.chain_size - 1];
+        if (k !== undefined) h.sprites.get(k)?.setChainMark(null);
+        this.chainLinks.length = Math.min(this.chainLinks.length, m.chain_size - 1);
+        return;
+      }
+      case OcgMessageType.CHAIN_END:
+        for (const k of this.chainLinks) h.sprites.get(k)?.setChainMark(null);
+        this.chainLinks.length = 0;
+        this.chainMarked = false;
+        return;
       case OcgMessageType.ATTACK:
         // Declaration: only mark attacker and target; the lunge plays at the hit (BATTLE).
         this.attackKeys = [cardKey(m.card), m.target ? cardKey(m.target) : null];
@@ -504,6 +534,20 @@ export class DuelAnimator {
   }
 
   // ---------------------------------------------------------------- helpers
+
+  /** Puts chain marks on the cards of the given links (indexes into the open chain) and spins their rings in. */
+  private async showChainMarks(links: number[]): Promise<void> {
+    if (!this.chainMarked) return;
+    const rings = links.map((i) => this.host.sprites.get(this.chainLinks[i])?.setChainMark(i + 1).chainRing);
+    await Promise.all(rings.map((ring) =>
+      ring && this.tween({ targets: ring, angle: { from: 0, to: 360 }, duration: T.chainSpin, ease: "Cubic.easeOut", onComplete: () => ring.setAngle(0) })));
+  }
+
+  /** A chained card moving (e.g. sent to the GY as a cost) keeps its link: the mark travels with its sprite. */
+  private followChainLink(from: string, to: string) {
+    const i = this.chainLinks.lastIndexOf(from);
+    if (i >= 0) this.chainLinks[i] = to;
+  }
 
   /** Whether a card at `l` is drawn face-up. Face-down cards on the field show their back for everyone. */
   private visible(code: number, l: Loc): boolean {
