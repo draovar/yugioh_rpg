@@ -11,6 +11,9 @@ import {
 import { loadEngine, type Engine } from "../duel/loadEngine.ts";
 import { DuelSession, counterTotal, type CardView, type FieldSnapshot, type Deck, type DuelSeed } from "../duel/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
+import { AiSeat } from "../duel/ai/AiSeat.ts";
+import { BRAINS, type BrainName } from "../duel/ai/brains.ts";
+import { formatTrace } from "../duel/ai/trace.ts";
 import { DECKS } from "../duel/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
 import { ANIM_SPEEDS, CHAIN_MODES, animSpeed, chainMode, setAnimSpeed, setChainMode } from "../ui/prefs.ts";
@@ -50,6 +53,8 @@ export interface DuelSceneData {
   goFirst?: boolean;
   /** Peer-to-peer duel against a player on another machine (decks come from the handshake). */
   net?: NetDuel;
+  /** The opponent AI's brain (ignored with `net`). Default: autobot. */
+  ai?: BrainName;
 }
 
 interface CardAction {
@@ -224,10 +229,17 @@ export class DuelScene extends Phaser.Scene {
     const seed = net ? net.seed
       : this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as DuelSeed) : undefined;
     session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
+    // `&aitrace` prints every AI decision to the console (also in the deployed game, for reporting misplays).
+    const trace = new URLSearchParams(location.search).has("aitrace");
+    const ai = net ? undefined : new AiSeat({
+      seat: (1 - this.me) as 0 | 1, brain: BRAINS[this.sceneData.ai ?? "autobot"](), duel: session, strict: import.meta.env.DEV,
+      onTrace: trace ? (e) => console.log(formatTrace(e)) : undefined,
+    });
     this.controller = new DuelController({
       session,
       me: this.me,
       remote: net?.remote,
+      ai,
       chainMode,
       schedule: (ms, fn) => this.time.delayedCall(ms, fn),
       events: {

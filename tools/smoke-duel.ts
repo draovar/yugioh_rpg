@@ -1,19 +1,11 @@
 // Headless sanity check: plays N full GOAT-format duels between two auto-bots
 // through the same DuelSession + data files the browser game uses, cycling through every pairing of the
-// prebuilt decks (decks.ts), after checking that each deck is legal.
+// prebuilt decks (decks.ts), after checking that each deck is legal. The bots play through AiSeat, like the game's AI.
 // Usage: npm run smoke [-- <duels>]     (needs `npm run build-data` first)
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import createCore, { OcgMessageType } from "ocgcore-wasm";
-import { CardDb, type CardRecord } from "../src/duel/cardData.ts";
-import { DuelSession } from "../src/duel/DuelSession.ts";
-import { autoRespond } from "../src/duel/autoBot.ts";
+import { AiSeat } from "../src/duel/ai/AiSeat.ts";
+import { autoBotBrain } from "../src/duel/ai/brains.ts";
 import { DECKS, deckProblems, type DeckName } from "../src/duel/decks.ts";
-
-const DATA = path.resolve(import.meta.dirname, "../public/data");
-const records: CardRecord[] = JSON.parse(readFileSync(path.join(DATA, "cards.json"), "utf-8"));
-const scripts: Record<string, string> = JSON.parse(readFileSync(path.join(DATA, "scripts.json"), "utf-8"));
-const cards = new CardDb(records);
+import { cards, newDuel, runDuel } from "./lib/engine.ts";
 
 const names = Object.keys(DECKS) as DeckName[];
 let bad = false;
@@ -25,28 +17,16 @@ if (bad) process.exit(1);
 // Every ordered pairing (both players can go first), then around again.
 const pairings = names.flatMap((a) => names.map((b) => [a, b] as const));
 
-const core = await createCore({ sync: true });
 const runs = Number(process.argv[2] ?? 5);
 let failures = 0;
 for (let i = 0; i < runs; i++) {
   const warnings: string[] = [];
   const [p0, p1] = pairings[i % pairings.length];
-  const duel = new DuelSession({
-    core, cards, decks: [DECKS[p0].deck, DECKS[p1].deck],
-    readScript: (name) => scripts[path.basename(name)] ?? null,
-    onCoreLog: (_t, text) => warnings.push(text),
-  });
-  let turns = 0, msgs = 0, decisions = 0, winner: number | null = null;
+  const duel = newDuel({ decks: [DECKS[p0].deck, DECKS[p1].deck], onCoreLog: (_t, text) => warnings.push(text) });
+  const seats = [new AiSeat({ seat: 0, brain: autoBotBrain, duel }), new AiSeat({ seat: 1, brain: autoBotBrain, duel })] as const;
   try {
-    for (;;) {
-      const step = duel.advance();
-      msgs += step.messages.length;
-      turns += step.messages.filter((m) => m.type === OcgMessageType.NEW_TURN).length;
-      if (step.ended) { winner = step.winner; break; }
-      if (++decisions > 20_000) throw new Error("duel did not finish");
-      duel.respond(autoRespond(step.prompt!, Math.random, cards));
-    }
-    console.log(`duel ${i + 1} (${p0} vs ${p1}): winner P${winner}, ${turns} turns, ${msgs} messages, ${decisions} decisions`);
+    const run = runDuel(duel, seats);
+    console.log(`duel ${i + 1} (${p0} vs ${p1}): winner P${run.winner}, ${run.turns} turns, ${run.messages} messages, ${run.decisions[0] + run.decisions[1]} decisions`);
   } catch (e) {
     failures++;
     console.error(`duel ${i + 1} FAILED:`, e);

@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { isBrainName } from "../duel/ai/brains.ts";
 import { deckByName } from "../duel/decks.ts";
 import { loadEngine } from "../duel/loadEngine.ts";
 import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, CHAIN_MARK, FRAMES, SPELL_SHEET, frameKey } from "../ui/duel/CardSprite.ts";
@@ -35,13 +36,15 @@ export class Boot extends Phaser.Scene {
       .then(() => {
         // Dev shortcut: /?duel jumps straight into a duel; &lp=1000 for a short one, &seed=N to replay one,
         // &setup=NAME to start from a test board (devSetups.ts), &deck=NAME / &opp=NAME pick the decks (decks.ts),
-        // &first=you / &first=opp skip rock-paper-scissors (a replay with &seed goes first unless &first=opp).
+        // &first=you / &first=opp skip rock-paper-scissors (a replay with &seed goes first unless &first=opp),
+        // &ai=NAME picks the opponent's brain (ai/brains.ts).
         const params = new URLSearchParams(location.search);
         const lp = Number(params.get("lp")) || undefined;
         const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
         const setup = params.get("setup") ?? undefined;
         const first = params.get("first");
         const goFirst = first === "opp" ? false : first === "you" || seed !== undefined ? true : undefined;
+        const ai = params.get("ai") ?? "";
         // Invite link from a multiplayer host: ?join=CODE (dropped from the address so a reload doesn't rejoin).
         const join = params.get("join");
         if (join) {
@@ -51,7 +54,7 @@ export class Boot extends Phaser.Scene {
         } else if (params.has("mp")) this.scene.start("Lobby");
         else if (params.has("duel")) {
           this.scene.start("Duel", {
-            opponentName: "Test Opponent", startingLP: lp, seed, setup, goFirst,
+            opponentName: "Test Opponent", startingLP: lp, seed, setup, goFirst, ai: isBrainName(ai) ? ai : undefined,
             playerDeck: deckByName(params.get("deck"), "yugi"), opponentDeck: deckByName(params.get("opp"), "kaiba"),
           });
         }

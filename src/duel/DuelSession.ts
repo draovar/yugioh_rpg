@@ -16,6 +16,7 @@ import {
 } from "ocgcore-wasm";
 import type { CardDb } from "./cardData.ts";
 import { fnv1a } from "./hash.ts";
+import { mulberry32, shuffle } from "./rng.ts";
 
 export interface Deck {
   main: number[];
@@ -121,6 +122,8 @@ export interface StepResult {
 export class DuelSession {
   /** The game's cards (pool + tokens), e.g. for answering card declarations. */
   readonly cards: CardDb;
+  /** The duel's seed (given or random): replaying it with the same answers replays the duel. */
+  readonly seed: DuelSeed;
   private readonly core: OcgCoreSync;
   private readonly handle: OcgDuelHandle;
   private ended = false;
@@ -131,7 +134,7 @@ export class DuelSession {
     this.core = cfg.core;
     this.cards = cfg.cards;
     const team = { drawCountPerTurn: 1, startingDrawCount: 5, startingLP: cfg.startingLP ?? 8000 };
-    const seed = cfg.seed ?? randomSeed();
+    const seed = (this.seed = cfg.seed ?? randomSeed());
     const handle = cfg.core.createDuel({
       flags: OcgDuelMode.MODE_GOAT,
       seed,
@@ -286,23 +289,6 @@ function counterList(counters: Record<number, number> | undefined): CounterView[
 /** All counters on a card, every kind added up. */
 export function counterTotal(counters: CounterView[]): number {
   return counters.reduce((n, c) => n + c.count, 0);
-}
-
-function mulberry32(a: number): () => number {
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function shuffle<T>(a: T[], rng: () => number): T[] {
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }
 
 /** A random duel seed (four 64-bit words). */

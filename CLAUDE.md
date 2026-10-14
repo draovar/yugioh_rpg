@@ -22,15 +22,17 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
-| `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession`; fails on RETRY/crash |
+| `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession` (bots in `AiSeat`s); fails on RETRY/crash |
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
+| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--only K] [--trace]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders); `--only K --trace` replays one duel's decisions |
+| `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
 After changing `data/pool.json`, rerun `build-data`, `check-cards`, `fetch-art`, `build-art`, then `smoke` (it validates
 the decks in `src/duel/decks.ts` and plays every deck pairing). `fetch-art`/`build-art` read `public/data/cards.json`, so
 tokens get art too.
 
-Deploy: every push to `main` runs `.github/workflows/deploy.yml` (the fresh-clone pipeline + `smoke -- 3` + `smoke-p2p -- 3` + `build`)
+Deploy: every push to `main` runs `.github/workflows/deploy.yml` (the fresh-clone pipeline + `smoke -- 3` + `smoke-p2p -- 3` + `test-ai` + `build`)
 and publishes `dist/` to GitHub Pages: https://draovar.github.io/yugioh_rpg/ . Never upload a local `dist/`: Vite
 copies all of `public/`, including the gitignored paid tilesets.
 
@@ -43,6 +45,8 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`; cards placed in hand/on the field first),
+`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`; default `autobot`), `&aitrace` prints every AI decision
+to the console (also in the deployed game, for misplay reports),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
 choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
@@ -61,7 +65,15 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     with `DuelSession.checksum()` from before it was applied; a mismatch stops the duel ("out of sync"). Anything that
     differs between the two machines (non-seeded randomness in the engine layer, deck order, data) splits the duel.
   - `text.ts` — `DuelText.describe(desc)` resolves system strings and `aux.Stringid` card strings.
-  - `autoBot.ts` — always-legal dumb responder (tests, placeholder AI). `freePlaces()` decodes SELECT_PLACE masks.
+  - `autoBot.ts` — always-legal dumb responder (the `autobot` brain, fallback when a brain throws). `freePlaces()` decodes SELECT_PLACE masks.
+  - `ai/` — the opponent AI (plan and milestones: `docs/ai-plan.md`). `AiSeat` is the only AI code touching the engine:
+    `observe()` gets every step's raw messages and runs them through `redact()` (the one gate: hidden codes → 0, other
+    players' prompts and private hints dropped, like ygopro's server) into `AiMemory` (turn/phase, open chain + targets,
+    attacks this turn, `seen` codes per owner, the pending select hint); `decide()` builds an `AiView` (`snapshot(seat)`,
+    memory, hint, seeded rng) for a `Brain`, which returns a `Decision` (response + reason + scored options). Brains never
+    get the session or raw messages. `trace.ts` turns decisions into lines (`&aitrace`, `arena --trace`). Brains by name
+    in `brains.ts`. A boss that peeks at your hand would be an explicit `AiSeat` option, never a brain reading the session.
+  - `rng.ts` — `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
   - `hash.ts` — `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).
   - `decks.ts` — prebuilt decks until the deck editor exists (`yugi`, `kaiba`, `goat` + Extra Decks), `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
@@ -105,7 +117,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   from the snapshot, so animations only need to *look* right. Reveals (CONFIRM_CARDS) flip hidden cards face-up in place;
   they stay up through the prompt that follows (Confiscation's pick: `animator.revealed`, honoured by the redraw) and flip
   back before the next action. Your own revealed cards just rise.
-- `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx).
+- `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx). `tools/lib/engine.ts`: shared
+  core + card data loader, `newDuel`, `runDuel` (AI vs AI to the end), `seedFrom(n)`.
 - `data/pool.json` — the card passcodes the game uses. Source of truth for the card pool.
 - `vendor/` — Project Ignis repos (gitignored, ~130 MB).
 
@@ -195,6 +208,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - `cards.cdb` `setcode` and `race` exceed 2^53: read with `stmt.setReadBigInts(true)`, store as strings in JSON.
 - A `RETRY` message means we sent an illegal response. Treat it as a bug, never retry silently.
 - Only the player-facing side may see hidden info: the AI must decide from messages addressed to it, not from `duelQuery` on the opponent's hand/deck.
+  ocgcore's raw messages carry hidden codes (a DRAW lists the drawn cards for either player, a SET names the card,
+  the other player's SELECT_* lists their candidates): the AI only ever sees them through `redact()`.
 
 ## Conventions
 
@@ -229,7 +244,9 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ Rock-paper-scissors before each duel (cards on the board); the winner chooses to go first or second.
    ✅ Code cleanup: DuelScene split into InfoPanel / BoardPick / duelPrompts, dead code and duplicates removed, comments
    brought up to date.
-3. **Opponent AI**: better than `autoBot` (sensible summons/attacks/chain decisions), per-trainer deck + difficulty.
+3. **Opponent AI** (`docs/ai-plan.md`: one universal brain + per-card knowledge + trainer profiles; levels Rookie /
+   Duelist / Expert, Expert as strong as possible, with lookahead later; no cheating by default).
+   ✅ M0 plumbing: `AiSeat` / `redact` / `AiMemory` / brains / trace, `arena`, `test-ai`. Next: M1 generic brain.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.

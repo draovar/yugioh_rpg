@@ -12,7 +12,8 @@ import {
   type OcgResponse,
 } from "ocgcore-wasm";
 import { DuelSession, type FieldSnapshot } from "./DuelSession.ts";
-import { autoRespond } from "./autoBot.ts";
+import { AiSeat } from "./ai/AiSeat.ts";
+import { autoBotBrain } from "./ai/brains.ts";
 
 const HINT_SELECTMSG = 3;
 
@@ -58,6 +59,8 @@ export interface DuelControllerOptions {
   me?: 0 | 1;
   /** The other seat is a player on another machine; without it, the built-in AI plays it. */
   remote?: RemotePeer;
+  /** The built-in AI for the other seat (ignored with `remote`). Default: autoBot. */
+  ai?: AiSeat;
   /** The human's chain mode, read at every chain prompt (it can change mid-duel). Default "auto". */
   chainMode?: () => ChainMode;
 }
@@ -69,6 +72,7 @@ export class DuelController {
   private readonly aiDelayMs: number;
   readonly me: 0 | 1;
   private readonly remote: RemotePeer | null;
+  private readonly ai: AiSeat | null;
   private readonly chainMode: () => ChainMode;
   /** Peer answers that arrived before our duel reached their prompt. */
   private inbox: { response: OcgResponse; checksum: number }[] = [];
@@ -76,10 +80,6 @@ export class DuelController {
   private pending: HumanPrompt | null = null;
   private destroyed = false;
   private hint: bigint | null = null;
-  /** Turn and phase as the engine reports them. Not read yet: kept for the opponent AI (roadmap 3). */
-  turn = 0;
-  turnPlayer = 0;
-  phase = 0;
 
   constructor(opts: DuelControllerOptions) {
     this.session = opts.session;
@@ -88,6 +88,8 @@ export class DuelController {
     this.aiDelayMs = opts.aiDelayMs ?? 450;
     this.me = opts.me ?? 0;
     this.remote = opts.remote ?? null;
+    this.ai = this.remote ? null : opts.ai ?? new AiSeat({ seat: (1 - this.me) as 0 | 1, brain: autoBotBrain, duel: this.session });
+    if (this.ai && this.ai.seat === this.me) throw new Error("DuelController: the AI can't play the local player's seat");
     this.chainMode = opts.chainMode ?? (() => "auto");
     this.remote?.onResponse((response, checksum) => {
       this.inbox.push({ response, checksum });
@@ -129,6 +131,7 @@ export class DuelController {
   private async step(): Promise<void> {
     const result = this.session.advance();
     for (const m of result.messages) this.track(m);
+    this.ai?.observe(result.messages);
     await this.events.onUpdate(result.messages, this.session.snapshot(this.me));
     if (this.destroyed) return;
 
@@ -153,7 +156,7 @@ export class DuelController {
       // The AI "thinks" a moment before each real choice.
       this.schedule(this.aiDelayMs, () => {
         if (this.destroyed) return;
-        this.session.respond(autoRespond(prompt, Math.random, this.session.cards));
+        this.session.respond(this.ai!.decide(prompt));
         void this.step();
       });
       return;
@@ -197,17 +200,6 @@ export class DuelController {
   }
 
   private track(m: OcgMessage): void {
-    switch (m.type) {
-      case OcgMessageType.NEW_TURN:
-        this.turn++;
-        this.turnPlayer = m.player;
-        break;
-      case OcgMessageType.NEW_PHASE:
-        this.phase = m.phase;
-        break;
-      case OcgMessageType.HINT:
-        if (m.hint_type === HINT_SELECTMSG && m.player === this.me) this.hint = m.hint;
-        break;
-    }
+    if (m.type === OcgMessageType.HINT && m.hint_type === HINT_SELECTMSG && m.player === this.me) this.hint = m.hint;
   }
 }
