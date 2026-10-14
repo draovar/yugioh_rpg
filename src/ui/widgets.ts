@@ -42,6 +42,65 @@ export function makeButton(
   return c;
 }
 
+/** One choice in a `makeDropUp` list. */
+export interface DropUpOption<T> {
+  value: T;
+  label: string;
+}
+
+/**
+ * A flat button showing the current choice (left-aligned label, ▲ on the right). Clicking it opens the list of
+ * choices above it, the current one in `pickedColor`; picking one, clicking elsewhere or Esc closes it.
+ * (x, y) is the button's centre, like `makeButton`.
+ */
+export function makeDropUp<T>(
+  scene: Phaser.Scene, x: number, y: number, w: number, h: number, options: DropUpOption<T>[], current: T,
+  onPick: (value: T) => void, color = 0x2d4a7a, pickedColor = 0x3f7a3a,
+): Button {
+  const labelOf = (v: T) => (options.find((o) => o.value === v)?.label ?? "").toUpperCase();
+  let list: Phaser.GameObjects.Container | null = null;
+  let value = current;
+  const close = () => {
+    list?.destroy();
+    list = null;
+    scene.input.keyboard?.off("keydown-ESC", close);
+  };
+  const open = () => {
+    if (list) return close();
+    const pitch = h + 1, left = Math.round(x - w / 2), bottom = Math.round(y - h / 2) - 2;
+    // Invisible full-screen catcher under the rows: a click anywhere else just closes the list.
+    const catcher = scene.add.zone(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setInteractive();
+    catcher.on("pointerup", close);
+    const rows = options.map((o, i) => {
+      const rowY = bottom - (options.length - i) * pitch + Math.floor(h / 2);
+      return makeButton(scene, left + Math.floor(w / 2), rowY, w, h, o.label.toUpperCase(), () => {
+        close();
+        if (o.value === value) return;
+        value = o.value;
+        button.setLabel(labelOf(value));
+        onPick(value);
+      }, o.value === value ? pickedColor : color);
+    });
+    list = scene.add.container(0, 0, [catcher, ...rows]).setDepth(1000);
+    scene.input.keyboard?.on("keydown-ESC", close);
+  };
+  const button = makeButton(scene, x, y, w, h, "", open, color);
+  const t = button.list[1] as Phaser.GameObjects.BitmapText;
+  const arrow = scene.add.graphics().fillStyle(0xffffff);
+  // 5x3 up-pointing triangle, 4px from the right edge.
+  const ax = Math.floor(w / 2) - 9, ay = -1;
+  arrow.fillRect(ax + 2, ay, 1, 1).fillRect(ax + 1, ay + 1, 3, 1).fillRect(ax, ay + 2, 5, 1);
+  button.add(arrow);
+  button.setLabel = (s: string) => {
+    t.setText(s);
+    t.setPosition(-Math.floor(w / 2) + 4, Math.round(-t.height / 2));
+    return button;
+  };
+  button.setLabel(labelOf(value));
+  button.once("destroy", close);
+  return button;
+}
+
 export interface WoodButton {
   setLabel(label: string): void;
 }

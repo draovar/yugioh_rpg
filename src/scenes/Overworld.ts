@@ -3,13 +3,16 @@ import { DECKS, type DeckName } from "../duel/decks.ts";
 import { WHITE, text } from "../ui/pixel.ts";
 import { aiDeck, chosenDeck, revealAiCards, setAiDeck, setChosenDeck, setRevealAiCards } from "../ui/prefs.ts";
 import { THEME, THEMES, setTheme } from "../ui/theme.ts";
-import { makeButton, type Button } from "../ui/widgets.ts";
+import { makeButton, makeDropUp, type Button } from "../ui/widgets.ts";
 
 const TILE = 16;
 /** Bottom menu bar (testing aids until the real menus exist). */
 /** `groupX`: the second group's labels (THEME / AI CARDS); its buttons are centred from `groupX + groupButtons` on. */
-const BAR = { top: 308, h: 52, row: 22, deckW: 64, groupX: 286, groupButtons: 76, themeW: 64, mpW: 84 };
+const BAR = { top: 308, h: 52, row: 22, deckW: 120, groupX: 286, groupButtons: 76, themeW: 64, mpW: 84 };
 const BUTTON_COLOR = 0x2d4a7a, PICKED_COLOR = 0x3f7a3a;
+
+/** The prebuilt decks as drop-up choices. */
+const deckOptions = () => (Object.keys(DECKS) as DeckName[]).map((name) => ({ value: name, label: DECKS[name].label }));
 
 /** Placeholder overworld: grid movement, and an "NPC" that starts a duel when you bump into it. */
 export class Overworld extends Phaser.Scene {
@@ -17,8 +20,6 @@ export class Overworld extends Phaser.Scene {
   private npc!: Phaser.GameObjects.Rectangle;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private moving = false;
-  private deckButtons: Button[] = [];
-  private aiDeckButtons: Button[] = [];
   private revealButton: Button | null = null;
   private themeButtons: Button[] = [];
   /** The new theme's sprites are loading: no duel or lobby until they're in. */
@@ -50,14 +51,7 @@ export class Overworld extends Phaser.Scene {
     this.add.rectangle(0, BAR.top, 640, BAR.h, 0x000000, 0.65).setOrigin(0);
     this.createAiRow(y + BAR.row);
     text(this, 8, y, "YOUR DECK:", { color: WHITE, originY: 0.5 });
-    const names = Object.keys(DECKS) as DeckName[];
-    const drawDecks = () => {
-      for (const b of this.deckButtons) b.destroy();
-      const picked = chosenDeck();
-      this.deckButtons = names.map((name, i) => makeButton(this, 92 + i * (BAR.deckW + 6), y, BAR.deckW, 14, DECKS[name].label.toUpperCase(),
-        () => { setChosenDeck(name); drawDecks(); }, name === picked ? PICKED_COLOR : BUTTON_COLOR));
-    };
-    drawDecks();
+    makeDropUp(this, 92 + BAR.deckW / 2, y, BAR.deckW, 14, deckOptions(), chosenDeck(), setChosenDeck, BUTTON_COLOR, PICKED_COLOR);
     // Duel UI theme: switched in place (nothing themed is on screen here).
     text(this, BAR.groupX, y, "THEME:", { color: WHITE, originY: 0.5 });
     const drawThemes = () => {
@@ -76,14 +70,7 @@ export class Overworld extends Phaser.Scene {
 
   private createAiRow(y: number) {
     text(this, 8, y, "AI DECK:", { color: WHITE, originY: 0.5 });
-    const names = Object.keys(DECKS) as DeckName[];
-    const drawDecks = () => {
-      for (const b of this.aiDeckButtons) b.destroy();
-      const picked = aiDeck();
-      this.aiDeckButtons = names.map((name, i) => makeButton(this, 92 + i * (BAR.deckW + 6), y, BAR.deckW, 14, DECKS[name].label.toUpperCase(),
-        () => { setAiDeck(name); drawDecks(); }, name === picked ? PICKED_COLOR : BUTTON_COLOR));
-    };
-    drawDecks();
+    makeDropUp(this, 92 + BAR.deckW / 2, y, BAR.deckW, 14, deckOptions(), aiDeck(), setAiDeck, BUTTON_COLOR, PICKED_COLOR);
     text(this, BAR.groupX, y, "AI CARDS:", { color: WHITE, originY: 0.5 });
     const drawReveal = () => {
       this.revealButton?.destroy();

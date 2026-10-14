@@ -134,8 +134,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   data and scripts), each side sends its deck as a passcode list (checked with `deckProblems`), the host sends the
   seed; then rock-paper-scissors packets (`rps` hands, the winner's `order`) decide the seats. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
-- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; bottom bar: deck choice
-  saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; THEME buttons (switch in place);
+- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; bottom bar: deck choice (drop-up lists, `makeDropUp` in
+  `src/ui/widgets.ts`) saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; THEME buttons (switch in place);
   MULTIPLAYER button / M key; second row (testing aids): AI DECK = the Rival's deck, AI CARDS = show the AI's hand and
   set cards in duels (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards
   drawn face-up at 60% alpha)) → `Duel` (`DuelScene`,
