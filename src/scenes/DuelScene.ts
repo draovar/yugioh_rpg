@@ -196,16 +196,26 @@ export class DuelScene extends Phaser.Scene {
     this.me = 0; // until rock-paper-scissors decides
     this.ended = false;
     this.sprites.clear();
+    this.counterBadges.clear();
     this.actions.clear();
     this.phaseActions.clear();
     this.logLines = [];
     this.menu = null;
     this.placeTargets = [];
+    this.fieldPick = null;
+    this.promptCounter = null;
     this.handCount = [0, 0];
     this.startLP = data?.startingLP ?? 8000;
     this.lpValue = [this.startLP, this.startLP];
     this.snapshot = null;
+    this.lastHint = null;
+    this.previewing = false;
+    this.previewAnswer = null;
+    this.turnPlayer = 0;
     this.phase = 0;
+    this.hoverTimer = null;
+    this.nameScroll = null;
+    this.attackArrow = null;
     this.infoCode = 0;
     this.lastCode = 0;
     this.lastCounters = [];
