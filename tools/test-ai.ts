@@ -5,21 +5,27 @@
 //    stolen card), and redact() must not change its input.
 // 3. The simulator's copies (sim/world.ts): every card a copy places on the opponent's side is a stand-in or one the
 //    AI could see right then.
+// 4. Move sequences in one copy (sim/sequence.ts) on a fixed board: what's offered, plans that can't work stop early,
+//    attacks and the opponent's reply turn change the score as they should.
 // Usage: npm run test-ai [-- <duels>]
 import {
   OcgHintType,
   OcgLocation,
   OcgMessageType,
   OcgPosition,
+  SelectIdleCMDAction,
   type OcgMessage,
 } from "ocgcore-wasm";
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
 import { autoBotBrain } from "../src/duel/ai/brains.ts";
 import { redact } from "../src/duel/ai/redact.ts";
 import { BLANK, layoutFrom } from "../src/duel/ai/sim/world.ts";
+import { AiMemory } from "../src/duel/ai/memory.ts";
+import { Simulator } from "../src/duel/ai/sim/simulator.ts";
+import { describeStep, type PlanStep } from "../src/duel/ai/sim/sequence.ts";
 import type { FieldSnapshot } from "../src/duel/DuelSession.ts";
 import { DECKS, type DeckName } from "../src/duel/decks.ts";
-import { cards, newDuel, runDuel, seedFrom } from "./lib/engine.ts";
+import { cards, core, newDuel, readScript, runDuel, seedFrom } from "./lib/engine.ts";
 
 let failures = 0;
 const check = (ok: boolean, what: string) => {
@@ -129,6 +135,34 @@ for (let i = 0; i < runs; i++) {
   } finally {
     duel.destroy();
   }
+}
+
+// --- 4. Move sequences -----------------------------------------------------------------------------------------
+{
+  const C = { lordOfD: 17985575, darkHole: 53129443, jinzo: 77585513, dmg: 38033121, elf: 15025844, sangan: 26202165 };
+  // The AI (seat 0): Dark Hole and Jinzo in hand, Lord of D. on the field. Opponent: Dark Magician Girl, a set monster.
+  const duel = newDuel({ decks: [
+    { main: Array<number>(20).fill(C.elf), start: [{ code: C.darkHole, location: OcgLocation.HAND }, { code: C.jinzo, location: OcgLocation.HAND }, { code: C.lordOfD, location: OcgLocation.MZONE, sequence: 0 }] },
+    { main: Array<number>(20).fill(C.elf), start: [{ code: C.dmg, location: OcgLocation.MZONE, sequence: 1 }, { code: C.sangan, location: OcgLocation.MZONE, sequence: 2, position: OcgPosition.FACEDOWN_DEFENSE }] },
+  ], seed: seedFrom(3), draws: { opening: 0, perTurn: 0 }, onCoreLog: () => {} });
+  duel.advance();
+  const view = { seat: 0 as const, board: duel.snapshot(0), memory: new AiMemory(0), cards, hint: null, rng: () => 0.5, deckList: Array<number>(20).fill(C.elf) };
+  const sim = new Simulator({ core, cards, readScript });
+  const start = sim.sequence(view, []);
+  const offered = (start?.next ?? []).map((s) => describeStep(s, cards));
+  check(offered.includes("activate Dark Hole") && offered.includes("summon Jinzo"), `sequence: offered at the start: ${offered.join(" | ")}`);
+  const find = (action: SelectIdleCMDAction) => start!.next.find((s) => s.kind === "idle" && s.action === action)!;
+  const darkHole = find(SelectIdleCMDAction.SELECT_ACTIVATE), jinzo = find(SelectIdleCMDAction.SELECT_SUMMON);
+  const toBattle: PlanStep = { kind: "idle", action: SelectIdleCMDAction.TO_BP };
+  const jinzoAttacks: PlanStep = { kind: "attack", attacker: { code: C.jinzo, location: OcgLocation.MZONE, sequence: 0, controller: 0 }, target: 1 };
+  check(sim.sequence(view, [darkHole, jinzo])?.done === 1, "sequence: no Jinzo after Dark Hole destroyed its tribute");
+  check(sim.sequence(view, [jinzo, darkHole])?.done === 2, "sequence: Jinzo, then Dark Hole");
+  const attack = sim.sequence(view, [jinzo, toBattle, jinzoAttacks]);
+  check(attack?.done === 3 && attack.value > start!.value, `sequence: Jinzo attacking Dark Magician Girl gains (${attack?.value} vs ${start?.value})`);
+  const theirTurn = sim.sequence(view, [], { opponentTurn: true });
+  check(theirTurn !== null && theirTurn.value < start!.value, `sequence: doing nothing loses Lord of D. in their turn (${theirTurn?.value} vs ${start?.value})`);
+  sim.dispose();
+  duel.destroy();
 }
 
 if (failures) {

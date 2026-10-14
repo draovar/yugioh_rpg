@@ -227,6 +227,16 @@ sim 55.0% vs generic, 87.2% vs autobot (was 54.4% / 83.9%). Also seen in the sam
 its own monster by the simple chain rule (the `replay` brain avoids this), and Dark Hole destroying the monster it
 needed as a tribute for Jinzo the same turn (an ordering mistake only the turn planner fixes).
 
+## 6e. Move sequences in one copy (2026-10-14, turn planner step 2)
+
+`Simulator.sequence(view, steps, { opponentTurn })` (`sim/sequence.ts`) plays a whole plan of the AI's own moves in
+one copy and reports how many steps worked, the board value (optionally after the opponent's next turn, played by the
+generic brain with stand-ins) and the possible next steps, so a search can extend a plan by playing it again (ocgcore
+can't fork a duel). Checked in `test-ai` on the board from the user's trace (Lord of D. on the field, Dark Hole and
+Jinzo in hand, their Dark Magician Girl and a set monster): "Dark Hole, then Jinzo" stops after step 1 (no tribute
+left), "Jinzo, then Dark Hole" wipes Jinzo too (0.00), "Jinzo attacks Dark Magician Girl" scores best (2.44), doing
+nothing loses Lord of D. in their turn (1.31 → −0.18). 15-35 ms per plan without the pool. Next: the search itself.
+
 ## 7. Milestones
 
 | # | Milestone | Done when |

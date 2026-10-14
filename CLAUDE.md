@@ -96,6 +96,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     not Maximum, Polymerization's helpers need it), and the `Simulator` keeps a pool of up to 24 prepared copies
     (`prepareOne`), filled while the human thinks (`Brain.idle` ← `AiSeat.idle` ← `DuelController`, one copy per 40 ms
     step) and freed at the duel's end (`dispose`). Copy from the pool ≈ 2.6 ms vs 19 ms built from scratch.
+    `sim/sequence.ts` = the turn planner's building block: `Simulator.sequence(view, steps, { opponentTurn })` plays
+    a list of the AI's own moves (`PlanStep`: main-phase action, attack with a target zone, leaving the battle phase)
+    in one copy, follow-ups answered by the generic brain, and returns how many steps worked, the board value (after
+    the opponent's next turn if asked) and the next possible steps. `sim/options.ts`: finding an option again in a
+    copy's prompt (`idleList`, `findSame`).
     `sim/replay.ts` = M3 (brain `replay`): a chain prompt in the opponent's turn is answered by replaying what they did
     (`situationOf`: their chain link, attack, summon, or the phase) in a copy where they move first, trying each
     candidate during that action, playing on to the end of their turn, and comparing; timing margins per situation in

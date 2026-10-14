@@ -26,6 +26,7 @@ import { evaluate, tributesFor } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
 import { SELECT_HINT } from "../generic/select.ts";
 import { formatTrace } from "../trace.ts";
+import { findSame } from "./options.ts";
 import type { Simulator } from "./simulator.ts";
 import { BLANK, layoutFrom, type SimLayout } from "./world.ts";
 
@@ -240,11 +241,4 @@ function opponentMove(p: Prompt, situation: Situation, opp: AiSeat): OcgResponse
     return { type: OcgResponseType.SELECT_TRIBUTE, indicies: order.slice(0, p.min).map((x) => x.i) };
   }
   return null;
-}
-
-/** The same chain candidate in the copy's prompt: same card, place and effect (hand cards: any copy of it). */
-function findSame(list: OcgCardLocPosActive[], o: OcgCardLocPosActive): number {
-  const exact = list.findIndex((c) => c.code === o.code && c.location === o.location && c.sequence === o.sequence && c.description === o.description);
-  if (exact >= 0) return exact;
-  return list.findIndex((c) => c.code === o.code && c.location === o.location && c.description === o.description);
 }

@@ -9,7 +9,6 @@ import {
   OcgMessageType,
   OcgResponseType,
   SelectIdleCMDAction,
-  type OcgCardLoc,
   type OcgCoreSync,
   type OcgMessage,
   type OcgResponse,
@@ -23,6 +22,8 @@ import { evaluate, type Weights } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
 import { formatTrace } from "../trace.ts";
 import { replayResponses, situationOf, type ResponseOutcome, type Situation } from "./replay.ts";
+import { findSame, idleList, type CardOption } from "./options.ts";
+import { playSequence, type PlanStep, type SequenceOptions, type SequenceResult } from "./sequence.ts";
 import { copyScripts, layoutFrom, withBlanks, type SimLayout } from "./world.ts";
 
 /** The rules engine (not a duel): what the simulator needs to build copies. Holds no hidden information. */
@@ -137,6 +138,14 @@ export class Simulator {
     return Simulator.debug;
   }
 
+  /**
+   * Plays a sequence of the AI's own moves in one copy (sequence.ts): how far it gets, the board at the end (optionally
+   * after the opponent's next turn), and what the AI could do next. Null if the copy failed.
+   */
+  sequence(view: AiView, steps: readonly PlanStep[], opts?: SequenceOptions): SequenceResult | null {
+    return playSequence(this, view, steps, opts);
+  }
+
   /** The cards the copies use (the game's plus the stand-ins). */
   get cardDb(): CardDb {
     return this.cards;
@@ -148,7 +157,7 @@ export class Simulator {
     return new DuelSession({ ...this.copyConfig, decks: layout.decks, startingLP: layout.lp, prepared: this.pool.pop() });
   }
 
-  private play(layout: SimLayout, action: SelectIdleCMDAction, option: OcgCardLoc & { description?: bigint }): SimOutcome | null {
+  private play(layout: SimLayout, action: SelectIdleCMDAction, option: CardOption): SimOutcome | null {
     const duel = this.build(layout);
     try {
       const debug = Simulator.debug;
@@ -212,24 +221,4 @@ export class Simulator {
     if (p.type === OcgMessageType.SELECT_CHAIN && !p.forced) return { type: OcgResponseType.SELECT_CHAIN, index: null };
     return autoRespond(p, () => 0, this.cards);
   }
-}
-
-/** The main-phase prompt's list for an action (summons, special summons, position changes, sets, activations). */
-function idleList(m: IdleMessage, action: SelectIdleCMDAction): (OcgCardLoc & { description?: bigint })[] | null {
-  switch (action) {
-    case SelectIdleCMDAction.SELECT_SUMMON: return m.summons;
-    case SelectIdleCMDAction.SELECT_SPECIAL_SUMMON: return m.special_summons;
-    case SelectIdleCMDAction.SELECT_POS_CHANGE: return m.pos_changes;
-    case SelectIdleCMDAction.SELECT_MONSTER_SET: return m.monster_sets;
-    case SelectIdleCMDAction.SELECT_SPELL_SET: return m.spell_sets;
-    case SelectIdleCMDAction.SELECT_ACTIVATE: return m.activates;
-    default: return null;
-  }
-}
-
-/** The same option in the copy's prompt: same card, place and effect (hand cards: any copy of the card). */
-function findSame(list: (OcgCardLoc & { description?: bigint })[], o: OcgCardLoc & { description?: bigint }): number {
-  const exact = list.findIndex((c) => c.code === o.code && c.location === o.location && c.sequence === o.sequence && c.description === o.description);
-  if (exact >= 0) return exact;
-  return list.findIndex((c) => c.code === o.code && c.location === o.location && c.description === o.description);
 }
