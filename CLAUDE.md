@@ -42,7 +42,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`; default Yugi vs Kaiba),
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
-(`&deck=kaiba`), `equip`, `coin`, `confiscation`; cards placed in hand/on the field first),
+(`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`; cards placed in hand/on the field first),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
 choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
@@ -80,8 +80,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   Before the engine starts, `DuelScene.decideFirst` plays rock-paper-scissors on the board (`src/ui/duel/RpsIntro.ts`:
   both draw ROCK/PAPER/SCISSORS, set one face-down in the middle Monster Zone, both flip, the loser's card flashes red,
   the winner gets a FIRST/SECOND dialog; a draw replays); `me` is only known after it.
-  `DuelScene` redraws the whole board from `snapshot()` after every engine step and maps each SELECT_* prompt to UI:
-  card action menus (idle/battle), zone highlights (place), and `Modal` dialogs/card pickers for everything else.
+  `DuelScene` redraws the whole board from `snapshot()` after every engine step; `src/scenes/duelPrompts.ts`
+  (`showPrompt`, through a `PromptHost`) maps each SELECT_* prompt to UI: card action menus (idle/battle), board picks
+  and zone highlights (`BoardPick`), and `Modal` dialogs/card pickers for everything else. The info panel is
+  `src/ui/duel/InfoPanel.ts`. The `&anims` / `&dialogs` previews are written for seat 0 = you (`previewSeats.ts` swaps seats).
   Calling a coin (`SELECT_OPTION` between system strings 60/61) gets `Modal.coinCall` (the two coin faces); the call
   comes back as HINT type 4 (`coinCallText`): logged, and the opponent's pauses on a "YOUR OPPONENT CALLED: …" notice.
   Declarations (`ANNOUNCE_*`): Type / Attribute / number as button dialogs, card names in `Modal.search` (typed search,
@@ -89,12 +91,12 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   in the canvas = `src/ui/textInput.ts` (card search, lobby room code): an invisible HTML input over the drawn field (phone keyboards, paste); it pauses
   Phaser's global key capture while it exists; the engine's HINT after each one is logged ("You declare
   DARK") and the opponent's declarations pause the duel on a "YOUR OPPONENT DECLARED: …" OK dialog (text only;
-  `AnimHost.notice`). Removing counters (`SELECT_COUNTER`) is picked on the board like tributes (`fieldPick.counters`: one counter per
+  `AnimHost.notice`). Removing counters (`SELECT_COUNTER`) is picked on the board like tributes (`BoardPick.counters`: one counter per
   click, badges count down). Ordering cards (`SORT_CARD`, Big Eye) = `Modal.sortCards`: click the cards in order, number
   badges, RESET / CONFIRM; ocgcore-wasm's encoder adds a length byte the core doesn't expect, worked around in
   `DuelSession.respond` (`rawSortOrder`). Rare prompts (`SORT_CHAIN`, RPS) are still auto-answered by `autoBot`.
 - `src/ui/` — `pixel.ts` (bitmap text, crisp 1px borders), `widgets.ts` (buttons), `duel/` (CardSprite, Modal,
-  layout geometry, log text, DuelAnimator).
+  InfoPanel, BoardPick, layout geometry, log text, DuelAnimator).
   Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
   squash/overshoot; faces swap instantly). Hover effects are suppressed while `animator.busy`.
   `DuelAnimator.play(messages)` tweens the displayed sprites per message (draw, move, summon, flip, activate,
@@ -116,7 +118,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   are never rounded by v4: `text()` gives each one a `GlyphSnapSubmitter` render node that snaps glyphs like v3 did
   (otherwise half-pixel glyphs, e.g. a centred wrapped line, break up). Create text only through `text()`.
 - Phaser 4 masks are filters: `obj.enableFilters().filters!.internal.addMask(graphics)` (GeometryMask is Canvas-only),
-  see `DuelScene.scrollName`.
+  see `InfoPanel.scrollName`.
 - Card art uses ONE shared 48-colour palette, `data/palette.gpl` (GIMP palette; editable in GIMP, reusable for other
   art; preview `docs/palette.png`). It is frozen: adding cards never changes it. Style knobs (boost, dither, sizes)
   live in `tools/lib/art-style.mjs`; quantisation is our own k-means/Oklab code in `tools/lib/palette.mjs`
@@ -157,7 +159,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   button-face text offsets, the table pattern, and every UI colour. Code reads `THEME.*` when drawing (never copy theme
   values into module-level constants: they'd go stale after a switch), `ui(role)`, `INSET`;
   never hard-code UI colours, `ui-` keys or per-theme positions. Cards and gameplay feedback (attack red,
-  summon flashes) are not themed. Info panel positions derive from `LAYOUT` in DuelScene.
+  summon flashes) are not themed. Info panel positions derive from `LAYOUT` in InfoPanel.ts.
 - Card action menu (`CardMenu.ts`): clicking a card squash-flips it to a card-sized Frame01a with FrameList09a
   buttons (09c on hover) inside its rim, plus BACK. 11px buttons, 4 fit (3 actions + BACK); labels max 30px (SUMMON,
   SET, SP.SUM, USE, ATTACK, FLIP / TO ATK / TO DEF). Your own Deck opens the same menu with FORFEIT (ends the duel as
@@ -165,11 +167,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Prompt dialogs (`Modal.dialog`): info-panel wood board, message as plain text, list-row buttons (`makeListButton`
   in `widgets.ts`, shared with the card menu). With a card: card (2x) left, text top-right wrapped to the button
   grid's width, buttons centred under it at the bottom; otherwise text over buttons. Boards are 240px wide (408 for 6+ cards).
-- Card choices (`pickCards` in DuelScene): SELECT_CARD / TRIBUTE / UNSELECT_CARD are picked on the board when
-  every candidate is a field/hand card (yellow 1px outline = choice, orange 2px = picked; `PICK_COLOR`), else in the
+- Card choices (`BoardPick.cards`, else the dialog): SELECT_CARD / TRIBUTE / UNSELECT_CARD are picked on the board when
+  every candidate is a field/hand card (yellow 1px outline = choice, orange 2px = picked; `THEME.pick`), else in the
   `Modal.picker` dialog. The prompt text is centred in the field strip (`setPrompt`); CONFIRM / CANCEL / FINISH
   sit stacked on a dark plate over your Extra Deck slot, with the n/max counter above them.
-- Zone choice (`pickPlaces`): free zones in semi-transparent yellow, more opaque on hover / once picked.
+- Zone choice (`BoardPick.places`): free zones in semi-transparent yellow, more opaque on hover / once picked.
 
 ## Engine facts worth knowing
 
