@@ -40,6 +40,10 @@ export interface Decision {
 export interface Brain {
   readonly name: string;
   decide(prompt: OcgMessage, view: AiView): Decision;
+  /** Called repeatedly while the opponent thinks: do a little preparation, return whether there's more. */
+  idle?(): boolean;
+  /** The duel is over: free what it holds. */
+  dispose?(): void;
 }
 
 /** What AiSeat needs from the duel. */
@@ -84,6 +88,16 @@ export class AiSeat {
     this.rng = mulberry32(Number((a ^ b) & 0xffffffffn) ^ (opts.seat ? 0x5bd1e995 : 0x1b873593));
   }
 
+  /** Lets the brain prepare a little while the opponent thinks; returns whether it has more to prepare. */
+  idle(): boolean {
+    return this.brain.idle?.() ?? false;
+  }
+
+  /** Frees what the brain holds (the duel is over or was left). */
+  dispose(): void {
+    this.brain.dispose?.();
+  }
+
   /** Feeds every message of one engine step (raw: this redacts them). Call it for every step, both players' turns. */
   observe(messages: readonly OcgMessage[]): void {
     this.memory.update(redact(messages, this.seat));
@@ -98,6 +112,7 @@ export class AiSeat {
     };
     this.memory.hint = null;
     let decision: Decision;
+    const started = performance.now();
     try {
       decision = this.brain.decide(prompt, view);
     } catch (e) {
@@ -108,6 +123,7 @@ export class AiSeat {
     this.onTrace?.({
       seat: this.seat, brain: this.brain.name, turn: this.memory.turn, phase: this.memory.phase, prompt: promptName(prompt),
       choice: describeChoice(prompt, decision.response, this.duel.cards), reason: decision.reason ?? "", options: decision.options,
+      ms: performance.now() - started,
     });
     return decision.response;
   }

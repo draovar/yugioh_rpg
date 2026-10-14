@@ -30,6 +30,8 @@ export function createGenericBrain(opts: GenericBrainOptions = {}): Brain {
       state.sync(view.memory.turn);
       return decide(prompt, weights ? { ...view, weights } : view, state);
     },
+    idle: () => state.simulator?.prepareOne() ?? false,
+    dispose: () => state.simulator?.dispose(),
   };
 }
 

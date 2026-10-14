@@ -16,14 +16,14 @@ import {
 } from "ocgcore-wasm";
 import { autoRespond } from "../../autoBot.ts";
 import type { CardDb } from "../../cardData.ts";
-import { DuelSession, type DuelSeed, type FieldSnapshot } from "../../DuelSession.ts";
+import { DuelSession, prepareDuel, type DuelConfig, type DuelSeed, type FieldSnapshot, type PreparedDuel } from "../../DuelSession.ts";
 import { fnv1a } from "../../hash.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
 import { evaluate, type Weights } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
 import { formatTrace } from "../trace.ts";
 import { replayResponses, situationOf, type ResponseOutcome, type Situation } from "./replay.ts";
-import { layoutFrom, withBlankScripts, withBlanks, type SimLayout } from "./world.ts";
+import { copyScripts, layoutFrom, withBlanks, type SimLayout } from "./world.ts";
 
 /** The rules engine (not a duel): what the simulator needs to build copies. Holds no hidden information. */
 export interface SimEngine {
@@ -47,6 +47,8 @@ const ATTACK_FIRST_TURN = 0x2n;
 const SIM_SEED: DuelSeed = [0x51n, 0x4dn, 0x5en, 0xedn];
 /** A move that takes more prompts than this to resolve is abandoned. */
 const MAX_STEPS = 200;
+/** Copies prepared ahead of time (about 1.5 MB of engine memory each; it never shrinks, so keep this small). */
+const POOL_SIZE = 24;
 
 export class Simulator {
   /** Debugging: receives every decision made inside the copies (arena `--sim-trace`). */
@@ -56,6 +58,9 @@ export class Simulator {
   private readonly readScript: (name: string) => string | null;
   private readonly cache = new Map<number, SimOutcome | null>();
   private readonly responseCache = new Map<number, ResponseOutcome[] | null>();
+  /** Everything about a copy except its cards and LP. */
+  private readonly copyConfig: Omit<DuelConfig, "decks">;
+  private readonly pool: PreparedDuel[] = [];
   /** Copies built so far (for the arena's statistics). */
   builds = 0;
 
@@ -66,7 +71,26 @@ export class Simulator {
     this.weights = weights;
     this.core = engine.core;
     this.cards = withBlanks(engine.cards);
-    this.readScript = withBlankScripts(engine.readScript);
+    this.readScript = copyScripts(engine.readScript);
+    this.copyConfig = {
+      core: this.core, cards: this.cards, readScript: this.readScript,
+      draws: { opening: 0, perTurn: 0 }, extraFlags: ATTACK_FIRST_TURN, seed: SIM_SEED, onCoreLog: () => {},
+    };
+  }
+
+  /**
+   * Uses idle time: prepares one copy ahead (the slow part of building one, ~15 ms) if the pool isn't full.
+   * Returns whether there's more to prepare.
+   */
+  prepareOne(): boolean {
+    if (this.pool.length >= POOL_SIZE) return false;
+    this.pool.push(prepareDuel(this.copyConfig));
+    return this.pool.length < POOL_SIZE;
+  }
+
+  /** Frees the prepared copies (the duel is over). */
+  dispose(): void {
+    for (const p of this.pool.splice(0)) this.core.destroyDuel(p.handle);
   }
 
   /** The board change of activating `prompt.activates[index]` in the main phase, or null if the copy can't play it. */
@@ -109,13 +133,10 @@ export class Simulator {
     return this.cards;
   }
 
-  /** A fresh duel laid out as `layout`; team 0 moves first, on a turn 1 that may attack. */
+  /** A fresh duel laid out as `layout` (from the pool when one is ready); team 0 moves first, on a turn 1 that may attack. */
   build(layout: SimLayout): DuelSession {
     this.builds++;
-    return new DuelSession({
-      core: this.core, cards: this.cards, readScript: this.readScript, decks: layout.decks, startingLP: layout.lp,
-      draws: { opening: 0, perTurn: 0 }, extraFlags: ATTACK_FIRST_TURN, seed: SIM_SEED, onCoreLog: () => {},
-    });
+    return new DuelSession({ ...this.copyConfig, decks: layout.decks, startingLP: layout.lp, prepared: this.pool.pop() });
   }
 
   private play(layout: SimLayout, option: OcgCardLocActive): SimOutcome | null {

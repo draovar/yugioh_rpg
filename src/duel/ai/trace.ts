@@ -31,6 +31,8 @@ export interface TraceEntry {
   choice: string;
   reason: string;
   options?: ScoredOption[];
+  /** How long the decision took, in ms. */
+  ms?: number;
 }
 
 const PHASES: [number, string][] = [
@@ -39,7 +41,8 @@ const PHASES: [number, string][] = [
 
 export function formatTrace(e: TraceEntry): string {
   const phase = PHASES.find(([bits]) => e.phase & bits)?.[1] ?? "-";
-  const lines = [`[AI P${e.seat} ${e.brain} T${e.turn} ${phase}] ${e.prompt}: ${e.choice}${e.reason ? ` (${e.reason})` : ""}`];
+  const time = e.ms !== undefined && e.ms >= 1 ? ` [${Math.round(e.ms)} ms]` : "";
+  const lines = [`[AI P${e.seat} ${e.brain} T${e.turn} ${phase}] ${e.prompt}: ${e.choice}${e.reason ? ` (${e.reason})` : ""}${time}`];
   for (const o of e.options ?? []) lines.push(`    ${o.score.toFixed(2).padStart(7)}  ${o.label}`);
   return lines.join("\n");
 }

@@ -16,6 +16,8 @@ import { AiSeat } from "./ai/AiSeat.ts";
 import { autoBotBrain } from "./ai/brains.ts";
 
 const HINT_SELECTMSG = 3;
+/** Pause between the AI's idle-time preparation steps (each ~15 ms), so frames stay smooth. */
+const IDLE_STEP_MS = 40;
 
 /**
  * Which optional chain prompts the human sees: "auto" only when a usable card's script marks this moment
@@ -122,6 +124,7 @@ export class DuelController {
   /** Stops the loop (scene shut down mid-animation); the session is destroyed by its owner. */
   stop(): void {
     this.destroyed = true;
+    this.ai?.dispose();
   }
 
   snapshot(): FieldSnapshot {
@@ -136,6 +139,7 @@ export class DuelController {
     if (this.destroyed) return;
 
     if (result.ended) {
+      this.ai?.dispose();
       this.events.onEnd(result.winner);
       return;
     }
@@ -167,6 +171,13 @@ export class DuelController {
     // A chain prompt our chain mode hides: answered like any human answer (so a peer gets it too).
     if (this.skipsChain(prompt)) return this.answer({ type: OcgResponseType.SELECT_CHAIN, index: null });
     this.events.onPrompt(prompt, hint);
+    this.idleWhileWaiting();
+  }
+
+  /** While the human thinks, the AI prepares for its next decisions, one small step at a time. */
+  private idleWhileWaiting(): void {
+    if (this.destroyed || !this.pending || !this.ai?.idle()) return;
+    this.schedule(IDLE_STEP_MS, () => this.idleWhileWaiting());
   }
 
   /** Applies the peer's next answer if it has arrived (otherwise `onResponse` calls this again later). */

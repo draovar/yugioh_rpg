@@ -25,10 +25,22 @@ export function withBlanks(cards: CardDb): CardDb {
   ]);
 }
 
-/** Script reader for the copy: the stand-ins get a script without effects. */
-export function withBlankScripts(readScript: (name: string) => string | null): (name: string) => string | null {
+/**
+ * Rule files the GOAT format never uses, left out of the copies (a fifth less Lua to load per copy). Each stand-in only
+ * defines its module table. Checked: 120 full duels play out with identical boards with and without them. (Not
+ * proc_maximum.lua: Polymerization's helpers call into it.)
+ */
+const UNUSED_RULES: Record<string, string> = {
+  "proc_synchro.lua": "Synchro = Synchro or {}", "proc_xyz.lua": "Xyz = Xyz or {}", "proc_pendulum.lua": "Pendulum = Pendulum or {}",
+  "proc_link.lua": "Link = Link or {}", "proc_skill.lua": "", "proc_rush.lua": "",
+};
+
+/** Script reader for the copies: the stand-ins get a script without effects, unused rule files are skipped. */
+export function copyScripts(readScript: (name: string) => string | null): (name: string) => string | null {
   return (name) => {
-    const code = Number(/^c(\d+)\.lua$/.exec(name.split("/").pop() ?? "")?.[1]);
+    const file = name.split("/").pop() ?? "";
+    if (file in UNUSED_RULES) return UNUSED_RULES[file];
+    const code = Number(/^c(\d+)\.lua$/.exec(file)?.[1]);
     return BLANK_CODES.has(code) ? "local s,id=GetID()\nfunction s.initial_effect(c) end" : readScript(name);
   };
 }

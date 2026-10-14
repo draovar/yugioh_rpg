@@ -59,7 +59,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   - `DuelSession.ts` — wraps one duel: `advance()` runs until a prompt/end, `respond()` answers it,
     `snapshot(viewer)` reads the board from the engine with hidden info masked.
     Options for the AI's copies (defaults = a normal duel): `startingLP` per player, `draws` (opening hand / per turn),
-    `extraFlags` (e.g. attack on the first turn).
+    `extraFlags` (e.g. attack on the first turn), `prepared` (an engine duel from `prepareDuel()` with the base scripts
+    already loaded, the slow ~15 ms part; LP are then set by a `Duel.SetLP` script after `startDuel`).
   - `DuelController.ts` — the local player (`me`, either seat) vs the AI or a `RemotePeer`; emits `onUpdate`/`onPrompt`/
     `onEnd`/`onError`, auto-passes empty chain prompts (both seats, unsent) and, per the local
     player's chain mode (`ChainMode`: auto = only when `spe_count` > 0 like YGOPro, all, off), hides their optional
@@ -88,6 +89,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     and returns `evaluate(after) − evaluate(before)`; the `sim` brain scores activations by it. Brains are built with a
     `BrainContext` holding the rules engine (`core`, `cards`, `readScript`), never the duel. The copy loses
     once-per-turn uses, equip links, counters and the turn number; such moves fall back to the M1 score.
+    Copies are fast: `copyScripts` skips the rule files GOAT never uses (Synchro, Xyz, Pendulum, Link, Skill, Rush;
+    not Maximum, Polymerization's helpers need it), and the `Simulator` keeps a pool of up to 24 prepared copies
+    (`prepareOne`), filled while the human thinks (`Brain.idle` ← `AiSeat.idle` ← `DuelController`, one copy per 40 ms
+    step) and freed at the duel's end (`dispose`). Copy from the pool ≈ 2.6 ms vs 19 ms built from scratch.
     `sim/replay.ts` = M3 (brain `replay`): a chain prompt in the opponent's turn is answered by replaying what they did
     (`situationOf`: their chain link, attack, summon, or the phase) in a copy where they move first, trying each
     candidate during that action, playing on to the end of their turn, and comparing; timing margins per situation in
@@ -229,6 +234,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - `duelQueryField` LP is unsigned (overkill wraps to ~4.29e9) and missing from the TS type; `snapshot()` handles both.
 - For SELECT_PLACE the preceding HINT carries the card passcode, not a string id.
 - `cards.cdb` `setcode` and `race` exceed 2^53: read with `stmt.setReadBigInts(true)`, store as strings in JSON.
+- The same duel (seed + answers) always reaches the same boards, but some cosmetic messages (CARD_HINT order) can
+  differ between runs in one engine instance (memory layout). Compare boards (`checksum()`), never message streams.
 - A `RETRY` message means we sent an illegal response. Treat it as a bug, never retry silently.
 - Only the player-facing side may see hidden info: the AI must decide from messages addressed to it, not from `duelQuery` on the opponent's hand/deck.
   ocgcore's raw messages carry hidden codes (a DRAW lists the drawn cards for either player, a SET names the card,

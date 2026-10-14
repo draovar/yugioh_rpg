@@ -52,6 +52,41 @@ export interface DuelConfig {
   /** Duel mode flags added to MODE_GOAT (e.g. attack on the first turn, for the AI's rebuilt boards). */
   extraFlags?: bigint;
   onCoreLog?: (type: number, text: string) => void;
+  /**
+   * An engine duel set up ahead of time by `prepareDuel` with this same config (the slow part: ~15 ms of base scripts).
+   * Only the LP may differ: they're set once the duel has started. Each prepared duel can be used once.
+   */
+  prepared?: PreparedDuel;
+}
+
+/** An engine duel with its base scripts loaded and no cards yet (`prepareDuel`). */
+export interface PreparedDuel {
+  readonly handle: OcgDuelHandle;
+  /** The LP it was created with. */
+  readonly lp: readonly [number, number];
+}
+
+/** Creates the engine duel for `cfg` and loads constant.lua and utility.lua into it: everything before the cards. */
+export function prepareDuel(cfg: Omit<DuelConfig, "decks" | "prepared">): PreparedDuel {
+  const lp = cfg.startingLP ?? 8000;
+  const lps: [number, number] = typeof lp === "number" ? [lp, lp] : lp;
+  const draws = { drawCountPerTurn: cfg.draws?.perTurn ?? 1, startingDrawCount: cfg.draws?.opening ?? 5 };
+  const handle = cfg.core.createDuel({
+    flags: OcgDuelMode.MODE_GOAT | (cfg.extraFlags ?? 0n),
+    seed: cfg.seed!,
+    team1: { ...draws, startingLP: lps[0] },
+    team2: { ...draws, startingLP: lps[1] },
+    cardReader: (code) => cfg.cards.get(code),
+    scriptReader: cfg.readScript,
+    errorHandler: cfg.onCoreLog ?? ((type, text) => console.warn("[ocgcore]", type, text)),
+  });
+  if (!handle) throw new Error("ocgcore: createDuel failed");
+  for (const s of ["constant.lua", "utility.lua"]) {
+    const src = cfg.readScript(s);
+    if (!src) throw new Error(`missing engine script ${s}`);
+    cfg.core.loadScript(handle, s, src);
+  }
+  return { handle, lp: lps };
 }
 
 /** One card as the viewing player is allowed to see it. */
@@ -138,26 +173,9 @@ export class DuelSession {
   constructor(cfg: DuelConfig) {
     this.core = cfg.core;
     this.cards = cfg.cards;
-    const lp = cfg.startingLP ?? 8000;
-    const draws = { drawCountPerTurn: cfg.draws?.perTurn ?? 1, startingDrawCount: cfg.draws?.opening ?? 5 };
     const seed = (this.seed = cfg.seed ?? randomSeed());
-    const handle = cfg.core.createDuel({
-      flags: OcgDuelMode.MODE_GOAT | (cfg.extraFlags ?? 0n),
-      seed,
-      team1: { ...draws, startingLP: typeof lp === "number" ? lp : lp[0] },
-      team2: { ...draws, startingLP: typeof lp === "number" ? lp : lp[1] },
-      cardReader: (code) => cfg.cards.get(code),
-      scriptReader: cfg.readScript,
-      errorHandler: cfg.onCoreLog ?? ((type, text) => console.warn("[ocgcore]", type, text)),
-    });
-    if (!handle) throw new Error("ocgcore: createDuel failed");
-    this.handle = handle;
-
-    for (const s of ["constant.lua", "utility.lua"]) {
-      const src = cfg.readScript(s);
-      if (!src) throw new Error(`missing engine script ${s}`);
-      this.core.loadScript(handle, s, src);
-    }
+    const prepared = cfg.prepared ?? prepareDuel({ ...cfg, seed });
+    this.handle = prepared.handle;
 
     // ocgcore does not shuffle at duel start (EDOPro shuffles client-side), so we do it here,
     // driven by the duel seed so a given seed always replays the same duel.
@@ -178,6 +196,10 @@ export class DuelSession {
     });
 
     this.core.startDuel(this.handle);
+    // A prepared duel was created with other LP: set the real ones before anything happens.
+    const lp = cfg.startingLP ?? 8000;
+    const [lp0, lp1] = typeof lp === "number" ? [lp, lp] : lp;
+    if (lp0 !== prepared.lp[0] || lp1 !== prepared.lp[1]) this.core.loadScript(this.handle, "set_lp.lua", `Duel.SetLP(0, ${lp0}) Duel.SetLP(1, ${lp1})`);
   }
 
   /** Runs the engine until it needs a decision or the duel ends. */

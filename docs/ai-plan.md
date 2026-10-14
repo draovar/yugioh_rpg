@@ -207,6 +207,15 @@ dropped, otherwise 540 more, kept at ≥ 53.5% over all 720. Winners are copied 
 final check against the old defaults (and against autobot / generic, so self-play doesn't drift somewhere odd).
 Trainer styles in M4 are the same mechanism: an aggressive trainer is a weight set that values damage higher.
 
+## 6c. Fast copies (2026-10-14, first step of the turn planner)
+
+Building a copy cost ~19 ms, 17 of them parsing the engine's base Lua (24 files, 358k characters) into a fresh Lua
+state. Tried: pre-compiled bytecode (the engine only accepts scripts as UTF-8 text, so bytecode has to travel escaped:
+38 ms, slower). Done: (1) the six rule files GOAT never uses are stubbed in copies (−20%; 120 full duels reach identical
+boards with and without them); (2) a pool of up to 24 copies prepared while the human thinks (1.5 MB each): taking one,
+placing the cards, starting and setting LP takes 2.6 ms. In the browser a decision that simulates Heavy Storm took
+12 ms. Next for the planner: replaying a move sequence in a copy, then the turn search itself.
+
 ## 7. Milestones
 
 | # | Milestone | Done when |
