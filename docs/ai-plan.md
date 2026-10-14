@@ -237,6 +237,23 @@ Jinzo in hand, their Dark Magician Girl and a set monster): "Dark Hole, then Jin
 left), "Jinzo, then Dark Hole" wipes Jinzo too (0.00), "Jinzo attacks Dark Magician Girl" scores best (2.44), doing
 nothing loses Lord of D. in their turn (1.31 → −0.18). 15-35 ms per plan without the pool. Next: the search itself.
 
+## 6f. The turn planner (2026-10-14, step 3: the search)
+
+`planTurn` (`sim/planner.ts`, brain `planner`): beam search over the AI's moves for the rest of its turn; each plan is
+scored by playing it in a copy, then a battle phase with the usual battle logic, then the opponent's whole next turn.
+Lesson from the first try: scoring a plan by "end the turn right after it" made "go to battle" worth nothing until the
+attack one step later, so the beam cut "summon Jinzo → battle → attack" before reaching the attack. Finishing every
+plan with the usual battle logic fixed it. The planner follows its plan while the real board matches the expected
+`checkpoints` and replans otherwise. Bench: the Dark Hole / Jinzo report is position 2 (replay: fails; planner: picks
+"summon Jinzo → battle", 2.44 vs Dark Hole 1.98). Speed in the arena (no pool): 63 ms per decision on average, 1.6 s
+slowest; the browser will need the Web Worker before this can be the default.
+Arena vs `replay` (360 duels each): 48.1% ± 5.2 at first: plans were short and it hardly set anything, because the
+opponent's hidden hand were stand-ins that never summon, so in a copy their turn never brought a new attacker and set
+traps / blockers looked worthless. With one "average monster" stand-in in their hand (Level 4, 1600 ATK): 51.4% ± 5.2,
+and it now sets traps and blockers and flips Magician of Faith. Not clearly stronger yet, at ~8x the thinking time.
+The copies still assume the opponent's set cards never fire and their hand holds exactly one 1600 monster: the next
+lever is sampling what their hidden cards could be (the M5 "sampled worlds" idea), not more search.
+
 ## 7. Milestones
 
 | # | Milestone | Done when |

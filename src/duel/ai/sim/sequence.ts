@@ -14,7 +14,8 @@ import {
 } from "ocgcore-wasm";
 import { autoRespond } from "../../autoBot.ts";
 import type { CardDb } from "../../cardData.ts";
-import type { FieldSnapshot } from "../../DuelSession.ts";
+import type { FieldSnapshot, PlayerView } from "../../DuelSession.ts";
+import { fnv1a } from "../../hash.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
 import { evaluate } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
@@ -36,6 +37,11 @@ export type PlanStep =
 export interface SequenceOptions {
   /** After the steps, end the turn and play the opponent's whole next turn before scoring. */
   opponentTurn?: boolean;
+  /**
+   * With opponentTurn: after the steps, first go to the battle phase (when the copy offers it) and attack the way the
+   * generic brain would, then end the turn. So a plan is scored with its attacks, not only its main-phase moves.
+   */
+  battleAfter?: boolean;
 }
 
 export interface SequenceResult {
@@ -43,8 +49,29 @@ export interface SequenceResult {
   done: number;
   /** The board at the end, for the AI (±1000 if the duel ended there). */
   value: number;
-  /** What the AI could do next where it stopped (empty after the opponent's turn or a finished duel). */
+  /** What the AI could do next once the steps were done (before the opponent's turn, if played). */
   next: PlanStep[];
+  /**
+   * `boardDigest` of the board at the moment each step was about to be taken: [0] before step 0 (the start), [k] once
+   * steps 0..k-1 had resolved. Following a plan in the real duel, a different board means something unplanned
+   * happened (a response, a different draw): plan again.
+   */
+  checkpoints: number[];
+}
+
+/**
+ * A fingerprint of the board as the AI sees it, comparable between the real duel and a copy: LP, our hand (sorted),
+ * both fields (hidden cards as 0), the opponent's hand size, both GY sizes. `me` = the AI's seat on that board.
+ */
+export function boardDigest(board: FieldSnapshot, me: 0 | 1): number {
+  const side = (p: PlayerView, ours: boolean) => [
+    p.lp,
+    ours ? p.hand.map((c) => c.code).sort((a, b) => a - b) : p.hand.length,
+    p.monsters.map((c) => (c ? [c.code, c.position, c.attack] : 0)),
+    p.spells.map((c) => (c ? [c.code, c.faceDown ? 1 : 0] : 0)),
+    p.grave.length,
+  ];
+  return fnv1a(JSON.stringify([side(board.players[me], true), side(board.players[1 - me], false)]));
 }
 
 type Prompt = OcgMessage & { player: number };
@@ -66,17 +93,22 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
       seat: 0, board: duel.snapshot(0), memory: ai.memory, cards: sim.cardDb, hint: null, rng: () => 0.5, deckList: null, weights: sim.weights,
     });
     let done = 0;
+    let next: PlanStep[] = [];
+    const checkpoints: number[] = [];
+    const result = (value: number): SequenceResult => ({ done, value, next, checkpoints });
     /** Our turn is over (all steps done, opponentTurn): from here on both sides play on their own. */
     let finishing = false;
     /** The attack the last step declared waits for its target prompt. */
     let target: number | null | undefined;
+    /** After the steps: the battle phase the generic brain plays (battleAfter). */
+    let battling = false;
 
     for (let n = 0; n < MAX_PROMPTS; n++) {
       const s = duel.advance();
       ai.observe(s.messages);
       opp?.observe(s.messages);
-      if (s.ended) return { done, value: s.winner === 0 ? 1000 : s.winner === 1 ? -1000 : 0, next: [] };
-      if (ai.memory.turn > 2) return { done, value: score(), next: [] }; // the opponent's turn is over
+      if (s.ended) return result(s.winner === 0 ? 1000 : s.winner === 1 ? -1000 : 0);
+      if (ai.memory.turn > 2) return result(score()); // the opponent's turn is over
       const p = s.prompt as Prompt;
 
       if (p.player === 1) {
@@ -86,15 +118,26 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
       }
       if (p.type === OcgMessageType.SELECT_IDLECMD || p.type === OcgMessageType.SELECT_BATTLECMD) {
         if (finishing) { duel.respond(ai.decide(p)); continue; } // only reached if our turn didn't end (shouldn't)
+        if (checkpoints.length === done) checkpoints.push(boardDigest(duel.snapshot(0), 0));
         if (done < steps.length) {
           const r = responseFor(p, steps[done]);
-          if (!r) return { done, value: score(), next: nextSteps(p, duel.snapshot(0)) };
+          if (!r) { next = nextSteps(p, duel.snapshot(0)); return result(score()); }
           const step = steps[done++];
           target = step.kind === "attack" ? step.target : undefined;
           duel.respond(r);
           continue;
         }
-        if (!opts.opponentTurn) return { done, value: score(), next: nextSteps(p, duel.snapshot(0)) };
+        if (!battling) next = nextSteps(p, duel.snapshot(0));
+        if (!opts.opponentTurn) return result(score());
+        if (opts.battleAfter && p.type === OcgMessageType.SELECT_IDLECMD && p.to_bp && !battling) {
+          battling = true;
+          duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_BP, index: null });
+          continue;
+        }
+        if (battling && p.type === OcgMessageType.SELECT_BATTLECMD) {
+          const r = ai.decide(p);
+          if (!(r.type === OcgResponseType.SELECT_BATTLECMD && r.action === SelectBattleCMDAction.TO_M2)) { duel.respond(r); continue; }
+        }
         finishing = true;
         duel.respond(p.type === OcgMessageType.SELECT_IDLECMD
           ? { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null }
@@ -119,7 +162,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
 }
 
 /** The response that carries out `step` at this prompt, or null if the prompt doesn't offer it. */
-function responseFor(p: IdleMessage | BattleMessage, step: PlanStep): OcgResponse | null {
+export function responseFor(p: IdleMessage | BattleMessage, step: PlanStep): OcgResponse | null {
   if (p.type === OcgMessageType.SELECT_IDLECMD) {
     if (step.kind !== "idle") return null;
     const idle = (index: number | null): OcgResponse => ({ type: OcgResponseType.SELECT_IDLECMD, action: step.action, index });
@@ -141,7 +184,7 @@ function responseFor(p: IdleMessage | BattleMessage, step: PlanStep): OcgRespons
 }
 
 /** Every step the AI could take at this prompt (attacks: one per target, or direct). */
-function nextSteps(p: IdleMessage | BattleMessage, board: FieldSnapshot): PlanStep[] {
+export function nextSteps(p: IdleMessage | BattleMessage, board: FieldSnapshot): PlanStep[] {
   const steps: PlanStep[] = [];
   if (p.type === OcgMessageType.SELECT_IDLECMD) {
     for (const action of [SelectIdleCMDAction.SELECT_ACTIVATE, SelectIdleCMDAction.SELECT_SUMMON, SelectIdleCMDAction.SELECT_SPECIAL_SUMMON,

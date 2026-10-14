@@ -2,6 +2,7 @@
 import type { OcgCardLoc, OcgResponse } from "ocgcore-wasm";
 import type { Decision } from "../AiSeat.ts";
 import type { Simulator } from "../sim/simulator.ts";
+import type { Plan } from "../sim/planner.ts";
 
 export interface Option {
   label: string;
@@ -26,6 +27,12 @@ export class BrainState {
   readonly simulator: Simulator | null;
   /** Answers the opponent's moves by replaying them in a copy (M3); needs the simulator. */
   readonly replayChains: boolean;
+  /** Plans whole turns (sim/planner.ts) for main-phase and battle decisions; needs the simulator. */
+  readonly planTurns: boolean;
+  /** The plan being followed and the index of its next step. */
+  plan: { plan: Plan; at: number } | null = null;
+  /** Our Normal Summon (or monster set) is used this turn (the copies don't know). */
+  normalSummonUsed = false;
   turn = -1;
   /** Main-phase decisions this turn (a safety stop against loops). */
   idleSteps = 0;
@@ -36,9 +43,10 @@ export class BrainState {
   /** The monster the battle plan wants the current attack to hit. */
   attackTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
 
-  constructor(simulator: Simulator | null = null, replayChains = false) {
+  constructor(simulator: Simulator | null = null, replayChains = false, planTurns = false) {
     this.simulator = simulator;
     this.replayChains = replayChains;
+    this.planTurns = planTurns;
   }
 
   /** Resets the per-turn state when a new turn has started. */
@@ -48,6 +56,8 @@ export class BrainState {
     this.idleSteps = 0;
     this.activations.clear();
     this.lastActivation = null;
+    this.plan = null;
+    this.normalSummonUsed = false;
     this.attackTarget = null;
   }
 }

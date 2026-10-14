@@ -2,7 +2,7 @@
 // it stays fixed. Each position is a board (cards placed before the duel starts, the AI going first) and a check on
 // the AI's first main-phase choice (its trace text, e.g. "summon Zaborg the Thunder Monarch").
 // Usage: npm run ai-bench [-- --brain NAME (default: the game's)] [-- --show]
-import { OcgLocation, OcgMessageType, OcgPosition, OcgResponseType } from "ocgcore-wasm";
+import { OcgLocation, OcgMessageType, OcgPosition, OcgResponseType, SelectIdleCMDAction } from "ocgcore-wasm";
 import { autoRespond } from "../src/duel/autoBot.ts";
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
 import { BRAINS, DEFAULT_BRAIN, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
@@ -12,15 +12,18 @@ import { cards, core, newDuel, readScript, seedFrom } from "./lib/engine.ts";
 
 const C = {
   zaborg: 51945556, mobius: 4929256, vorseRaider: 14898066, mysticalElf: 15025844, celticGuardian: 91152256,
+  darkHole: 53129443, jinzo: 77585513, lordOfD: 17985575, darkMagicianGirl: 38033121, sangan: 26202165,
 } as const;
 
 interface Position {
   name: string;
   /** Where it came from (a user report, a known misplay...). */
   why: string;
-  /** The AI (seat 0, goes first) and the opponent. Main decks are filler so draws don't matter. */
+  /** The AI's and the opponent's cards. Main decks are filler, and nobody draws. */
   ai: StartCard[];
   opponent: StartCard[];
+  /** The opponent goes first and just ends their turn, so the AI is on turn 2 and may attack. */
+  aiSecond?: boolean;
   /** The AI's first main-phase choice must match this... */
   expect?: RegExp;
   /** ...and must not match this. */
@@ -28,7 +31,7 @@ interface Position {
 }
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
-const monster = (code: number, sequence = 0, position = OcgPosition.FACEUP_ATTACK): StartCard =>
+const monster = (code: number, sequence = 0, position: OcgPosition = OcgPosition.FACEUP_ATTACK): StartCard =>
   ({ code, location: OcgLocation.MZONE, sequence, position });
 
 const POSITIONS: Position[] = [
@@ -38,6 +41,14 @@ const POSITIONS: Position[] = [
     ai: [hand(C.zaborg), monster(C.mobius)],
     opponent: [],
     forbid: /summon Zaborg/,
+  },
+  {
+    name: "tribute-before-dark-hole",
+    why: "user report 2026-10-14: Dark Hole first destroyed Lord of D., the tribute Jinzo needed; then no summon",
+    ai: [hand(C.darkHole), hand(C.jinzo), monster(C.lordOfD)],
+    opponent: [monster(C.darkMagicianGirl, 1), monster(C.sangan, 2, OcgPosition.FACEDOWN_DEFENSE)],
+    aiSecond: true,
+    forbid: /activate Dark Hole/,
   },
   {
     name: "monarch-with-target",
@@ -56,14 +67,16 @@ const filler = (): Deck["main"] => Array<number>(30).fill(C.mysticalElf);
 
 let failed = 0;
 for (const p of POSITIONS) {
-  // No opening hand and no draws: only the placed cards.
+  // No opening hand and no draws: only the placed cards. Seat 0 goes first.
+  const aiSeat = p.aiSecond ? 1 : 0;
+  const sides = [{ main: filler(), start: p.ai }, { main: filler(), start: p.opponent }];
   const duel = newDuel({
-    decks: [{ main: filler(), start: p.ai }, { main: filler(), start: p.opponent }], seed: seedFrom(1),
+    decks: p.aiSecond ? [sides[1], sides[0]] : [sides[0], sides[1]], seed: seedFrom(1),
     draws: { opening: 0, perTurn: 0 }, onCoreLog: () => {},
   });
   const traces: TraceEntry[] = [];
   const ai = new AiSeat({
-    seat: 0, brain: BRAINS[brainName]({ engine: { core, cards, readScript } }), duel,
+    seat: aiSeat, brain: BRAINS[brainName]({ engine: { core, cards, readScript } }), duel,
     deck: filler(), onTrace: (e) => traces.push(e),
   });
   let choice: TraceEntry | null = null;
@@ -72,10 +85,11 @@ for (const p of POSITIONS) {
     ai.observe(s.messages);
     if (s.ended) break;
     const prompt = s.prompt as typeof s.prompt & { player: number };
-    if (prompt.player !== 0) {
-      // The opponent never does anything: passes chains, answers anything else with the first legal option.
-      duel.respond(prompt.type === OcgMessageType.SELECT_CHAIN && !prompt.forced
-        ? { type: OcgResponseType.SELECT_CHAIN, index: null } : autoRespond(prompt, () => 0, cards));
+    if (prompt.player !== aiSeat) {
+      // The opponent never does anything: passes chains, ends its turn, answers anything else with the first legal option.
+      duel.respond(prompt.type === OcgMessageType.SELECT_CHAIN && !prompt.forced ? { type: OcgResponseType.SELECT_CHAIN, index: null }
+        : prompt.type === OcgMessageType.SELECT_IDLECMD ? { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null }
+        : autoRespond(prompt, () => 0, cards));
       continue;
     }
     duel.respond(ai.decide(prompt));

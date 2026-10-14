@@ -9,19 +9,24 @@ import { shuffle } from "../../rng.ts";
 import type { AiView } from "../AiSeat.ts";
 
 /** Stand-in passcodes (no real card uses them). */
-export const BLANK = { TRAP: 1, MONSTER: 2, CARD: 3 } as const;
+export const BLANK = { TRAP: 1, MONSTER: 2, CARD: 3, ATTACKER: 4 } as const;
 const BLANK_CODES = new Set<number>(Object.values(BLANK));
 
-const blank = (code: number, type: number, def = 0): CardRecord => ({
-  code, alias: 0, setcode: "0", type, atk: 0, def, level: type & TYPE.MONSTER ? 3 : 0, race: type & TYPE.MONSTER ? "1" : "0",
+const blank = (code: number, type: number, def = 0, atk = 0, level = 3): CardRecord => ({
+  code, alias: 0, setcode: "0", type, atk, def, level: type & TYPE.MONSTER ? level : 0, race: type & TYPE.MONSTER ? "1" : "0",
   attribute: type & TYPE.MONSTER ? 1 : 0, name: "(hidden card)", desc: "", strings: Array<string>(16).fill(""),
 });
 
-/** The game's cards plus the stand-ins: a face-down Spell/Trap, a face-down monster (guessed DEF), any other card. */
+/**
+ * The game's cards plus the stand-ins: a face-down Spell/Trap, a face-down monster (guessed DEF), any other card, and an
+ * average monster in the opponent's hand (Level 4, 1600 ATK, typical for GOAT decks): without it the opponent's turn in
+ * a copy never brings a new attacker, so set traps and blockers would look worthless.
+ */
 export function withBlanks(cards: CardDb): CardDb {
   return new CardDb([
     ...cards.records.values(),
     blank(BLANK.TRAP, TYPE.TRAP), blank(BLANK.MONSTER, TYPE.MONSTER | TYPE.NORMAL, 1300), blank(BLANK.CARD, TYPE.SPELL),
+    blank(BLANK.ATTACKER, TYPE.MONSTER | TYPE.NORMAL, 1200, 1600, 4),
   ]);
 }
 
@@ -85,6 +90,9 @@ function ownSide(view: AiView, me: PlayerView): Deck {
 
 function opponentSide(opp: PlayerView): Deck {
   const start = piles(opp, (c) => place(c, c.location === OcgLocation.MZONE ? BLANK.MONSTER : BLANK.TRAP));
-  start.push(...opp.hand.map((_c, i) => ({ code: BLANK.CARD, location: OcgLocation.HAND, sequence: i, position: OcgPosition.FACEDOWN_DEFENSE })));
+  // Their hidden hand: one average monster (they'll usually have one to summon), the rest cards that do nothing.
+  start.push(...opp.hand.map((_c, i) => ({
+    code: i === 0 ? BLANK.ATTACKER : BLANK.CARD, location: OcgLocation.HAND, sequence: i, position: OcgPosition.FACEDOWN_DEFENSE,
+  })));
   return { main: Array<number>(opp.deckCount).fill(BLANK.CARD), start };
 }

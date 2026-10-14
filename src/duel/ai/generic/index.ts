@@ -8,6 +8,7 @@ import { pickAttackTarget, decideBattle } from "./battle.ts";
 import { decideChain } from "./chain.ts";
 import { BrainState } from "./common.ts";
 import { decideIdle } from "./idle.ts";
+import { decideByPlan } from "./plan.ts";
 import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
 import { SELECT_HINT, chooseCards, pickUtility, purposeOf } from "./select.ts";
 import type { Simulator } from "../sim/simulator.ts";
@@ -16,13 +17,15 @@ import type { Weights } from "../board.ts";
 export interface GenericBrainOptions {
   simulator?: Simulator;
   replayChains?: boolean;
+  /** Plan whole turns for main-phase and battle decisions (needs the simulator). */
+  planTurns?: boolean;
   /** How it values things (board.ts); default DEFAULT_WEIGHTS. */
   weights?: Readonly<Weights>;
   name?: string;
 }
 
 export function createGenericBrain(opts: GenericBrainOptions = {}): Brain {
-  const state = new BrainState(opts.simulator ?? null, opts.replayChains ?? false);
+  const state = new BrainState(opts.simulator ?? null, opts.replayChains ?? false, opts.planTurns ?? false);
   const weights = opts.weights;
   return {
     name: opts.name ?? "generic",
@@ -38,9 +41,9 @@ export function createGenericBrain(opts: GenericBrainOptions = {}): Brain {
 function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
   switch (m.type) {
     case OcgMessageType.SELECT_IDLECMD:
-      return decideIdle(m, view, state);
+      return decideByPlan(m, view, state) ?? decideIdle(m, view, state);
     case OcgMessageType.SELECT_BATTLECMD:
-      return decideBattle(m, view, state);
+      return decideByPlan(m, view, state) ?? decideBattle(m, view, state);
     case OcgMessageType.SELECT_CHAIN:
       return decideChain(m, view, state);
     case OcgMessageType.SELECT_CARD: {

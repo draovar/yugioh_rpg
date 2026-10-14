@@ -30,6 +30,12 @@ export const BRAINS = {
     createGenericBrain({
       simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, replayChains: true, weights: ctx.weights, name: "replay",
     }),
+  /** replay + plans whole turns (sim/planner.ts): main-phase and battle moves as the best sequence for the turn. */
+  planner: (ctx: BrainContext) =>
+    createGenericBrain({
+      simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, replayChains: true, planTurns: true, weights: ctx.weights,
+      name: "planner",
+    }),
 } satisfies Record<string, (ctx: BrainContext) => Brain>;
 
 export type BrainName = keyof typeof BRAINS;

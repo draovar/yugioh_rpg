@@ -47,7 +47,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`; cards placed in hand/on the field first),
-`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `replay` (default, `DEFAULT_BRAIN`), `sim`, `generic`, `autobot`), `&aitrace` prints every AI decision
+`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `replay` (default, `DEFAULT_BRAIN`), `planner`, `sim`, `generic`, `autobot`), `&aitrace` prints every AI decision
 to the console (also in the deployed game, for misplay reports),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
@@ -101,6 +101,13 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     in one copy, follow-ups answered by the generic brain, and returns how many steps worked, the board value (after
     the opponent's next turn if asked) and the next possible steps. `sim/options.ts`: finding an option again in a
     copy's prompt (`idleList`, `findSame`).
+    `sim/planner.ts` = the turn planner (brain `planner`): `planTurn` beam-searches move sequences (root moves from the
+    real prompt, deeper ones from each copy's `next`), scoring each plan by playing it, then a battle phase with the
+    generic battle logic (`battleAfter`), then the opponent's turn; plans reaching the same board merge; budgets
+    `DEFAULT_PLAN_SETTINGS` (beam 3, depth 6, 8 children, 60 copies, 2 s). It enforces what copies don't know (Normal
+    Summon used, monsters that attacked, no battle on turn 1 / after Main 2). `generic/plan.ts` follows the plan step by
+    step while the real board matches the plan's `checkpoints` (`boardDigest`), replans otherwise, battles with the
+    usual logic after a finished plan and plans Main Phase 2 afresh.
     `sim/replay.ts` = M3 (brain `replay`): a chain prompt in the opponent's turn is answered by replaying what they did
     (`situationOf`: their chain link, attack, summon, or the phase) in a copy where they move first, trying each
     candidate during that action, playing on to the end of their turn, and comparing; timing margins per situation in
