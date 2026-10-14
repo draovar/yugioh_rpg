@@ -45,7 +45,12 @@ export interface DuelConfig {
   readScript: (name: string) => string | null;
   decks: [Deck, Deck];
   seed?: DuelSeed;
-  startingLP?: number;
+  /** One value for both players, or one per player. Default 8000. */
+  startingLP?: number | [number, number];
+  /** Opening hand and cards drawn per turn. Default 5 and 1 (the AI's rebuilt boards use 0 and 0). */
+  draws?: { opening: number; perTurn: number };
+  /** Duel mode flags added to MODE_GOAT (e.g. attack on the first turn, for the AI's rebuilt boards). */
+  extraFlags?: bigint;
   onCoreLog?: (type: number, text: string) => void;
 }
 
@@ -133,13 +138,14 @@ export class DuelSession {
   constructor(cfg: DuelConfig) {
     this.core = cfg.core;
     this.cards = cfg.cards;
-    const team = { drawCountPerTurn: 1, startingDrawCount: 5, startingLP: cfg.startingLP ?? 8000 };
+    const lp = cfg.startingLP ?? 8000;
+    const draws = { drawCountPerTurn: cfg.draws?.perTurn ?? 1, startingDrawCount: cfg.draws?.opening ?? 5 };
     const seed = (this.seed = cfg.seed ?? randomSeed());
     const handle = cfg.core.createDuel({
-      flags: OcgDuelMode.MODE_GOAT,
+      flags: OcgDuelMode.MODE_GOAT | (cfg.extraFlags ?? 0n),
       seed,
-      team1: team,
-      team2: team,
+      team1: { ...draws, startingLP: typeof lp === "number" ? lp : lp[0] },
+      team2: { ...draws, startingLP: typeof lp === "number" ? lp : lp[1] },
       cardReader: (code) => cfg.cards.get(code),
       scriptReader: cfg.readScript,
       errorHandler: cfg.onCoreLog ?? ((type, text) => console.warn("[ocgcore]", type, text)),

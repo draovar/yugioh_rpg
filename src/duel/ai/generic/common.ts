@@ -1,6 +1,7 @@
 // Shared pieces of the generic brain: scored options and the brain's own per-turn state.
 import type { OcgCardLoc, OcgResponse } from "ocgcore-wasm";
 import type { Decision } from "../AiSeat.ts";
+import type { Simulator } from "../sim/simulator.ts";
 
 export interface Option {
   label: string;
@@ -21,6 +22,8 @@ export function best(options: Option[], reason: (o: Option) => string = () => ""
 
 /** What the brain remembers between decisions (reset every turn). */
 export class BrainState {
+  /** Plays main-phase activations on a copy of the board to judge them (M2); null = judge by card type (M1). */
+  readonly simulator: Simulator | null;
   turn = -1;
   /** Main-phase decisions this turn (a safety stop against loops). */
   idleSteps = 0;
@@ -30,6 +33,10 @@ export class BrainState {
   lastActivation: string | null = null;
   /** The monster the battle plan wants the current attack to hit. */
   attackTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
+
+  constructor(simulator: Simulator | null = null) {
+    this.simulator = simulator;
+  }
 
   /** Resets the per-turn state when a new turn has started. */
   sync(turn: number): void {

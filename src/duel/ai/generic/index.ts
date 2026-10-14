@@ -1,5 +1,6 @@
-// The generic brain (milestone M1): plays any deck from card data alone (types, ATK/DEF, levels), the engine's
-// legality and timing signals, and the selection hints. Card-specific knowledge comes on top of it later.
+// The generic brain: plays any deck from card data alone (types, ATK/DEF, levels), the engine's legality and timing
+// signals, and the selection hints (M1). With a Simulator it judges main-phase activations by playing them on a copy
+// of the board (M2).
 import { OcgMessageType, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
 import { autoRespond } from "../../autoBot.ts";
 import type { AiView, Brain, Decision } from "../AiSeat.ts";
@@ -9,11 +10,12 @@ import { BrainState } from "./common.ts";
 import { decideIdle } from "./idle.ts";
 import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
 import { SELECT_HINT, chooseCards, pickUtility, purposeOf } from "./select.ts";
+import type { Simulator } from "../sim/simulator.ts";
 
-export function createGenericBrain(): Brain {
-  const state = new BrainState();
+export function createGenericBrain(opts: { simulator?: Simulator; name?: string } = {}): Brain {
+  const state = new BrainState(opts.simulator ?? null);
   return {
-    name: "generic",
+    name: opts.name ?? "generic",
     decide(prompt: OcgMessage, view: AiView): Decision {
       state.sync(view.memory.turn);
       return decide(prompt, view, state);

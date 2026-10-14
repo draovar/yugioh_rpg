@@ -24,7 +24,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession` (bots in `AiSeat`s); fails on RETRY/crash |
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
-| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--only K] [--trace] [--losses]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions |
+| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--only K] [--trace] [--sim-trace] [--losses]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened inside each simulated copy |
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
@@ -45,7 +45,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`; cards placed in hand/on the field first),
-`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `generic` (default), `autobot`), `&aitrace` prints every AI decision
+`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `sim` (default), `generic`, `autobot`), `&aitrace` prints every AI decision
 to the console (also in the deployed game, for misplay reports),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
@@ -57,6 +57,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - `src/duel/` — engine layer, **no Phaser imports**. Runs unchanged in Node (tools) and the browser.
   - `DuelSession.ts` — wraps one duel: `advance()` runs until a prompt/end, `respond()` answers it,
     `snapshot(viewer)` reads the board from the engine with hidden info masked.
+    Options for the AI's copies (defaults = a normal duel): `startingLP` per player, `draws` (opening hand / per turn),
+    `extraFlags` (e.g. attack on the first turn).
   - `DuelController.ts` — the local player (`me`, either seat) vs the AI or a `RemotePeer`; emits `onUpdate`/`onPrompt`/
     `onEnd`/`onError`, auto-passes empty chain prompts (both seats, unsent) and, per the local
     player's chain mode (`ChainMode`: auto = only when `spe_count` > 0 like YGOPro, all, off), hides their optional
@@ -78,6 +80,12 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     attacking), `battle` (best killable target, weakest attacker that kills it, target remembered for the 549 prompt),
     `chain` (responds only to the opponent and only when `spe_count` > 0, never to its own link), `select` (the
     HINT_SELECTMSG purpose: bad for the owner → their best / our worst, good → best), `misc` (position, declarations).
+    `sim/` = M2: `world.ts` lays the AiView out as a fresh duel (AI = team 0; the opponent's hidden cards and Decks
+    become blank stand-ins, codes 1-3 with empty scripts; the AI's Deck = its decklist minus the cards it can see),
+    `simulator.ts` plays one main-phase activation there (follow-up prompts by the generic brain, the opponent passes)
+    and returns `evaluate(after) − evaluate(before)`; the `sim` brain scores activations by it. Brains are built with a
+    `BrainContext` holding the rules engine (`core`, `cards`, `readScript`), never the duel. The copy loses
+    once-per-turn uses, equip links, counters and the turn number; such moves fall back to the M1 score.
   - `rng.ts` — `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
   - `hash.ts` — `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).
@@ -255,7 +263,9 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
 3. **Opponent AI** (`docs/ai-plan.md`: one universal brain + per-card knowledge + trainer profiles; levels Rookie /
    Duelist / Expert, Expert as strong as possible, with lookahead later; no cheating by default).
    ✅ M0 plumbing: `AiSeat` / `redact` / `AiMemory` / brains / trace, `arena`, `test-ai`.
-   ✅ M1 generic brain (default opponent): ~82% vs autobot over 1008 duels; the rest needs card knowledge (M2).
+   ✅ M1 generic brain: ~82% vs autobot over 1008 duels.
+   ✅ M2 `sim` brain (default opponent): main-phase activations judged by playing them on a rebuilt copy of the board
+   (`docs/ai-plan.md` §6a); 54% vs generic, 84% vs autobot. Next: M3 chain responses.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.

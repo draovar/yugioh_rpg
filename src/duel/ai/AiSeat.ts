@@ -21,6 +21,8 @@ export interface AiView {
   readonly hint: bigint | null;
   /** The AI's own randomness, seeded from the duel seed. */
   readonly rng: () => number;
+  /** The AI's own Main Deck list (it built the deck: it knows what's in it, not the order); null if not given. */
+  readonly deckList: readonly number[] | null;
 }
 
 export interface Decision {
@@ -48,6 +50,8 @@ export interface AiSeatOptions {
   seat: 0 | 1;
   brain: Brain;
   duel: AiDuel;
+  /** The seat's Main Deck list (what's in it, not the order). */
+  deck?: readonly number[];
   /** Throw when the brain fails (dev builds, tools). Otherwise fall back to autoBot's answer and log the error. */
   strict?: boolean;
   /** Receives a record of every decision. */
@@ -59,6 +63,7 @@ export class AiSeat {
   readonly brain: Brain;
   readonly memory: AiMemory;
   private readonly duel: AiDuel;
+  private readonly deckList: readonly number[] | null;
   private readonly rng: () => number;
   private readonly strict: boolean;
   private readonly onTrace?: (entry: TraceEntry) => void;
@@ -67,6 +72,7 @@ export class AiSeat {
     this.seat = opts.seat;
     this.brain = opts.brain;
     this.duel = opts.duel;
+    this.deckList = opts.deck ?? null;
     this.memory = new AiMemory(opts.seat);
     this.strict = opts.strict ?? true;
     this.onTrace = opts.onTrace;
@@ -85,7 +91,7 @@ export class AiSeat {
     if ((prompt as { player?: number }).player !== this.seat) throw new Error(`AiSeat ${this.seat}: prompt is for another player`);
     const view: AiView = {
       seat: this.seat, board: this.duel.snapshot(this.seat), memory: this.memory, cards: this.duel.cards,
-      hint: this.memory.hint, rng: this.rng,
+      hint: this.memory.hint, rng: this.rng, deckList: this.deckList,
     };
     this.memory.hint = null;
     let decision: Decision;

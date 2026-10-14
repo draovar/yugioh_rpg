@@ -1,6 +1,7 @@
 # Opponent AI: plan (roadmap #3)
 
-Status: agreed 2026-10-14 (user's answers in §9). M0 and M1 done (branch `ai-m0`); next: M2.
+Status: agreed 2026-10-14 (user's answers in §9). M0, M1 and M2 done (branch `ai-m0`). Plan changed after M1 (§6a):
+M2 = one-move simulation instead of a hand-written card table. Next: M3 (chain responses).
 
 M1 result: the generic brain beats autobot 81.6% ± 2.4% (1008 duels, seeds 5000+, 0 errors), short of the 90% target.
 Its losses are card-knowledge mistakes a generic brain can't avoid: Heavy Storm with no opposing Spells/Traps, Breaker /
@@ -115,7 +116,7 @@ In a Pokémon-style game, **deck quality is the main difficulty lever** (early t
 Even Rookie should never look broken (no suicide attacks into a visible bigger monster). Its mistakes should look human:
 holding back, not chaining, attacking into set cards, spending removal early.
 
-## 6. Lookahead (Expert only, after M3)
+## 6. Lookahead (Expert only, M5)
 
 Plain version: the brain judges a move by rules ("Raigeki is good when they have more monsters"). Lookahead also
 *tries the move out*: on an imaginary copy of the duel (your hidden cards guessed), it plays the move, the rest of its
@@ -135,16 +136,65 @@ hitch, a time budget (~1-2 s, covered by the "thinking" delay). Known blind spot
 control links (Snatch Steal), counters and turn-based effects are lost in the rebuilt world. **Only keep it if the
 arena shows a clear gain over Expert without it.**
 
+## 6a. One-move simulation (decided 2026-10-14, after M1)
+
+The user's question after M1: with a board score, would the AI still Heavy Storm its own cards? Not with the score
+alone (the AI needs the board *after* the move), but yes with simulation: rebuild the board in the engine, play the
+move, let the scripts resolve it, score the result. The engine already knows what every card does, so most of the
+planned per-card table becomes unnecessary; only *timing* and *future value* need knowledge.
+
+**Probe results (2026-10-14):**
+
+| Question | Result |
+|---|---|
+| Rebuild a board so the duel sits in the AI's main phase | ✅ fresh duel, AI = team 0, both boards placed with `duelNewCard`, draw counts 0, pass the draw/standby chain windows |
+| Different LP per side | ✅ per-team `startingLP` |
+| Card effects in the rebuilt duel | ✅ Heavy Storm destroyed both sides' Spells/Traps; a face-up Jinzo blocked the AI's set trap |
+| Hidden cards | ✅ fake codes with no script (blank trap / monster with guessed DEF / card) work as stand-ins; MST only offered them as targets |
+| Battle in the rebuilt duel | ✅ with the `attack_first_turn` duel flag |
+| Speed | ⚠️ ~17 ms to build (16 ms = loading constant.lua + utility.lua into the new Lua state), ~5 ms to resolve the move |
+
+**Design:**
+1. `SimWorld` (`src/duel/ai/sim/`) is built **only from the AiView** (masked snapshot + memory), so it can't cheat:
+   own hand / field / GY / banished / Extra Deck by code, the opponent's face-up and public cards by code, their
+   face-down cards, hand and both Decks as blank stand-ins (counts kept), LP per side. The AI is always team 0.
+2. `simulate(view, option)`: build, find the same option in the copy's prompt (code + location + description), apply
+   it, answer its follow-up prompts (zones, targets, costs) with the generic brain's own choices, the opponent passes
+   everything, stop at the AI's next main-phase prompt. Result = `evaluate(after) − evaluate(before)`.
+3. The main phase scores **activations** (spells, monster effects, traps) by that result instead of fixed type scores.
+   Summons, sets and battles stay as they are (stats already judge them).
+4. Speed: only activations are simulated (usually 0-4 per prompt); results cached for the same board and option;
+   blank duels with the base scripts loaded are prepared ahead of time. Target ≤ 100 ms per decision in the browser.
+   The arena gets parallel workers (Node `worker_threads`) so tuning stays fast.
+5. Known gaps, covered by a short knowledge list instead of a full card table:
+   - lost in the rebuild: once-per-turn uses, equip links, counters (Breaker), Prohibition's declared name, the turn
+     number → those options fall back to the M1 score;
+   - stand-ins never respond, so the copy can't see a Mirror Force coming → timing rules now, sampled worlds in M5;
+   - value that only shows later: Swords of Revealing Light, set traps, Change of Heart's monster going back,
+     Graceful Charity's filtering → small "future value" entries;
+   - chain responses (an open chain or an attack can't be placed directly) → M3 rebuilds the opponent's attack in the
+     copy (opponent as team 0 declares the same attack, the AI answers with each candidate) and compares.
+
+**M2 result (2026-10-14):** the `sim` brain beats the M1 `generic` brain 54.2% ± 5.1% (360 duels), short of the 65%
+target, and autobot 83.9% (generic: 78.9% on the same 360 seeds). 0 errors; 2 ms per decision on average, the slowest
+135 ms (several copies in one decision). What the simulation judges now, with no card rules: Pot of Greed, Raigeki,
+Monster Reborn, Change of Heart / Brain Control / Snatch Steal positive; Dark Hole / Heavy Storm only when they gain;
+Book of Moon, Shrink, Waboku, Mind Crush held in the main phase; Graceful Charity positive once hand cards count by
+quality. Why the gain is small: main-phase activations are a small share of the decisions that decide duels. The
+generic chain rule fires far more often (72 duels: MST 31×, Asura Priest 19, Call of the Haunted 15, Book of Moon 15,
+Mirror Force 14, Magic Cylinder 12, ...) → M3.
+
 ## 7. Milestones
 
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | **Plumbing**: `src/duel/ai/`, `AiPlayer` interface, `redact` + `AiMemory` + `AiView`, seeded AI RNG, decision trace (`&aitrace` prints it in the console), `npm run arena` (AI vs AI/autoBot, every deck pairing, both seat orders, win rates) | autoBot runs through the new interface; smoke/smoke-p2p unchanged; redact test passes |
-| M1 | **Generic brain**: `evaluate()` + every decider, card data only (no card knowledge) | beats autoBot ≥ 90% in the arena; no RETRY in 1000 duels; < 5 ms per decision |
-| M2 | **Card knowledge** for the whole pool (roles, value, timing, targets), chain responses for every trap/quick-play, hint-aware choices, check-cards also lists cards without AI knowledge | beats M1 ≥ 65%; bench positions pass |
-| M3 | **Levels, styles, deck plans** (Yugi / Kaiba / Goat combos), trainer profile format for the overworld, think delay scaled by decision weight | each level beats the one below in the arena; the user plays every level in the browser |
-| M4 | **Lookahead** for Expert, in a Web Worker | Expert with lookahead beats Expert without it measurably within the time budget |
-| M5 | **Tuning with the user**: misplays you report (copy the trace) become bench positions | ongoing |
+| M0 ✅ | **Plumbing**: `src/duel/ai/`, AiSeat, `redact` + `AiMemory` + `AiView`, seeded AI RNG, decision trace (`&aitrace`), `npm run arena`, `npm run test-ai` | autoBot runs through the new interface; smoke/smoke-p2p unchanged; redact test passes |
+| M1 ✅ | **Generic brain**: `evaluate()` + every decider, card data only | 81.6% vs autoBot (target was 90%; the rest needs card knowledge, see §6a) |
+| M2 ✅ | **One-move simulation** for main-phase activations (§6a 1-4) | 54% vs M1 (target 65%), 84% vs autoBot; 2 ms avg, 135 ms slowest |
+| M3 | **Chain responses by simulation** (rebuilt attacks / activations) + **short knowledge list** for timing and future value; check-cards lists cards the sim can't judge | beats M2 clearly; bench positions pass |
+| M4 | **Levels, styles, deck plans** (Rookie / Duelist / Expert), trainer profile format, think delay | each level beats the one below; the user plays every level |
+| M5 | **Multi-turn lookahead** for Expert (§6: sampled worlds, play until our next turn), Web Worker | Expert with lookahead beats Expert without it |
+| M6 | **Tuning with the user**: reported misplays become bench positions | ongoing |
 
 ## 8. How we test it
 

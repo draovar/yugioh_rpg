@@ -104,12 +104,18 @@ export function bestAtk(p: PlayerView): number {
   return Math.max(0, ...p.monsters.filter((c): c is CardView => !!c && !c.faceDown).map((c) => c.attack));
 }
 
-/** One side's material: LP, monsters, Spells/Traps, hand, and a penalty for an almost empty Deck. */
+/** An unknown card in a hand: about what an average known one is worth. */
+const UNKNOWN_HAND_CARD = 1.2;
+
+/**
+ * One side's material: LP, monsters, Spells/Traps, hand, and a penalty for an almost empty Deck. Hand cards we can see
+ * count by what they are (so drawing 3 and discarding the 2 worst is a gain), hidden ones as an average card.
+ */
 function sideValue(view: AiView, p: PlayerView): number {
   let v = lpValue(p.lp);
   for (const c of p.monsters) if (c) v += monsterValue(view, c);
   for (const c of p.spells) if (c) v += spellTrapValue(view, c);
-  v += p.hand.length;
+  for (const c of p.hand) v += c.code ? codeValue(view, c.code) : UNKNOWN_HAND_CARD;
   if (p.deckCount < 5) v -= (5 - p.deckCount) * 0.5;
   return v;
 }

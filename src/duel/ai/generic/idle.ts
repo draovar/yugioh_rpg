@@ -73,6 +73,16 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
   // of theirs on the field, quick-plays, traps and monster effects can only hit our own cards (MST, Breaker): wait.
   const theirField = opp.monsters.some((c) => c) || opp.spells.some((c) => c);
   m.activates.forEach((c, i) => {
+    const key = `${c.code}:${c.description}`;
+    const repeats = state.activations.get(key) ?? 0;
+    // Simulated: the board change it really makes. Worth doing early when it gains (draws, removal before attacking).
+    const sim = state.simulator?.activation(view, m, i) ?? null;
+    if (sim) {
+      const score = (sim.delta > 0.05 ? 2 + sim.delta : sim.delta - 0.3) - repeats;
+      const label = `activate ${name(c.code)} (sim ${sim.delta >= 0 ? "+" : ""}${sim.delta.toFixed(2)})`;
+      options.push({ label, score, response: act(SelectIdleCMDAction.SELECT_ACTIVATE, i) });
+      return;
+    }
     const type = cardType(view, c.code);
     let score: number;
     if (type & TYPE.MONSTER) score = 1.8;
@@ -82,8 +92,7 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
     else if (type & TYPE.QUICKPLAY) score = c.location === OcgLocation.HAND ? 1 : 0.9;
     else score = 2.6; // normal spells first: draws and removal before summoning and attacking
     if (!theirField && type & (TYPE.MONSTER | TYPE.TRAP | TYPE.QUICKPLAY)) score = -1;
-    const key = `${c.code}:${c.description}`;
-    score -= state.activations.get(key) ?? 0; // the same effect again and again: less and less
+    score -= repeats; // the same effect again and again: less and less
     options.push({ label: `activate ${name(c.code)}`, score, response: act(SelectIdleCMDAction.SELECT_ACTIVATE, i) });
   });
 

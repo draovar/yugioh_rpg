@@ -7,11 +7,13 @@
 //   --only K play only duel k (with --trace: replay one duel's decisions)
 //   --trace  print every decision of both brains
 //   --losses list the duels A lost (replay one with --only K --trace)
+//   --sim-trace  also print the decisions inside the simulated copies (with --trace)
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
 import { BRAINS, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
+import { Simulator } from "../src/duel/ai/sim/simulator.ts";
 import { formatTrace } from "../src/duel/ai/trace.ts";
 import { DECKS, type DeckName } from "../src/duel/decks.ts";
-import { newDuel, runDuel, seedFrom } from "./lib/engine.ts";
+import { cards, core, newDuel, readScript, runDuel, seedFrom } from "./lib/engine.ts";
 
 const args = new Map<string, string>();
 const argv = process.argv.slice(2);
@@ -32,13 +34,14 @@ const lp = args.has("lp") ? Number(args.get("lp")) : undefined;
 const only = args.has("only") ? Number(args.get("only")) : null;
 const trace = args.has("trace");
 const listLosses = args.has("losses");
+if (args.has("sim-trace")) Simulator.debug = (line) => console.log(line);
 const losses: string[] = [];
 const deckNames = (args.get("decks") ?? Object.keys(DECKS).join(",")).split(",") as DeckName[];
 for (const d of deckNames) if (!(d in DECKS)) throw new Error(`unknown deck "${d}"`);
 
 interface Row { aDeck: DeckName; bDeck: DeckName; aFirst: boolean; aWins: number; bWins: number; draws: number; turns: number; duels: number }
 const rows: Row[] = [];
-const think = { a: 0, b: 0 }, decisions = { a: 0, b: 0 };
+const think = { a: 0, b: 0 }, decisions = { a: 0, b: 0 }, slowest = { a: 0, b: 0 };
 let k = 0, errors = 0;
 const started = performance.now();
 
@@ -53,8 +56,9 @@ for (const aDeck of deckNames) for (const bDeck of deckNames) for (const aFirst 
     const duel = newDuel({ decks: [...decks], seed, startingLP: lp, onCoreLog: () => {} });
     const label = `duel ${k} (seed ${baseSeed + k}): ${A} [${aDeck}] ${aFirst ? "first" : "second"} vs ${B} [${bDeck}]`;
     const onTrace = trace ? (e: Parameters<typeof formatTrace>[0]) => console.log(formatTrace(e)) : undefined;
-    const seatOf = (seat: 0 | 1) =>
-      new AiSeat({ seat, brain: BRAINS[seat === aSeat ? A : B](), duel, onTrace });
+    const seatOf = (seat: 0 | 1) => new AiSeat({
+      seat, brain: BRAINS[seat === aSeat ? A : B]({ engine: { core, cards, readScript } }), duel, onTrace, deck: decks[seat].main,
+    });
     try {
       if (trace) console.log(`--- ${label}`);
       const run = runDuel(duel, [seatOf(0), seatOf(1)]);
@@ -65,6 +69,7 @@ for (const aDeck of deckNames) for (const bDeck of deckNames) for (const aFirst 
       else { row.bWins++; losses.push(`${k} (${aDeck} ${aFirst ? "first" : "second"} vs ${bDeck}, ${run.turns} turns)`); }
       think.a += run.thinkMs[aSeat]; think.b += run.thinkMs[1 - aSeat];
       decisions.a += run.decisions[aSeat]; decisions.b += run.decisions[1 - aSeat];
+      slowest.a = Math.max(slowest.a, run.maxMs[aSeat]); slowest.b = Math.max(slowest.b, run.maxMs[1 - aSeat]);
       if (trace) console.log(`--- winner: ${run.winner === null ? "draw" : run.winner === aSeat ? `A (${A})` : `B (${B})`}`);
     } catch (e) {
       errors++;
@@ -89,7 +94,8 @@ const p = total ? aWins / total : 0;
 const margin = total ? 196 * Math.sqrt((p * (1 - p)) / total) : 0;
 console.log(`\nA won ${aWins}/${total} = ${(100 * p).toFixed(1)}% (±${margin.toFixed(1)}%, 95%), draws ${draws}, errors ${errors}`);
 const ms = (t: number, d: number) => (d ? (t / d).toFixed(3) : "-");
-console.log(`think time: A ${ms(think.a, decisions.a)} ms/decision, B ${ms(think.b, decisions.b)} ms/decision; ` +
+console.log(`think time: A ${ms(think.a, decisions.a)} ms/decision (slowest ${slowest.a.toFixed(0)} ms), ` +
+  `B ${ms(think.b, decisions.b)} ms/decision (slowest ${slowest.b.toFixed(0)} ms); ` +
   `${(total / ((performance.now() - started) / 1000)).toFixed(1)} duels/s`);
 if (listLosses) console.log(`
 A lost: ${losses.join(", ") || "none"}`);

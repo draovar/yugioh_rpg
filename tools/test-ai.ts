@@ -3,6 +3,8 @@
 // 2. Real duels: every card an AI remembers seeing on the opponent's side must have been visible to it there at some
 //    point (face-up on the field, in the GY/banished, or revealed), or public on its own side (a
 //    stolen card), and redact() must not change its input.
+// 3. The simulator's copies (sim/world.ts): every card a copy places on the opponent's side is a stand-in or one the
+//    AI could see right then.
 // Usage: npm run test-ai [-- <duels>]
 import {
   OcgHintType,
@@ -14,6 +16,7 @@ import {
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
 import { autoBotBrain } from "../src/duel/ai/brains.ts";
 import { redact } from "../src/duel/ai/redact.ts";
+import { BLANK, layoutFrom } from "../src/duel/ai/sim/world.ts";
 import type { FieldSnapshot } from "../src/duel/DuelSession.ts";
 import { DECKS, type DeckName } from "../src/duel/decks.ts";
 import { cards, newDuel, runDuel, seedFrom } from "./lib/engine.ts";
@@ -102,6 +105,15 @@ for (let i = 0; i < runs; i++) {
           if (c.location !== OcgLocation.DECK || v === m.player) pub[v][c.controller].add(c.code);
       }
       for (const v of [0, 1] as const) redact(step.messages, v);
+      // 3. A copy laid out from what this seat sees right now places nothing of theirs it can't see.
+      for (const v of [0, 1] as const) {
+        const view = { seat: v, board: duel.snapshot(v), memory: seats[v].memory, cards, hint: null, rng: Math.random, deckList: DECKS[v ? d1 : d0].deck.main };
+        const visible = new Set(shown(view.board, (1 - v) as 0 | 1));
+        const blanks = new Set<number>(Object.values(BLANK));
+        const theirSide = layoutFrom(view).decks[1];
+        for (const c of [...theirSide.main, ...(theirSide.extra ?? []), ...(theirSide.start ?? []).map((s) => s.code)])
+          check(blanks.has(c) || visible.has(c), `duel ${i}: P${v}'s copy places P${1 - v}'s ${cards.name(c)}, which it can't see`);
+      }
       check(JSON.stringify(step.messages, (_k, v) => (typeof v === "bigint" ? v.toString() : v)) === before, `duel ${i}: redact mutated messages`);
       record();
     });

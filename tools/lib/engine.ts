@@ -49,11 +49,13 @@ export interface DuelRun {
   decisions: [number, number];
   /** Time spent in each seat's `decide`, in ms. */
   thinkMs: [number, number];
+  /** Each seat's slowest single decision, in ms. */
+  maxMs: [number, number];
 }
 
 /** Plays a duel to the end with an AI in each seat. `onStep` sees every engine step (raw), before the AIs do. */
 export function runDuel(duel: DuelSession, seats: readonly [AiSeat, AiSeat], onStep?: (step: StepResult) => void, maxDecisions = 20_000): DuelRun {
-  const run: DuelRun = { winner: null, turns: 0, messages: 0, decisions: [0, 0], thinkMs: [0, 0] };
+  const run: DuelRun = { winner: null, turns: 0, messages: 0, decisions: [0, 0], thinkMs: [0, 0], maxMs: [0, 0] };
   for (;;) {
     const step = duel.advance();
     onStep?.(step);
@@ -65,7 +67,9 @@ export function runDuel(duel: DuelSession, seats: readonly [AiSeat, AiSeat], onS
     if (run.decisions[0] + run.decisions[1] >= maxDecisions) throw new Error("duel did not finish");
     const t = performance.now();
     const response = seats[player].decide(step.prompt!);
-    run.thinkMs[player] += performance.now() - t;
+    const ms = performance.now() - t;
+    run.thinkMs[player] += ms;
+    run.maxMs[player] = Math.max(run.maxMs[player], ms);
     run.decisions[player]++;
     duel.respond(response);
   }

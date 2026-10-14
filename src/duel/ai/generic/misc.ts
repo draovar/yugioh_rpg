@@ -3,7 +3,7 @@ import { OcgMessageType, OcgPosition, OcgResponseType, type OcgMessage, type Ocg
 import { TYPE } from "../../cardData.ts";
 import { declarableCards } from "../../autoBot.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
-import { bestAtk, codeValue, theirs } from "../board.ts";
+import { bestAtk, codeValue, mine, theirs } from "../board.ts";
 
 type Msg<T extends OcgMessageType> = Extract<OcgMessage, { type: T }>;
 
@@ -32,31 +32,35 @@ export function decideAnnounceCard(m: Msg<OcgMessageType.ANNOUNCE_CARD>, view: A
   return { response: { type: OcgResponseType.ANNOUNCE_CARD, card }, reason: "nothing shown yet: a guess" };
 }
 
-/** Bits of the opponent's shown monsters, most common first (for attribute / type declarations). */
-function shownBits(view: AiView, field: "attribute" | "race"): bigint[] {
-  const count = new Map<bigint, number>();
-  for (const code of view.memory.seen[1 - view.seat]) {
+/**
+ * Attribute / type bits by how well a declaration of them hits the opponent: their face-up monsters count for it, ours
+ * against it (Tribe-Infecting Virus destroys both sides), monsters they've shown this duel a little.
+ */
+function bitScores(view: AiView, field: "attribute" | "race"): Map<bigint, number> {
+  const score = new Map<bigint, number>();
+  const add = (code: number, weight: number) => {
     const r = view.cards.records.get(code);
-    if (!r || !(r.type & TYPE.MONSTER)) continue;
+    if (!r || !(r.type & TYPE.MONSTER)) return;
     const bit = BigInt(r[field]);
-    count.set(bit, (count.get(bit) ?? 0) + 1);
-  }
-  return [...count.entries()].sort((a, b) => b[1] - a[1]).map(([bit]) => bit);
+    score.set(bit, (score.get(bit) ?? 0) + weight);
+  };
+  for (const c of theirs(view).monsters) if (c?.code) add(c.code, 2);
+  for (const c of mine(view).monsters) if (c?.code && !c.faceDown) add(c.code, -2);
+  for (const code of view.memory.seen[1 - view.seat]) add(code, 0.5);
+  return score;
 }
 
-/** Declare attributes / types: the ones the opponent's shown monsters have most, then any available. */
+/** Declare attributes / types: the best-scoring ones, then ones no monster has, and ours only when nothing else is left. */
 export function decideAnnounceBits(
   m: Msg<OcgMessageType.ANNOUNCE_ATTRIB> | Msg<OcgMessageType.ANNOUNCE_RACE>, view: AiView,
 ): Decision {
   const isAttrib = m.type === OcgMessageType.ANNOUNCE_ATTRIB;
   const available = BigInt(m.available);
-  const picked: bigint[] = [];
-  for (const bit of shownBits(view, isAttrib ? "attribute" : "race"))
-    if (picked.length < m.count && available & bit) picked.push(bit);
-  for (let b = 0n; b < 64n && picked.length < m.count; b++) {
-    const bit = 1n << b;
-    if (available & bit && !picked.includes(bit)) picked.push(bit);
-  }
+  const scores = bitScores(view, isAttrib ? "attribute" : "race");
+  const bits: bigint[] = [];
+  for (let b = 0n; b < 64n; b++) if (available & (1n << b)) bits.push(1n << b);
+  // Stable sort: equal scores keep the lowest bit first.
+  const picked = bits.sort((a, b) => (scores.get(b) ?? 0) - (scores.get(a) ?? 0)).slice(0, m.count);
   const response = (isAttrib
     ? { type: OcgResponseType.ANNOUNCE_ATTRIB, attributes: picked.map(Number) }
     : { type: OcgResponseType.ANNOUNCE_RACE, races: picked }) as OcgResponse;
