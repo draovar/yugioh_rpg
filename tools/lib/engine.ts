@@ -18,7 +18,8 @@ export const readScript = (name: string) => scripts[path.basename(name)] ?? null
 export interface NewDuel {
   decks: [Deck, Deck];
   seed?: DuelSeed;
-  startingLP?: number;
+  /** One for both players, or [P0, P1]. */
+  startingLP?: number | [number, number];
   /** Opening hand and draws per turn (default 5 and 1). */
   draws?: { opening: number; perTurn: number };
   /** Engine warnings (script errors); default: printed. */

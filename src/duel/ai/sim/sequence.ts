@@ -102,12 +102,17 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
     let target: number | null | undefined;
     /** After the steps: the battle phase the generic brain plays (battleAfter). */
     let battling = false;
+    /**
+     * The board when our turn ended. A duel decided in the opponent's turn scores ±1000 plus this, so plans that all
+     * lose (their stand-in attacker is a guess, not a certainty) still rank by how much they leave them to get through.
+     */
+    let endOfTurn = 0;
 
     for (let n = 0; n < MAX_PROMPTS; n++) {
       const s = duel.advance();
       ai.observe(s.messages);
       opp?.observe(s.messages);
-      if (s.ended) return result(s.winner === 0 ? 1000 : s.winner === 1 ? -1000 : 0);
+      if (s.ended) return result(s.winner === 0 ? 1000 + endOfTurn : s.winner === 1 ? -1000 + endOfTurn : 0);
       if (ai.memory.turn > 2) return result(score()); // the opponent's turn is over
       const p = s.prompt as Prompt;
 
@@ -139,6 +144,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
           if (!(r.type === OcgResponseType.SELECT_BATTLECMD && r.action === SelectBattleCMDAction.TO_M2)) { duel.respond(r); continue; }
         }
         finishing = true;
+        endOfTurn = score();
         duel.respond(p.type === OcgMessageType.SELECT_IDLECMD
           ? { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null }
           : { type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.TO_EP, index: null });

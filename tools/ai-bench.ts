@@ -15,6 +15,8 @@ const C = {
   zaborg: 51945556, mobius: 4929256, vorseRaider: 14898066, mysticalElf: 15025844, celticGuardian: 91152256,
   darkHole: 53129443, jinzo: 77585513, lordOfD: 17985575, darkMagicianGirl: 38033121, sangan: 26202165,
   potOfGreed: 55144522, compulsory: 94192409, darkMagician: 46986414, magicianOfFaith: 31560081,
+  flute: 43973174, heavyStorm: 19613556, dnaTransplant: 56769674, fissure: 66788016, magicCylinder: 62279055,
+  kuriboh: 40640057, gaia: 6368038,
 } as const;
 
 interface Position {
@@ -28,6 +30,8 @@ interface Position {
   aiSecond?: boolean;
   /** Play it with this many duel seeds (different deck orders and AI randomness); every one must pass. Default 1. */
   seeds?: number;
+  /** Starting LP [AI, opponent]; default 8000 each. */
+  lp?: [number, number];
   /** The AI's whole decklist (its Main Deck = this minus its placed cards); default filler. */
   aiDeck?: readonly number[];
   /** The AI's first main-phase choice must match this... */
@@ -39,6 +43,7 @@ interface Position {
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
 const monster = (code: number, sequence = 0, position: OcgPosition = OcgPosition.FACEUP_ATTACK): StartCard =>
   ({ code, location: OcgLocation.MZONE, sequence, position });
+const setCard = (code: number, sequence = 0): StartCard => ({ code, location: OcgLocation.SZONE, sequence, position: OcgPosition.FACEDOWN_DEFENSE });
 
 const POSITIONS: Position[] = [
   {
@@ -65,6 +70,18 @@ const POSITIONS: Position[] = [
     aiDeck: DECKS.kaiba.deck.main,
     seeds: 8,
     expect: /activate Pot of Greed/,
+  },
+  {
+    name: "fissure-when-every-line-loses",
+    why: "user report 2026-10-14: at 1600 LP every plan lost to the opponent's guessed 1600-ATK attacker (all -1000, a tie), so the AI kept Fissure instead of destroying Dark Magician",
+    ai: [hand(C.flute), hand(C.heavyStorm), hand(C.dnaTransplant), hand(C.fissure)],
+    opponent: [
+      monster(C.darkMagician, 2), monster(C.mysticalElf, 3, OcgPosition.FACEDOWN_DEFENSE), setCard(C.magicCylinder, 2),
+      hand(C.darkMagician), hand(C.kuriboh), hand(C.kuriboh), hand(C.gaia),
+    ],
+    aiSecond: true,
+    lp: [1600, 7200],
+    expect: /activate Fissure/,
   },
   {
     name: "monarch-with-target",
@@ -94,6 +111,7 @@ for (const p of POSITIONS) for (let run = 1; run <= (p.seeds ?? 1); run++) {
   const duel = newDuel({
     decks: p.aiSecond ? [sides[1], sides[0]] : [sides[0], sides[1]], seed: seedFrom(run),
     draws: { opening: 0, perTurn: 0 }, onCoreLog: () => {},
+    startingLP: p.lp ? (p.aiSecond ? [p.lp[1], p.lp[0]] : p.lp) : undefined,
   });
   const traces: TraceEntry[] = [];
   const ai = new AiSeat({
