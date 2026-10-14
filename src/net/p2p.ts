@@ -11,7 +11,7 @@
 import { Peer, type DataConnection, type PeerError } from "peerjs";
 import type { OcgResponse } from "ocgcore-wasm";
 import type { RemotePeer } from "../duel/DuelController.ts";
-import type { Deck } from "../duel/DuelSession.ts";
+import { randomSeed, type Deck, type DuelSeed as Seed } from "../duel/DuelSession.ts";
 import type { RpsHand, RpsOpponent } from "../duel/rps.ts";
 import { decodeResponse, encodeResponse } from "./wire.ts";
 
@@ -26,8 +26,6 @@ export const CODE_LENGTH = 5;
 const CONNECT_TIMEOUT_MS = 15_000;
 /** Pings keep the link alive; silence longer than the timeout means the other side is gone. */
 const HEARTBEAT = { everyMs: 3_000, timeoutMs: 20_000 };
-
-type Seed = [bigint, bigint, bigint, bigint];
 
 type Packet =
   | { t: "hello"; protocol: number; fingerprint: number; deck: Deck }
@@ -246,11 +244,6 @@ function parse(raw: unknown): Packet | null {
 function randomCode(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(CODE_LENGTH));
   return [...bytes].map((b) => CODE_CHARS[b % CODE_CHARS.length]).join("");
-}
-
-function randomSeed(): Seed {
-  const a = crypto.getRandomValues(new BigUint64Array(4));
-  return [a[0], a[1], a[2], a[3]];
 }
 
 function describe(e: PeerError<string>): string {

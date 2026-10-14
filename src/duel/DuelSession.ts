@@ -15,6 +15,7 @@ import {
   type OcgResponse,
 } from "ocgcore-wasm";
 import type { CardDb } from "./cardData.ts";
+import { fnv1a } from "./hash.ts";
 
 export interface Deck {
   main: number[];
@@ -34,13 +35,15 @@ export interface StartCard {
   position?: OcgPosition;
 }
 
+export type DuelSeed = [bigint, bigint, bigint, bigint];
+
 export interface DuelConfig {
   core: OcgCoreSync;
   cards: CardDb;
   /** Returns a Lua script's source by file name (e.g. "c89631139.lua", "utility.lua"). */
   readScript: (name: string) => string | null;
   decks: [Deck, Deck];
-  seed?: [bigint, bigint, bigint, bigint];
+  seed?: DuelSeed;
   startingLP?: number;
   onCoreLog?: (type: number, text: string) => void;
 }
@@ -254,10 +257,7 @@ export class DuelSession {
    * answer, so two machines whose duels drifted apart notice at once instead of playing on diverged.
    */
   checksum(): number {
-    const s = JSON.stringify([this.snapshot(0), this.snapshot(1)]);
-    let h = 0x811c9dc5;
-    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
-    return h >>> 0;
+    return fnv1a(JSON.stringify([this.snapshot(0), this.snapshot(1)]));
   }
 
   destroy(): void {
@@ -305,8 +305,8 @@ function shuffle<T>(a: T[], rng: () => number): T[] {
   return a;
 }
 
-function randomSeed(): [bigint, bigint, bigint, bigint] {
-  const a = new Uint32Array(8);
-  crypto.getRandomValues(a);
-  return [0, 2, 4, 6].map((i) => (BigInt(a[i]) << 32n) | BigInt(a[i + 1])) as [bigint, bigint, bigint, bigint];
+/** A random duel seed (four 64-bit words). */
+export function randomSeed(): DuelSeed {
+  const a = crypto.getRandomValues(new BigUint64Array(4));
+  return [a[0], a[1], a[2], a[3]];
 }

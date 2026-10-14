@@ -9,7 +9,7 @@ import {
   type OcgResponse,
 } from "ocgcore-wasm";
 import { loadEngine, type Engine } from "../duel/loadEngine.ts";
-import { DuelSession, counterTotal, type CardView, type FieldSnapshot, type Deck } from "../duel/DuelSession.ts";
+import { DuelSession, counterTotal, type CardView, type FieldSnapshot, type Deck, type DuelSeed } from "../duel/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
 import { DECKS } from "../duel/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
@@ -227,7 +227,7 @@ export class DuelScene extends Phaser.Scene {
     const bySeat: [Deck, Deck] = this.me === 0 ? [mine, theirs] : [theirs, mine];
     const decks = net ? bySeat : withDevSetup(bySeat, this.sceneData.setup);
     const seed = net ? net.seed
-      : this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as [bigint, bigint, bigint, bigint]) : undefined;
+      : this.sceneData.seed !== undefined ? ([BigInt(this.sceneData.seed), 0n, 0n, 0n] as DuelSeed) : undefined;
     session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
     this.controller = new DuelController({
       session,

@@ -1,6 +1,7 @@
 // Browser-side loader: fetches the built game data and initialises ocgcore once.
 import createCore, { type OcgCoreSync } from "ocgcore-wasm";
 import { CardDb, type CardRecord } from "./cardData.ts";
+import { fnv1a } from "./hash.ts";
 import { DuelText, type SystemStrings } from "./text.ts";
 
 export interface Engine {
@@ -36,10 +37,4 @@ export function loadEngine(): Promise<Engine> {
     };
   })();
   return engine;
-}
-
-function fnv1a(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
-  return h >>> 0;
 }
