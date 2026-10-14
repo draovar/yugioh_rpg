@@ -2,7 +2,7 @@
 // signals, and the selection hints (M1). With a Simulator it judges main-phase activations by playing them on a copy
 // of the board (M2), and with `replayChains` it answers the opponent's moves by replaying them there (M3).
 import { OcgMessageType, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
-import { autoRespond } from "../../autoBot.ts";
+import { autoRespond, pickTributes } from "../../autoBot.ts";
 import type { AiView, Brain, Decision } from "../AiSeat.ts";
 import { pickAttackTarget, decideBattle } from "./battle.ts";
 import { decideChain } from "./chain.ts";
@@ -58,8 +58,8 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
       return { response: { type: OcgResponseType.SELECT_CARD, indicies: chooseCards(view, m.selects, m.min, m.max, purpose) }, reason: `${purpose} for the card's owner` };
     }
     case OcgMessageType.SELECT_TRIBUTE: {
-      // Tribute the least valuable; `min` counts cards (every pool monster counts as one tribute).
-      const indicies = chooseCards(view, m.selects, m.min, m.min, "neutral");
+      // Tribute the least valuable, as many as it takes (`min` counts tributes; Double Tribute monsters count 2).
+      const indicies = pickTributes(m.selects, chooseCards(view, m.selects, m.selects.length, m.selects.length, "neutral"), m.min);
       return { response: { type: OcgResponseType.SELECT_TRIBUTE, indicies }, reason: "least valuable monsters" };
     }
     case OcgMessageType.SELECT_UNSELECT_CARD: {

@@ -20,6 +20,7 @@ import {
   type OcgMessage,
   type OcgResponse,
 } from "ocgcore-wasm";
+import { pickTributes } from "../../autoBot.ts";
 import type { Deck, StartCard } from "../../DuelSession.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
 import { evaluate, tributesFor } from "../board.ts";
@@ -238,7 +239,7 @@ function opponentMove(p: Prompt, situation: Situation, opp: AiSeat): OcgResponse
   if (p.type === OcgMessageType.SELECT_TRIBUTE) {
     // Tribute the stand-ins put there for it.
     const order = p.selects.map((c, i) => ({ i, blank: c.code === BLANK.MONSTER })).sort((a, b) => Number(b.blank) - Number(a.blank));
-    return { type: OcgResponseType.SELECT_TRIBUTE, indicies: order.slice(0, p.min).map((x) => x.i) };
+    return { type: OcgResponseType.SELECT_TRIBUTE, indicies: pickTributes(p.selects, order.map((x) => x.i), p.min) };
   }
   return null;
 }

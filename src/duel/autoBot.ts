@@ -17,6 +17,54 @@ import type { CardDb } from "./cardData.ts";
 
 const firstN = (n: number) => Array.from({ length: n }, (_, i) => i);
 
+/**
+ * SELECT_SUM check. Each amount packs two alternative values (low/high 16 bits, e.g. level
+ * modifiers). `atLeast` = the sum may exceed the target, but no chosen card may be unnecessary.
+ * ocgcore-wasm's `select_max` field is really this mode: 0 = exact sum, else "at least" (Ritual tributes).
+ */
+export function sumMatches(amounts: number[], target: number, atLeast: boolean): boolean {
+  const options = amounts.map((a) => [a & 0xffff, a >>> 16].filter((v, i) => i === 0 || v > 0));
+  let sums = new Set<number>([0]);
+  for (const opt of options) {
+    const next = new Set<number>();
+    for (const s of sums) for (const v of opt) next.add(s + v);
+    sums = next;
+  }
+  if (!atLeast) return sums.has(target);
+  const min = Math.min(...amounts.map((a) => a & 0xffff));
+  return [...sums].some((s) => s >= target && s - min < target);
+}
+
+/**
+ * SELECT_SUM: the fewest optional cards (indexes into `selects`) that make a valid sum together with the `must`
+ * cards, `min`-`max` of them; null if none does.
+ */
+export function pickSum(must: number[], selects: number[], target: number, atLeast: boolean, min: number, max: number): number[] | null {
+  const n = Math.min(selects.length, 16);
+  let best: number[] | null = null;
+  for (let mask = 0; mask < 1 << n; mask++) {
+    const picked = selects.slice(0, n).flatMap((_, i) => (mask & (1 << i) ? [i] : []));
+    if (picked.length < min || picked.length > max || (best && picked.length >= best.length)) continue;
+    if (sumMatches([...must, ...picked.map((i) => selects[i])], target, atLeast)) best = picked;
+  }
+  return best;
+}
+
+/**
+ * SELECT_TRIBUTE: takes cards in `order` (indexes into `selects`) until they are worth `min` tributes. `min` counts
+ * tributes, not cards: a Double Tribute monster (Kaiser Sea Horse for a LIGHT monster) has release_param 2.
+ */
+export function pickTributes(selects: readonly { release_param: number }[], order: readonly number[], min: number): number[] {
+  const picked: number[] = [];
+  let worth = 0;
+  for (const i of order) {
+    if (worth >= min) break;
+    picked.push(i);
+    worth += selects[i].release_param || 1;
+  }
+  return picked;
+}
+
 /** `cards`: the game's cards, so a card declaration picks a legal name (without: Blue-Eyes, which may be refused). */
 export function autoRespond(m: OcgMessage, rng: () => number = Math.random, cards?: CardDb): OcgResponse {
   switch (m.type) {
@@ -40,7 +88,7 @@ export function autoRespond(m: OcgMessage, rng: () => number = Math.random, card
     case OcgMessageType.SELECT_CARD:
       return { type: OcgResponseType.SELECT_CARD, indicies: firstN(m.min) };
     case OcgMessageType.SELECT_TRIBUTE:
-      return { type: OcgResponseType.SELECT_TRIBUTE, indicies: firstN(m.min) };
+      return { type: OcgResponseType.SELECT_TRIBUTE, indicies: pickTributes(m.selects, firstN(m.selects.length), m.min) };
     case OcgMessageType.SELECT_UNSELECT_CARD:
       return { type: OcgResponseType.SELECT_UNSELECT_CARD, index: m.can_finish || !m.select_cards.length ? null : 0 };
     case OcgMessageType.SELECT_POSITION: {
@@ -56,13 +104,10 @@ export function autoRespond(m: OcgMessage, rng: () => number = Math.random, card
         : { type: OcgResponseType.SELECT_DISFIELD, places };
     }
     case OcgMessageType.SELECT_SUM: {
-      const picked: number[] = [];
-      let sum = m.selects_must.reduce((s, c) => s + (c.amount & 0xffff), 0);
-      for (let i = 0; i < m.selects.length && sum < m.amount; i++) {
-        picked.push(i);
-        sum += m.selects[i].amount & 0xffff;
-      }
-      return { type: OcgResponseType.SELECT_SUM, indicies: picked };
+      const atLeast = m.select_max !== 0;
+      const picked = pickSum(m.selects_must.map((c) => c.amount), m.selects.map((c) => c.amount), m.amount, atLeast,
+        atLeast ? 0 : m.min, atLeast ? Infinity : m.max);
+      return { type: OcgResponseType.SELECT_SUM, indicies: picked ?? [] };
     }
     case OcgMessageType.SELECT_COUNTER: {
       // Take them from the first cards, as many as each has.

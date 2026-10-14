@@ -14,7 +14,7 @@ import {
 import type { HumanPrompt } from "../duel/DuelController.ts";
 import type { FieldSnapshot } from "../duel/DuelSession.ts";
 import type { Engine } from "../duel/loadEngine.ts";
-import { autoRespond, declarableCards } from "../duel/autoBot.ts";
+import { autoRespond, declarableCards, sumMatches } from "../duel/autoBot.ts";
 import { ATTRIBUTES, COIN_HEADS_STRING, COIN_TAILS_STRING, RACES } from "../duel/text.ts";
 import type { BoardPick } from "../ui/duel/BoardPick.ts";
 import type { Modal, PickerOptions } from "../ui/duel/Modal.ts";
@@ -196,7 +196,9 @@ export function showPrompt(h: PromptHost, m: HumanPrompt, hint: bigint | null) {
         mode: "multi",
         isValid: (sel) => {
           const chosen = sel.filter((i) => i >= must.length).map((i) => m.selects[i - must.length].amount);
-          return chosen.length >= m.min && chosen.length <= m.max && sumMatches([...must, ...chosen], m.amount, m.select_max !== 0);
+          // "At least" mode (Ritual tributes) sends min = max = 0: no count limit then.
+          const countOk = m.select_max !== 0 || (chosen.length >= m.min && chosen.length <= m.max);
+          return countOk && sumMatches([...must, ...chosen], m.amount, m.select_max !== 0);
         },
         // CONFIRM shows the running total against the target ("CONFIRM 6/8").
         counter: {
@@ -321,21 +323,4 @@ function locationName(location: number, controller: number, me: number): string 
     [OcgLocation.SZONE]: "S/T", [OcgLocation.GRAVE]: "GY", [OcgLocation.REMOVED]: "BANISHED", [OcgLocation.EXTRA]: "EXTRA",
   };
   return `${owner}${names[location] ?? "?"}`;
-}
-
-/**
- * SELECT_SUM check. Each amount packs two alternative values (low/high 16 bits, e.g. level
- * modifiers). `atLeast` = the sum may exceed the target, but no chosen card may be unnecessary.
- */
-function sumMatches(amounts: number[], target: number, atLeast: boolean): boolean {
-  const options = amounts.map((a) => [a & 0xffff, a >>> 16].filter((v, i) => i === 0 || v > 0));
-  let sums = new Set<number>([0]);
-  for (const opt of options) {
-    const next = new Set<number>();
-    for (const s of sums) for (const v of opt) next.add(s + v);
-    sums = next;
-  }
-  if (!atLeast) return sums.has(target);
-  const min = Math.min(...amounts.map((a) => a & 0xffff));
-  return [...sums].some((s) => s >= target && s - min < target);
 }
