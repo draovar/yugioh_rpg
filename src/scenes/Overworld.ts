@@ -39,12 +39,14 @@ export class Overworld extends Phaser.Scene {
     text(this, 8, 8, "ARROW KEYS TO MOVE. WALK INTO THE RED DUELIST TO CHALLENGE THEM.", { color: WHITE });
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.input.keyboard!.on("keydown-M", () => this.openLobby());
+    this.input.keyboard!.on("keydown-D", () => this.startDuel());
     this.createMenu();
   }
 
   /**
    * Bottom bar. Row 1: your deck (used against the Rival and in multiplayer), the duel UI theme, the multiplayer lobby
-   * (also M). Row 2 (testing aids): the Rival's deck, and whether its hand and set cards are shown during duels.
+   * (also M). Row 2 (testing aids): the Rival's deck, whether its hand and set cards are shown during duels, and a
+   * button that starts the duel against the Rival without walking to it (also D).
    */
   private createMenu() {
     const y = BAR.top + BAR.h / 2 - BAR.row / 2;
@@ -79,6 +81,12 @@ export class Overworld extends Phaser.Scene {
         () => { setRevealAiCards(!on); drawReveal(); }, on ? PICKED_COLOR : BUTTON_COLOR);
     };
     drawReveal();
+    makeButton(this, 640 - 8 - BAR.mpW / 2, y, BAR.mpW, 14, "DUEL RIVAL (D)", () => this.startDuel());
+  }
+
+  /** The duel against the Rival (the red square): your deck vs the AI DECK choice. */
+  private startDuel() {
+    if (!this.loadingTheme) this.scene.start("Duel", { opponentName: "Rival", playerDeck: DECKS[chosenDeck()].deck, opponentDeck: DECKS[aiDeck()].deck });
   }
 
   private openLobby() {
@@ -91,10 +99,7 @@ export class Overworld extends Phaser.Scene {
       : this.cursors.up.isDown ? [0, -1] : this.cursors.down.isDown ? [0, 1] : null;
     if (!dir) return;
     const tx = this.player.x + dir[0] * TILE, ty = this.player.y + dir[1] * TILE;
-    if (tx === this.npc.x && ty === this.npc.y) {
-      this.scene.start("Duel", { opponentName: "Rival", playerDeck: DECKS[chosenDeck()].deck, opponentDeck: DECKS[aiDeck()].deck });
-      return;
-    }
+    if (tx === this.npc.x && ty === this.npc.y) return this.startDuel();
     this.moving = true;
     this.tweens.add({ targets: this.player, x: tx, y: ty, duration: 140, onComplete: () => (this.moving = false) });
   }
