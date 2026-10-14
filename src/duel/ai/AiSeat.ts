@@ -6,6 +6,7 @@ import type { CardDb } from "../cardData.ts";
 import type { DuelSeed, FieldSnapshot } from "../DuelSession.ts";
 import { autoRespond } from "../autoBot.ts";
 import { mulberry32 } from "../rng.ts";
+import type { Weights } from "./board.ts";
 import { AiMemory } from "./memory.ts";
 import { redact } from "./redact.ts";
 import { describeChoice, promptName, type ScoredOption, type TraceEntry } from "./trace.ts";
@@ -23,6 +24,8 @@ export interface AiView {
   readonly rng: () => number;
   /** The AI's own Main Deck list (it built the deck: it knows what's in it, not the order); null if not given. */
   readonly deckList: readonly number[] | null;
+  /** How the deciding brain values things (board.ts); absent = the defaults. Set by the brain, not by AiSeat. */
+  readonly weights?: Readonly<Weights>;
 }
 
 export interface Decision {

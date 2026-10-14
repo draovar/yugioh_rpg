@@ -136,8 +136,8 @@ function replayOne(sim: Simulator, view: AiView, layout: SimLayout, situation: S
   try {
     const debug = sim.debugSink;
     // In the copy the opponent is seat 0 and the AI seat 1.
-    const opp = new AiSeat({ seat: 0, brain: createGenericBrain(), duel });
-    const ai = new AiSeat({ seat: 1, brain: createGenericBrain(), duel, onTrace: debug ? (e) => debug(`      (replay) ${formatTrace(e)}`) : undefined });
+    const opp = new AiSeat({ seat: 0, brain: createGenericBrain({ weights: sim.weights }), duel });
+    const ai = new AiSeat({ seat: 1, brain: createGenericBrain({ weights: sim.weights }), duel, onTrace: debug ? (e) => debug(`      (replay) ${formatTrace(e)}`) : undefined });
     const realPhase = view.memory.phase;
     // done: the opponent has started the action; over: it has finished (their next main/battle prompt, or the phase
     // has moved on). The candidate may only be used in between.
@@ -172,7 +172,7 @@ function replayOne(sim: Simulator, view: AiView, layout: SimLayout, situation: S
       }
     }
     if (!done || (candidate && !used)) return null;
-    const value = evaluate({ seat: 1, board: duel.snapshot(1), memory: ai.memory, cards: sim.cardDb, hint: null, rng: () => 0.5, deckList: null });
+    const value = evaluate({ seat: 1, board: duel.snapshot(1), memory: ai.memory, cards: sim.cardDb, hint: null, rng: () => 0.5, deckList: null, weights: sim.weights });
     debug?.(`      (replay) ${situation.kind}: ${candidate ? sim.cardDb.name(candidate.code) : "pass"} -> ${value.toFixed(2)}`);
     return value;
   } catch {

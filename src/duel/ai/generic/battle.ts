@@ -10,7 +10,7 @@ import {
 } from "ocgcore-wasm";
 import type { CardView } from "../../DuelSession.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
-import { cardAt, damageCost, monsterStats, monsterValue, theirs } from "../board.ts";
+import { cardAt, damageCost, monsterStats, monsterValue, theirs, weightsOf } from "../board.ts";
 import { best, sameLoc, type BrainState, type Option } from "./common.ts";
 
 type BattleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_BATTLECMD }>;
@@ -23,7 +23,7 @@ export function attackValue(view: AiView, attacker: CardView, target: CardView):
   const theirValue = monsterValue(view, target);
   const ourValue = monsterValue(view, attacker);
   if (t.attackPos && t.known) {
-    if (atk > t.atk) return theirValue + damageCost(opp.lp, atk - t.atk);
+    if (atk > t.atk) return theirValue + damageCost(opp.lp, atk - t.atk, weightsOf(view));
     if (atk === t.atk) return theirValue - ourValue;
     return -ourValue - 1; // our monster dies and we take damage
   }
@@ -67,7 +67,7 @@ export function decideBattle(m: BattleMessage, view: AiView, state: BrainState):
     }
     // Attackers allowed to go direct over monsters (rare effects).
     for (const x of attackers.filter((x) => x.a.can_direct))
-      options.push({ label: `${name(x.a.code)} attacks directly`, score: damageCost(opp.lp, x.card.attack), response: attack(x.index) });
+      options.push({ label: `${name(x.a.code)} attacks directly`, score: damageCost(opp.lp, x.card.attack, weightsOf(view)), response: attack(x.index) });
   }
 
   const top = options.reduce((a, b) => (b.score > a.score ? b : a));

@@ -196,6 +196,17 @@ in ~11% of chain prompts, mostly passing where the rule uses Book of Moon / MST 
 whether those passes are right depends on `evaluate()`, which now limits both M2 and M3 (tempo and LP are valued by
 hand-picked constants). 6.8 ms per decision on average, 210 ms slowest. The arena now runs on all CPU cores.
 
+## 6b. Weight tuning by self-play (2026-10-14)
+
+Every value judgement (the board score the simulations compare, battle outcomes, card picks) goes through one
+`Weights` object (`board.ts`, 19 numbers: LP curve, monster value from ATK/DEF, set / hidden / continuous cards, hand
+cards, deck-out penalty, the activation threshold). The hand-picked defaults are what limits M2/M3, so `npm run tune`
+searches for better ones: each round multiplies 1-3 weights by a random factor (about ±30%), plays the variant against
+the current best (same brain, all deck pairings, both seat orders, fresh seeds): 180 duels first, below 52% it's
+dropped, otherwise 540 more, kept at ≥ 53.5% over all 720. Winners are copied into `DEFAULT_WEIGHTS` by hand after a
+final check against the old defaults (and against autobot / generic, so self-play doesn't drift somewhere odd).
+Trainer styles in M4 are the same mechanism: an aggressive trainer is a weight set that values damage higher.
+
 ## 7. Milestones
 
 | # | Milestone | Done when |

@@ -11,14 +11,24 @@ import { decideIdle } from "./idle.ts";
 import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
 import { SELECT_HINT, chooseCards, pickUtility, purposeOf } from "./select.ts";
 import type { Simulator } from "../sim/simulator.ts";
+import type { Weights } from "../board.ts";
 
-export function createGenericBrain(opts: { simulator?: Simulator; replayChains?: boolean; name?: string } = {}): Brain {
+export interface GenericBrainOptions {
+  simulator?: Simulator;
+  replayChains?: boolean;
+  /** How it values things (board.ts); default DEFAULT_WEIGHTS. */
+  weights?: Readonly<Weights>;
+  name?: string;
+}
+
+export function createGenericBrain(opts: GenericBrainOptions = {}): Brain {
   const state = new BrainState(opts.simulator ?? null, opts.replayChains ?? false);
+  const weights = opts.weights;
   return {
     name: opts.name ?? "generic",
     decide(prompt: OcgMessage, view: AiView): Decision {
       state.sync(view.memory.turn);
-      return decide(prompt, view, state);
+      return decide(prompt, weights ? { ...view, weights } : view, state);
     },
   };
 }

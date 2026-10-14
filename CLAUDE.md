@@ -24,7 +24,8 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession` (bots in `AiSeat`s); fails on RETRY/crash |
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
-| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders), on all CPU cores (worker threads); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened inside each simulated copy |
+| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--wa W.json] [--wb W.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders), on all CPU cores (worker threads); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened inside each simulated copy |
+| `npm run tune -- [--brain sim] [--rounds 20] [--quick 10] [--long 30] [--seed S]` | tune the AI's `Weights` by self-play: random 1-3 weight changes vs the current best, kept at ≥ 53.5% over 720 duels; writes `vendor/tune/best.json` (resumed) + `log.jsonl`; winners are copied into `DEFAULT_WEIGHTS` by hand |
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
@@ -75,7 +76,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     memory, hint, seeded rng) for a `Brain`, which returns a `Decision` (response + reason + scored options). Brains never
     get the session or raw messages. `trace.ts` turns decisions into lines (`&aitrace`, `arena --trace`). Brains by name
     in `brains.ts`. A boss that peeks at your hand would be an explicit `AiSeat` option, never a brain reading the session.
-    `board.ts`: card values in "cards", `evaluate()`, finding cards in the snapshot. `generic/` = the M1 brain from card
+    `board.ts`: card values in "cards" (all constants in `Weights` / `DEFAULT_WEIGHTS`; a brain's own weights ride on
+    `AiView.weights` into its simulations), `evaluate()`, finding cards in the snapshot. `generic/` = the M1 brain from card
     data alone: `idle` scores every main-phase action (summon vs set by survival, tribute cost, sets wait for Main 2 when
     attacking), `battle` (best killable target, weakest attacker that kills it, target remembered for the 549 prompt),
     `chain` (responds only to the opponent and only when `spe_count` > 0, never to its own link), `select` (the
@@ -135,7 +137,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   they stay up through the prompt that follows (Confiscation's pick: `animator.revealed`, honoured by the redraw) and flip
   back before the next action. Your own revealed cards just rise.
 - `tools/` — Node scripts. `.ts` ones run directly with Node 24 type stripping (no tsx). `tools/lib/engine.ts`: shared
-  core + card data loader, `newDuel`, `runDuel` (AI vs AI to the end), `seedFrom(n)`.
+  core + card data loader, `newDuel`, `runDuel` (AI vs AI to the end), `seedFrom(n)`. `tools/lib/match.ts`: brain vs
+  brain matches on worker threads (`matchJobs`, `runMatch`, `winRate`; also the workers' entry), used by arena and tune.
 - `data/pool.json` — the card passcodes the game uses. Source of truth for the card pool.
 - `vendor/` — Project Ignis repos (gitignored, ~130 MB).
 

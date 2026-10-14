@@ -11,7 +11,7 @@ import {
 } from "ocgcore-wasm";
 import { TYPE } from "../../cardData.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
-import { bestAtk, cardAt, cardType, mine, monsterStats, monsterValue, statValue, theirs, tributesFor } from "../board.ts";
+import { bestAtk, cardAt, cardType, mine, monsterStats, monsterValue, statValue, theirs, tributesFor, weightsOf } from "../board.ts";
 import { best, type BrainState, type Option } from "./common.ts";
 
 type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
@@ -45,7 +45,7 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
     const r = view.cards.records.get(c.code);
     if (!r) return;
     const survives = r.atk > theirBest;
-    let score = statValue(r.atk, r.def) * (survives ? 1.3 : 0.6) - tributeCost(c.code);
+    let score = statValue(r.atk, r.def, weightsOf(view)) * (survives ? 1.3 : 0.6) - tributeCost(c.code);
     if (!survives) score -= (theirBest - r.atk) / 2000; // they'll run it over for damage
     if (r.type & TYPE.FLIP) score -= 1; // flip effects want to be set
     if (!theyHaveMonsters && !inMain2) score += 0.3; // a direct hit this turn
@@ -65,7 +65,7 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
   // Special Summons from the hand (no Normal Summon used): almost always good.
   m.special_summons.forEach((c, i) => {
     const r = view.cards.records.get(c.code);
-    const score = r ? statValue(r.atk, r.def) * 1.3 + 0.5 : 1;
+    const score = r ? statValue(r.atk, r.def, weightsOf(view)) * 1.3 + 0.5 : 1;
     options.push({ label: `special summon ${name(c.code)}`, score, response: act(SelectIdleCMDAction.SELECT_SPECIAL_SUMMON, i) });
   });
 
@@ -78,7 +78,7 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
     // Simulated: the board change it really makes. Worth doing early when it gains (draws, removal before attacking).
     const sim = state.simulator?.activation(view, m, i) ?? null;
     if (sim) {
-      const score = (sim.delta > 0.05 ? 2 + sim.delta : sim.delta - 0.3) - repeats;
+      const score = (sim.delta > weightsOf(view).activateMin ? 2 + sim.delta : sim.delta - 0.3) - repeats;
       const label = `activate ${name(c.code)} (sim ${sim.delta >= 0 ? "+" : ""}${sim.delta.toFixed(2)})`;
       options.push({ label, score, response: act(SelectIdleCMDAction.SELECT_ACTIVATE, i) });
       return;

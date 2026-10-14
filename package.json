@@ -16,6 +16,7 @@
     "smoke-p2p": "node tools/smoke-p2p.ts",
     "arena": "node tools/arena.ts",
     "test-ai": "node tools/test-ai.ts",
+    "tune": "node tools/tune.ts",
     "fetch-art": "node tools/fetch-art.mjs",
     "build-fonts": "node tools/build-pixel-font.mjs public/assets/fonts/3x3_font_for_nerds.ttf nerds3 228.3 && node tools/build-tiny5-font.mjs",
     "build-art": "node tools/build-art.mjs",

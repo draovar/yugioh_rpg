@@ -19,7 +19,7 @@ import type { CardDb } from "../../cardData.ts";
 import { DuelSession, type DuelSeed, type FieldSnapshot } from "../../DuelSession.ts";
 import { fnv1a } from "../../hash.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
-import { evaluate } from "../board.ts";
+import { evaluate, type Weights } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
 import { formatTrace } from "../trace.ts";
 import { replayResponses, situationOf, type ResponseOutcome, type Situation } from "./replay.ts";
@@ -59,7 +59,11 @@ export class Simulator {
   /** Copies built so far (for the arena's statistics). */
   builds = 0;
 
-  constructor(engine: SimEngine) {
+  /** The owning brain's weights: the copies' brains and board scores use them too. */
+  readonly weights: Readonly<Weights> | undefined;
+
+  constructor(engine: SimEngine, weights?: Readonly<Weights>) {
+    this.weights = weights;
     this.core = engine.core;
     this.cards = withBlanks(engine.cards);
     this.readScript = withBlankScripts(engine.readScript);
@@ -118,9 +122,9 @@ export class Simulator {
     const duel = this.build(layout);
     try {
       const debug = Simulator.debug;
-      const ai = new AiSeat({ seat: 0, brain: createGenericBrain(), duel, onTrace: debug ? (e) => debug(`    (copy) ${formatTrace(e)}`) : undefined });
+      const ai = new AiSeat({ seat: 0, brain: createGenericBrain({ weights: this.weights }), duel, onTrace: debug ? (e) => debug(`    (copy) ${formatTrace(e)}`) : undefined });
       const view = (): AiView => ({
-        seat: 0, board: duel.snapshot(0), memory: ai.memory, cards: this.cards, hint: null, rng: () => 0.5, deckList: null,
+        seat: 0, board: duel.snapshot(0), memory: ai.memory, cards: this.cards, hint: null, rng: () => 0.5, deckList: null, weights: this.weights,
       });
       const step = () => {
         const s = duel.advance();
