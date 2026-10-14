@@ -260,10 +260,6 @@ export class DuelSession {
     return h >>> 0;
   }
 
-  get isOver(): boolean {
-    return this.ended;
-  }
-
   destroy(): void {
     this.core.destroyDuel(this.handle);
   }

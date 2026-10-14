@@ -5,7 +5,7 @@ import Phaser from "phaser";
 import { OcgLocation, OcgMessageType, OcgPosition, type OcgMessage } from "ocgcore-wasm";
 import type { CardDb } from "../../duel/cardData.ts";
 import { REASON, type MoveMessage, type NewTurnMessage } from "../../duel/DuelSession.ts";
-import { PHASE_NAMES, coinCallText, declarationText } from "../../duel/text.ts";
+import { coinCallText, declarationText } from "../../duel/text.ts";
 import { text } from "../pixel.ts";
 import { THEME } from "../theme.ts";
 import { CardSprite } from "./CardSprite.ts";
@@ -23,7 +23,7 @@ export interface AnimHost {
   /** Displayed hand sizes, kept in sync while animating. */
   readonly handCount: [number, number];
   /** Called with the engine phase bit on NEW_PHASE. */
-  setPhase(phase: number, name: string): void;
+  setPhase(phase: number): void;
   /** Animates the LP display of `player` to `lp`, with a floating `delta` label. */
   changeLP(player: number, lp: number, delta: number): Promise<void>;
   lp(player: number): number;
@@ -197,7 +197,7 @@ export class DuelAnimator {
       }
       case OcgMessageType.NEW_PHASE:
         if (!(m.phase & 0xf8)) this.clearAttack(); // left the battle phase
-        h.setPhase(m.phase, PHASE_NAMES[m.phase] ?? "");
+        h.setPhase(m.phase);
         return this.wait(120);
       case OcgMessageType.DRAW:
         return this.draw(m.player, m.drawn.map((d) => d.code));

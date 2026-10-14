@@ -76,6 +76,7 @@ export class DuelController {
   private pending: HumanPrompt | null = null;
   private destroyed = false;
   private hint: bigint | null = null;
+  /** Turn and phase as the engine reports them. Not read yet: kept for the opponent AI (roadmap 3). */
   turn = 0;
   turnPlayer = 0;
   phase = 0;
@@ -111,7 +112,7 @@ export class DuelController {
     return this.pending;
   }
 
-  /** Peer-to-peer: the duel is waiting for the other player's answer. */
+  /** Peer-to-peer: the duel is waiting for the other player's answer (for the planned "waiting for opponent" indicator). */
   get waitingForRemote(): boolean {
     return this.awaitingRemote;
   }

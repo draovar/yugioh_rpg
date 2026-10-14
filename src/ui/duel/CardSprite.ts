@@ -48,9 +48,9 @@ const ATTRIBUTE_COLOR: Record<number, number> = { 0x20: 0x7d1f9e, 0x01: 0x2f4a19
 
 
 /** Field targeting: "choice" = can be picked (yellow, 1px), "selected" = picked (orange, 2px). */
-export type CardHighlight = "none" | "action" | "choice" | "selected" | "target" | "attacker" | "attacked";
+export type CardHighlight = "none" | "choice" | "selected" | "attacker" | "attacked";
 const highlightColor = (kind: CardHighlight): number => ({
-  none: 0, action: 0xffd400, choice: THEME.pick.choice, selected: THEME.pick.selected, target: 0xff4136, attacker: 0xff4136, attacked: 0xff4136,
+  none: 0, choice: THEME.pick.choice, selected: THEME.pick.selected, attacker: 0xff4136, attacked: 0xff4136,
 } satisfies Record<CardHighlight, number>)[kind];
 /** Attack declarations and pickable cards use a thin 1px outline; other highlights 2px. */
 const HIGHLIGHT_WIDTH: Partial<Record<CardHighlight, number>> = { choice: 1, attacker: 1, attacked: 1 };
@@ -59,8 +59,6 @@ const LEFT = -CARD.w / 2, TOP = -CARD.h / 2;
 
 export interface ShowOptions {
   back?: boolean;
-  /** Own face-down cards: show the face, faded. */
-  dim?: boolean;
   /** Current (modified) ATK/DEF on the field; defaults to the printed values. */
   atk?: number;
   def?: number;
@@ -102,7 +100,6 @@ export class CardSprite extends Phaser.GameObjects.Container {
       }
       this.drawText(record, opts, add);
     }
-    if (opts.dim) for (const p of this.parts) (p as unknown as Phaser.GameObjects.Components.Alpha).setAlpha(0.55);
     this.addAt(this.parts, 0);
     return this;
   }

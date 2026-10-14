@@ -31,8 +31,8 @@ import { RpsIntro } from "../ui/duel/RpsIntro.ts";
 import { CardMenu } from "../ui/duel/CardMenu.ts";
 import { drawField } from "../ui/duel/field.ts";
 import { CARD, FIELD, FIELD_CENTER, INFO, INSET, PHASE_COL, handXY, slotXY, type Slot } from "../ui/duel/layout.ts";
-import { FONT_UI, INK, INK_SOFT, WHITE, border, measure, text } from "../ui/pixel.ts";
-import { LIST_BUTTON_H, makeButton, makeListButton, makeWoodButton, type ListButton, type WoodButton } from "../ui/widgets.ts";
+import { INK, WHITE, border, text } from "../ui/pixel.ts";
+import { LIST_BUTTON_H, makeListButton, makeWoodButton, type ListButton, type WoodButton } from "../ui/widgets.ts";
 import { installAnimPreview } from "./animPreview.ts";
 import { installDialogPreview } from "./dialogPreview.ts";
 import { withDevSetup } from "./devSetups.ts";
@@ -505,7 +505,7 @@ export class DuelScene extends Phaser.Scene {
     this.logText.setVisible(false);
     this.stopNameScroll();
     const p = this.infoPanel.removeAll(true);
-    const L = LAYOUT, ink = THEME.panel.ink;
+    const L = LAYOUT;
     const monster = (r.type & 0x1) !== 0;
 
     // Name at 2x, light with a 1px dark drop shadow, left-aligned; names wider than their space scroll (see
