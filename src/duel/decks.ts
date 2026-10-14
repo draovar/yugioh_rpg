@@ -12,7 +12,16 @@ const C = {
   asuraPriest: 2134346, abyssSoldier: 18318842, zaborg: 51945556, mobius: 4929256, cyberJar: 34124316,
   nightAssailant: 16226786, mysticTomato: 83011277, witch: 78010363, darkMagicianGirl: 38033121,
   skilledDarkMagician: 73752131, kuriboh: 40640057, lordOfD: 17985575, mysticalElf: 15025844, gaia: 6368038,
-  tribeInfectingVirus: 33184167,
+  tribeInfectingVirus: 33184167, battleOx: 5053103, koumoriDragon: 67724379, rogueDoll: 91939608, kojikocy: 1184620,
+  uraby: 1784619, mysticHorseman: 68516705, ryuKishinPowered: 24611934, skullRedBird: 10202894, hyozanryu: 62397231,
+  opticlops: 14531242, dragonDwellingInTheCave: 93346024, lusterDragon2: 17658803, kaiserSeaHorse: 17444133,
+  mysteriousPuppeteer: 54098121, trapMaster: 46461247, haneHane: 7089711, madSwordBeast: 79870141, spiritRyu: 67957315,
+  manEaterBug: 54652250, giantRat: 97017120, feralImp: 41392891, wingedDragon1: 87796900, beaverWarrior: 32452818,
+  greatWhite: 13429800, giantSoldierOfStone: 13039848, mysticClown: 47060154, neo: 50930991, gazelle: 5818798,
+  warriorDaiGrepher: 75953262, darkBlade: 11321183, wallOfIllusion: 13945283, sonicBird: 57617178,
+  zombyra: 88472456, royalMagicalLibrary: 70791313,
+  // rituals
+  paladinOfWhiteDragon: 73398797, blackLusterSoldier: 5405694,
   // fusions (Extra Deck)
   thousandEyesRestrict: 63519819, blueEyesUltimate: 23995346,
   // spells
@@ -21,12 +30,18 @@ const C = {
   delinquentDuo: 44763025, snatchSteal: 45986603, prematureBurial: 70828912, nobleman: 71044499, bookOfMoon: 14087893,
   smashingGround: 97169186, enemyController: 98045062, brainControl: 87910978, confiscation: 17375316,
   metamorphosis: 46411259, shrink: 55713623, fissure: 66788016, polymerization: 24094653, flute: 43973174,
-  sixthSense: 3280747, dnaTransplant: 56769674,
+  sixthSense: 3280747, dnaTransplant: 56769674, whiteDragonRitual: 9786492, deSpell: 19159413, soulExchange: 68005187,
+  tributeToTheDoomed: 79759861, rushRecklessly: 70046172, megamorph: 22046459, fairyMeteorCrush: 97687912,
+  blackLusterRitual: 55761792, dianKeto: 84257639, lastWill: 85602018, cardDestruction: 72892473, removeTrap: 51482758,
+  reliableGuardian: 16430187, axeOfDespair: 40619825, malevolentNuzzler: 99597615, mysticPlasmaZone: 18161786,
   // traps
   mirrorForce: 44095762, sakuretsu: 56120475, trapHole: 4206964, callOfTheHaunted: 97077563, ringOfDestruction: 83555666,
   torrential: 53582587, bottomless: 29401950, magicCylinder: 62279055, waboku: 12607053, dustTornado: 60082869,
   solemn: 41420027, compulsory: 94192409, threateningRoar: 36361633, recklessGreed: 37576645,
-  mindCrush: 15800838, prohibition: 43711255, dnaSurgery: 74701381,
+  mindCrush: 15800838, prohibition: 43711255, dnaSurgery: 74701381, shadowSpell: 29267084, justDesserts: 24068492,
+  lightOfIntervention: 62867251, jarOfGreed: 83968380, riryokuField: 70344351, burstBreath: 80163754,
+  magicJammer: 77414722, sevenTools: 3819470, spellbindingCircle: 18807108, backupSoldier: 36280194, shift: 59560625,
+  disappear: 24623598, raigekiBreak: 4178474,
 } as const;
 
 type Name = keyof typeof C;
@@ -82,6 +97,44 @@ export const DECKS = {
         mirrorForce: 1, ringOfDestruction: 1, torrential: 1, callOfTheHaunted: 1,
       }),
       extra: list({ thousandEyesRestrict: 1 }),
+    },
+  },
+  /** Starter Deck: Kaiba Evolution (2009), with Ookazi, The Inexperienced Spy, Gift of the Mystical Elf, D. Tribe and
+   *  Mountain swapped for 2 more Blue-Eyes, 2 more Mystic Tomato and Pot of Greed. Paladin of White Dragon is its Ritual. */
+  kaibaEvolution: {
+    label: "Kaiba Evolution",
+    deck: {
+      main: list({
+        blueEyes: 3, battleOx: 1, koumoriDragon: 1, rogueDoll: 1, kojikocy: 1, uraby: 1, mysticHorseman: 1,
+        ryuKishinPowered: 1, laJinn: 1, skullRedBird: 1, hyozanryu: 1, opticlops: 1, dragonDwellingInTheCave: 1,
+        lusterDragon2: 1,
+        mysticTomato: 3, kaiserSeaHorse: 1, lordOfD: 1, mysteriousPuppeteer: 1, trapMaster: 1, haneHane: 1, witch: 1,
+        madSwordBeast: 1, spiritRyu: 1, paladinOfWhiteDragon: 1,
+        whiteDragonRitual: 1, potOfGreed: 1, fissure: 1, deSpell: 1, monsterReborn: 1, flute: 1, changeOfHeart: 1,
+        soulExchange: 1, tributeToTheDoomed: 1, rushRecklessly: 1, megamorph: 1, nobleman: 1, prematureBurial: 1,
+        fairyMeteorCrush: 1,
+        shadowSpell: 1, trapHole: 1, justDesserts: 1, dustTornado: 1, lightOfIntervention: 1, jarOfGreed: 1,
+        riryokuField: 1, burstBreath: 1,
+      }),
+    },
+  },
+  /** Starter Deck: Yugi Evolution (2006), with The Eye of Truth swapped for a second Giant Rat. Black Luster Soldier is
+   *  its Ritual. */
+  yugiEvolution: {
+    label: "Yugi Evolution",
+    deck: {
+      main: list({
+        darkMagician: 1, mysticalElf: 1, feralImp: 1, wingedDragon1: 1, summonedSkull: 1, beaverWarrior: 1, gaia: 1,
+        celticGuardian: 1, greatWhite: 1, giantSoldierOfStone: 1, mysticClown: 1, neo: 1, gazelle: 1, warriorDaiGrepher: 1,
+        darkBlade: 1,
+        wallOfIllusion: 1, manEaterBug: 1, sangan: 1, kuriboh: 1, giantRat: 2, sonicBird: 1, zombyra: 1,
+        royalMagicalLibrary: 1, blackLusterSoldier: 1,
+        blackLusterRitual: 1, darkHole: 1, dianKeto: 1, fissure: 1, monsterReborn: 1, changeOfHeart: 1, lastWill: 1,
+        cardDestruction: 1, removeTrap: 1, reliableGuardian: 1, axeOfDespair: 1, malevolentNuzzler: 1, mst: 1,
+        mysticPlasmaZone: 1, swords: 1, potOfGreed: 1,
+        trapHole: 1, waboku: 1, magicJammer: 1, sevenTools: 1, spellbindingCircle: 1, backupSoldier: 1, shift: 1,
+        disappear: 1, raigekiBreak: 1,
+      }),
     },
   },
 } satisfies Record<string, DeckDef>;

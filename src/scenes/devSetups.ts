@@ -9,6 +9,7 @@ const BREAKER = 71413901, SKILLED_DM = 73752131, POT_OF_GREED = 55144522, UPSTAR
 const TRIBE_INFECTING_VIRUS = 33184167, MIND_CRUSH = 15800838, SIXTH_SENSE = 3280747, DNA_TRANSPLANT = 56769674;
 const SINISTER_SERPENT = 8131171, SCAPEGOAT = 73915051, METAMORPHOSIS = 46411259, POLYMERIZATION = 24094653, SNATCH_STEAL = 45986603, AXE = 40619825;
 const CONFISCATION = 17375316, TIME_WIZARD = 71625222, BIG_EYE = 16768387;
+const WHITE_DRAGON_RITUAL = 9786492, PALADIN = 73398797, KAISER_SEA_HORSE = 17444133, HANE_HANE = 7089711, BATTLE_OX = 5053103;
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
 const monster = (code: number, sequence: number): StartCard => ({ code, location: OcgLocation.MZONE, sequence });
@@ -68,6 +69,15 @@ const SETUPS: Record<string, { you: StartCard[]; opponent: StartCard[] }> = {
   sort: {
     you: [{ code: BIG_EYE, location: OcgLocation.MZONE, sequence: 2, position: OcgPosition.FACEDOWN_DEFENSE }],
     opponent: [],
+  },
+  /**
+   * Ritual: White Dragon Ritual for Paladin of White Dragon (Level 4), tributes by Level from hand or field (Hane-Hane 2,
+   * Kaiser Sea Horse / Battle Ox 4); Paladin can then tribute itself for a Blue-Eyes from the Deck (&deck=kaibaEvolution).
+   * Kaiser Sea Horse also counts as 2 tributes for the LIGHT Blue-Eyes in hand.
+   */
+  ritual: {
+    you: [monster(KAISER_SEA_HORSE, 1), monster(HANE_HANE, 3), hand(WHITE_DRAGON_RITUAL), hand(PALADIN), hand(BATTLE_OX), hand(BLUE_EYES)],
+    opponent: [monster(VORSE, 2)],
   },
   /** Reveals: Confiscation flips the opponent's hand face-up while you pick the card to discard. */
   confiscation: {

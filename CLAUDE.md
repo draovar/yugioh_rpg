@@ -43,10 +43,10 @@ Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations
 `&dialogs` adds one that opens every prompt UI with sample cards (`src/scenes/dialogPreview.ts`; answers are only
 logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`);
 `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
-`&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`; default Yugi vs Kaiba),
+`&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`, `kaibaEvolution`, `yugiEvolution`; default Yugi vs Kaiba),
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
-(`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`; cards placed in hand/on the field first),
+(`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`, `ritual` (`&deck=kaibaEvolution`); cards placed in hand/on the field first),
 `&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `planner` (default, `DEFAULT_BRAIN`), `replay`, `sim`, `generic`, `autobot`),
 `&noworker` makes the AI think on the main thread instead of its Web Worker, `&reveal` shows the AI's hand and set cards
 (also the world menu's AI CARDS toggle), `&aitrace` prints every AI decision
@@ -125,7 +125,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   - `rng.ts` — `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
   - `hash.ts` — `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).
-  - `decks.ts` — prebuilt decks until the deck editor exists (`yugi`, `kaiba`, `goat` + Extra Decks), `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
+  - `decks.ts` — prebuilt decks until the deck editor exists (`yugi`, `kaiba`, `goat` + Extra Decks; starter decks like
+    `kaibaEvolution`, `yugiEvolution` = the Evolution starter decks with the owner's swaps), `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
   - `rps.ts` — rock-paper-scissors before each duel (`rpsWinner`, `RpsOpponent`: the AI picks at random and goes
     first when it wins; peer-to-peer via `NetDuel.rps`). The winner picks first/second, which sets the seats (seat 0 goes first).
   - `loadEngine.ts` — browser only: fetches `public/data/*.json`, inits core once.
@@ -253,8 +254,12 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
 - Tokens (e.g. Scapegoat's Sheep Tokens, its code + 1..4) are separate cards the engine looks up: `build-data` exports
   every TYPE_TOKEN card a pool script creates. A pool card without its tokens breaks when it resolves.
 - ocgcore-wasm 0.1.2 misreads MSG_SHUFFLE_SET_CARD (u32 count, interleaved places; the core writes a u8 count and two
-  lists) and throws "eof", killing the duel (Cyber Jar summoning face-down). `tools/patch-ocgcore.mjs` fixes the dist
-  file as npm's `postinstall`; it fails loudly if the package changes.
+  lists) and throws "eof", killing the duel (Cyber Jar summoning face-down), and MSG_SELECT_SUM (Ritual tributes: the
+  core writes the must list first and a position per card). `tools/patch-ocgcore.mjs` fixes the dist
+  file as npm's `postinstall`; it fails loudly if the package changes. SELECT_SUM's `select_max` field is really the
+  mode: 0 = exact sum (with min/max cards), else "at least" (min = max = 0; no card may be unnecessary, `sumMatches`).
+- SELECT_TRIBUTE `min` counts tributes, not cards: Double Tribute monsters (Kaiser Sea Horse) have `release_param` 2
+  (`pickTributes` in `autoBot.ts`).
 - ocgcore-wasm's MOVE parser drops the move reason; `DuelSession` re-adds it (`MoveMessage.reason`, REASON_*
   bits) by querying the card at its destination right after each batch. Used to flash only real destructions.
 - ocgcore does **not** shuffle decks at start (EDOPro does it client-side); `DuelSession` shuffles with a PRNG seeded from the duel seed.
@@ -298,6 +303,7 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    needs them (none came up in 150 bot duels with the current pool).
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
    ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).
+   Starter decks: ✅ Kaiba Evolution (first Ritual: Paladin of White Dragon), ✅ Yugi Evolution.
    ✅ Rock-paper-scissors before each duel (cards on the board); the winner chooses to go first or second.
    ✅ Code cleanup: DuelScene split into InfoPanel / BoardPick / duelPrompts, dead code and duplicates removed, comments
    brought up to date.
