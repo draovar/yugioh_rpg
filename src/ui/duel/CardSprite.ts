@@ -1,7 +1,7 @@
 // One 38x56 card: the type frame (public/assets/cards/frames), 32x32 art from the art atlas,
 // and name / attribute / level / ATK-DEF drawn on top in pixel fonts. Or the card back.
 import Phaser from "phaser";
-import type { CardRecord } from "../../duel/cardData.ts";
+import { TYPE, type CardRecord } from "../../duel/cardData.ts";
 import { FONT_CARD, FONT_UI, INK, INK_SOFT, border, fit, text } from "../pixel.ts";
 import { THEME } from "../theme.ts";
 import { CARD } from "./layout.ts";
@@ -11,19 +11,17 @@ export const ART_ATLAS = "art32";
 export const ATTRIBUTE_SHEET = "attributes";
 export const SPELL_SHEET = "spells";
 
-const TYPE_MONSTER = 0x1, TYPE_SPELL = 0x2, TYPE_TRAP = 0x4, TYPE_EFFECT = 0x20, TYPE_FUSION = 0x40, TYPE_RITUAL = 0x80;
-const TYPE_TOKEN = 0x4000;
 
 export const FRAMES = ["normal_monster", "effect_monster", "fusion_monster", "ritual_monster", "token", "spell", "trap"] as const;
 export const frameKey = (name: (typeof FRAMES)[number]) => `frame-${name}`;
 
 export function frameFor(type: number): (typeof FRAMES)[number] {
-  if (type & TYPE_SPELL) return "spell";
-  if (type & TYPE_TRAP) return "trap";
-  if (type & TYPE_FUSION) return "fusion_monster";
-  if (type & TYPE_RITUAL) return "ritual_monster";
-  if (type & TYPE_TOKEN) return "token";
-  if (type & TYPE_EFFECT) return "effect_monster";
+  if (type & TYPE.SPELL) return "spell";
+  if (type & TYPE.TRAP) return "trap";
+  if (type & TYPE.FUSION) return "fusion_monster";
+  if (type & TYPE.RITUAL) return "ritual_monster";
+  if (type & TYPE.TOKEN) return "token";
+  if (type & TYPE.EFFECT) return "effect_monster";
   return "normal_monster";
 }
 
@@ -32,7 +30,7 @@ export function frameFor(type: number): (typeof FRAMES)[number] {
  * (plain circle) CONTINUOUS. Checked in this order, NORMAL when no kind bit is set.
  */
 export const SPELL_KIND_ICON: [number, number][] = [
-  [0x100000, 0], [0x10000, 1], [0x40000, 2], [0x80, 3], [0x80000, 4], [0x20000, 6],
+  [TYPE.COUNTER, 0], [TYPE.QUICKPLAY, 1], [TYPE.EQUIP, 2], [TYPE.RITUAL, 3], [TYPE.FIELD, 4], [TYPE.CONTINUOUS, 6],
 ];
 export const SPELL_NORMAL_ICON = 5;
 export const SPELL_EQUIP_ICON = 2;
@@ -120,7 +118,7 @@ export class CardSprite extends Phaser.GameObjects.Container {
 
   private drawText(r: CardRecord, opts: ShowOptions, add: <T extends Phaser.GameObjects.GameObject>(o: T) => T) {
     const sc = this.scene;
-    const monster = (r.type & TYPE_MONSTER) !== 0;
+    const monster = (r.type & TYPE.MONSTER) !== 0;
     // Name bar: x 2..35, y 2..6, 1px padding inside. 3x3 glyphs at y 3; the attribute swatch takes x 32..34,
     // so a monster name may use x 3..30 (1px gap before the swatch), other names x 3..34.
     const nameWidth = monster ? 28 : 32;
@@ -142,7 +140,7 @@ export class CardSprite extends Phaser.GameObjects.Container {
       add(text(sc, LEFT + 3, TOP + 48, stat(opts.atk ?? r.atk), { font: FONT_UI, color: INK }));
       add(text(sc, LEFT + 36, TOP + 48, stat(opts.def ?? r.def), { font: FONT_UI, color: INK_SOFT, originX: 1 }));
     } else {
-      add(text(sc, 0, TOP + 48, r.type & TYPE_SPELL ? "SPELL" : "TRAP", { font: FONT_UI, color: INK, originX: 0.5 }));
+      add(text(sc, 0, TOP + 48, r.type & TYPE.SPELL ? "SPELL" : "TRAP", { font: FONT_UI, color: INK, originX: 0.5 }));
     }
   }
 

@@ -3,6 +3,7 @@
 // and previews cards only while hovered. Everything is drawn above dialogs' shade (INFO_DEPTH), so it stays bright
 // and still shows cards hovered in a dialog.
 import Phaser from "phaser";
+import { TYPE } from "../../duel/cardData.ts";
 import type { CounterView, FieldSnapshot } from "../../duel/DuelSession.ts";
 import type { Engine } from "../../duel/loadEngine.ts";
 import { raceNames } from "../../duel/text.ts";
@@ -149,7 +150,7 @@ export class InfoPanel {
     this.stopNameScroll();
     const p = this.content.removeAll(true);
     const L = LAYOUT;
-    const monster = (r.type & 0x1) !== 0;
+    const monster = (r.type & TYPE.MONSTER) !== 0;
 
     // Name at 2x, light with a 1px dark drop shadow, left-aligned; names wider than their space scroll (see
     // scrollName). Monsters stop before the attribute icon; Spells/Traps (icons sit by the art) get the full width.
@@ -190,9 +191,9 @@ export class InfoPanel {
       const plateH = 2 * STAT_PLATE_H + 4;
       const kind = SPELL_KIND_ICON.find(([bit]) => r.type & bit)?.[1] ?? SPELL_NORMAL_ICON;
       const iconsX = statX + (statW - (16 + 4 + 16)) / 2, iconsY = artY + (plateH - 16) / 2;
-      p.add(s.add.image(iconsX, iconsY, ATTRIBUTE_SHEET, r.type & 0x2 ? SPELL_ATTRIBUTE : TRAP_ATTRIBUTE).setOrigin(0));
+      p.add(s.add.image(iconsX, iconsY, ATTRIBUTE_SHEET, r.type & TYPE.SPELL ? SPELL_ATTRIBUTE : TRAP_ATTRIBUTE).setOrigin(0));
       p.add(s.add.image(iconsX + 20, iconsY, SPELL_SHEET, kind).setOrigin(0));
-      types = [r.type & 0x2 ? "SPELL" : "TRAP", spellTrapKind(r.type)];
+      types = [r.type & TYPE.SPELL ? "SPELL" : "TRAP", spellTrapKind(r.type)];
     }
     const pr = THEME.plate.slice;
     p.add(s.add.nineslice(statX, typesY, ui("menu-back"), undefined, statW, artY + ART_FRAME - typesY, pr, pr, pr, pr).setOrigin(0));
@@ -294,22 +295,22 @@ export class InfoPanel {
  */
 function monsterTypes(type: number): string[] {
   const kinds: [number, string][] = [
-    [0x40, "FUSION"], [0x80, "RITUAL"], [0x2000, "SYNCHRO"], [0x200, "SPIRIT"], [0x400, "UNION"],
-    [0x800, "GEMINI"], [0x400000, "TOON"], [0x1000, "TUNER"], [0x200000, "FLIP"],
+    [TYPE.FUSION, "FUSION"], [TYPE.RITUAL, "RITUAL"], [TYPE.SYNCHRO, "SYNCHRO"], [TYPE.SPIRIT, "SPIRIT"], [TYPE.UNION, "UNION"],
+    [TYPE.GEMINI, "GEMINI"], [TYPE.TOON, "TOON"], [TYPE.TUNER, "TUNER"], [TYPE.FLIP, "FLIP"],
   ];
   const out = kinds.filter(([bit]) => type & bit).map(([, name]) => name);
-  if (type & 0x4000) out.push("TOKEN");
-  else if (type & 0x20) out.push("EFFECT");
-  else if (type & 0x10) out.push("NORMAL");
+  if (type & TYPE.TOKEN) out.push("TOKEN");
+  else if (type & TYPE.EFFECT) out.push("EFFECT");
+  else if (type & TYPE.NORMAL) out.push("NORMAL");
   return out;
 }
 
 function spellTrapKind(type: number): string {
-  if (type & 0x10000) return "QUICK-PLAY";
-  if (type & 0x20000) return "CONTINUOUS";
-  if (type & 0x40000) return "EQUIP";
-  if (type & 0x80000) return "FIELD";
-  if (type & 0x100000) return "COUNTER";
-  if (type & 0x80) return "RITUAL";
+  if (type & TYPE.QUICKPLAY) return "QUICK-PLAY";
+  if (type & TYPE.CONTINUOUS) return "CONTINUOUS";
+  if (type & TYPE.EQUIP) return "EQUIP";
+  if (type & TYPE.FIELD) return "FIELD";
+  if (type & TYPE.COUNTER) return "COUNTER";
+  if (type & TYPE.RITUAL) return "RITUAL";
   return "NORMAL";
 }

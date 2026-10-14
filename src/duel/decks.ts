@@ -1,5 +1,5 @@
 // Prebuilt decks until the deck editor exists. Every card must be in data/pool.json (the smoke tests check).
-import type { CardDb } from "./cardData.ts";
+import { TYPE, type CardDb } from "./cardData.ts";
 import type { Deck } from "./DuelSession.ts";
 
 /** Passcodes of the cards the decks use, by name. */
@@ -103,7 +103,7 @@ export function deckProblems(deck: Deck, cards: CardDb): string[] {
   for (const [code, n] of counts) {
     const r = cards.records.get(code);
     if (!r) out.push(`unknown card ${code}`);
-    else if (r.type & 0x4000) out.push(`${r.name} is a token`);
+    else if (r.type & TYPE.TOKEN) out.push(`${r.name} is a token`);
     if (n > 3) out.push(`${r?.name ?? code} x${n}`);
   }
   return out;
