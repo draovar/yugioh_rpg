@@ -44,6 +44,11 @@ interface Position {
   forbid?: RegExp;
   /** Check the whole turn plan behind that choice (the planner's "plan:" trace line) instead. */
   plan?: boolean;
+  /**
+   * A known misplay waiting for a planned fix (docs/ai-rework-plan.md, e.g. "phase 2a"): reported as "known", not a
+   * failure; when it passes, "now passes" says the flag can go.
+   */
+  known?: string;
   /** The opponent activates this card at the first chain prompt in the AI's turn that offers it... */
   opponentActivates?: number;
   /** ...and the check is on the AI's next chain answer after that (with something to chain), not a main-phase choice. */
@@ -192,6 +197,21 @@ const POSITIONS: Position[] = [
     expect: /set Magic Jammer/,
   },
   {
+    name: "summon-under-1600-next-to-a-monster",
+    why: "user report 2026-10-15: kept Celtic Guardian (1400) in hand behind Warrior Dai Grepher; in the copies it always dies to the guessed 1600 attacker",
+    ai: [hand(C.backupSoldier), hand(C.celticGuardian), hand(C.magicJammer), monster(C.warriorDaiGrepher, 0)],
+    opponent: [
+      monster(C.spiritRyu, 0, OcgPosition.FACEDOWN_DEFENSE), setCard(C.trapHole, 4),
+      hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [6800, 3700],
+    plan: true,
+    expect: /summon Celtic Guardian/,
+    known: "phase 2a",
+  },
+  {
     name: "monarch-with-target",
     why: "control for the above: with an opposing monster, Zaborg's effect pays off",
     ai: [hand(C.zaborg), monster(C.celticGuardian)],
@@ -207,6 +227,7 @@ const show = args.includes("--show");
 const filler = (): Deck["main"] => Array<number>(30).fill(C.mysticalElf);
 
 let failed = 0;
+let known = 0;
 let runs = 0;
 for (const p of POSITIONS) for (let run = 1; run <= (p.seeds ?? 1); run++) {
   runs++;
@@ -250,9 +271,12 @@ for (const p of POSITIONS) for (let run = 1; run <= (p.seeds ?? 1); run++) {
   const planLine = choice && p.plan ? formatTrace(choice).split("\n").find((l) => l.includes("plan:"))?.trim() : undefined;
   const text = planLine ?? choice?.choice ?? "(no main-phase decision)";
   const ok = !!choice && (!p.expect || p.expect.test(text)) && (!p.forbid || !p.forbid.test(text));
-  if (!ok) failed++;
-  console.log(`${ok ? "ok  " : "FAIL"} ${p.name}${p.seeds ? ` #${run}` : ""}: ${text}${ok ? "" : `   (${p.expect ? `expected ${p.expect}` : ""}${p.forbid ? ` forbidden ${p.forbid}` : ""}; ${p.why})`}`);
-  if (show || !ok) if (choice) console.log(formatTrace(choice).split("\n").slice(1).join("\n"));
+  if (!ok && p.known) known++;
+  else if (!ok) failed++;
+  const status = p.known ? (ok ? "now passes (drop `known`)" : `known (${p.known})`) : ok ? "ok  " : "FAIL";
+  console.log(`${status} ${p.name}${p.seeds ? ` #${run}` : ""}: ${text}${ok ? "" : `   (${p.expect ? `expected ${p.expect}` : ""}${p.forbid ? ` forbidden ${p.forbid}` : ""}; ${p.why})`}`);
+  if (show || (!ok && !p.known)) if (choice) console.log(formatTrace(choice).split("\n").slice(1).join("\n"));
 }
-console.log(failed ? `${failed} of ${runs} runs failed` : `all ${runs} runs of ${POSITIONS.length} positions passed (${brainName})`);
+const knownNote = known ? `, ${known} known misplay${known > 1 ? "s" : ""}` : "";
+console.log(failed ? `${failed} of ${runs} runs failed${knownNote}` : `all ${runs - known} runs passed${knownNote} (${POSITIONS.length} positions, ${brainName})`);
 if (failed) process.exit(1);

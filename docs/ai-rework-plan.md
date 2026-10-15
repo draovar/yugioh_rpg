@@ -89,14 +89,14 @@ to "no effect" (e.g. `openField` after phase 2) go back to neutral.
 - `ai-bench` gets a `known: true` flag: such positions are reported ("known failing") but don't fail the run, so the
   bench shows progress as phases land.
 
-## Bench positions to add (from 2026-10-15 reports, as known-failing until phase 2)
+## Bench positions from the 2026-10-15 reports
 
-- `summon-under-1600-next-to-a-monster`: Warrior Dai Grepher on the field, Celtic Guardian in hand, opponent with
-  a set monster and 4 cards → summon Celtic Guardian.
-- `respect-a-set-card`: three monsters vs one set card and an empty field, lethal not available → don't attack with
-  everything (or attack in an order that keeps the best monster safe).
-- `trap-for-their-spells`: Magic Jammer in hand while the opponent holds several cards → set it (passes today only
-  because of `setTrap`; phase 3 decides whether that weight stays).
+- `summon-under-1600-next-to-a-monster` (added, `known: "phase 2a"`): Warrior Dai Grepher on the field, Celtic
+  Guardian in hand, opponent with a set monster and 4 cards → summon Celtic Guardian.
+- `set-magic-jammer` (passes today only because of `setTrap`; phase 3 decides whether that weight stays).
+- `respect-a-set-card` (to add in phase 2b): three monsters vs one set card and an empty field, lethal not
+  available → don't attack with everything. Needs ai-bench to check battle decisions (today it checks the first
+  main-phase choice, its plan line, or chain answers).
 
 ## Order and size
 
