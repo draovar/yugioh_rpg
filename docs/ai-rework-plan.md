@@ -52,6 +52,24 @@ reports **win rate and passivity numbers**, and "less passive" is a measured cla
 
 Done when: `npm run arena -- --stats` prints the four numbers for both sides; baseline recorded here.
 
+✅ Done 2026-10-15 (`PassivityStats` in `match.ts`: the AiSeats are wrapped, counts come from their own prompts and
+answers, the board as the turn player sees it at the turn's last decision). "Unused S/T" counts the hand
+Spells/Traps the turn's last main-phase prompt offered to activate or set that are still in hand at the turn's end.
+
+**Baseline** (`--n 10 --decks yugiEvolution,kaibaEvolution,yugi,kaiba --stats`, seeds from 1, 320 duels each):
+
+| Match | Side | Win rate | Skipped summons | Open field | Unused S/T | Attacks into sets | S/T in hand at end |
+|---|---|---|---|---|---|---|---|
+| planner vs planner | A planner (2631 turns) | 46.6% ± 5.5 | 11.1 | 26.5 | 183.3 | 40.6 (58% of attacks) | 1.89 |
+| | B planner (2625 turns) | | 11.1 | 24.8 | 182.6 | 42.6 (57%) | 1.78 |
+| planner vs generic | A planner (2270 turns) | 64.1% ± 5.3 | 11.7 | 23.9 | 191.7 | 25.8 (31%) | 2.02 |
+| | B generic (2305 turns) | | 2.8 | 30.1 | 54.0 | 35.7 (55%) | 0.56 |
+
+Per 100 own turns, except the last column (per duel). What it shows: the planner skips a Normal Summon it could make
+in about 1 turn in 9 (generic: 1 in 36) and leaves about 1.8 playable Spells/Traps in hand per turn (generic: 0.5),
+so its passivity is measurable and much stronger than the M1 brain's. It still wins 64% against generic.
+The 46.6% planner-vs-planner split (same brain, both seat orders) is the noise to expect at this size.
+
 ### Phase 2: a better guess of the opponent (the real work, its own session)
 
 Replace the single fixed guess with a few **sampled worlds** (the reference project's approach, `ai-plan.md` §6),

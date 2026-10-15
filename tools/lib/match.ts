@@ -1,10 +1,13 @@
 // Brain vs brain matches for the arena and the tuner: seeded duels over every deck pairing and seat order, run in
 // parallel worker threads (one engine each). This file is also the workers' entry point.
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
+import { OcgLocation, OcgMessageType, OcgResponseType, SelectBattleCMDAction, SelectIdleCMDAction, type OcgCardLoc, type OcgMessage, type OcgResponse } from "ocgcore-wasm";
 import { AiSeat } from "../../src/duel/ai/AiSeat.ts";
 import type { Weights } from "../../src/duel/ai/board.ts";
 import { BRAINS, type BrainName } from "../../src/duel/ai/brains.ts";
 import { formatTrace } from "../../src/duel/ai/trace.ts";
+import { TYPE } from "../../src/duel/cardData.ts";
+import type { DuelSession, FieldSnapshot } from "../../src/duel/DuelSession.ts";
 import { DECKS, type DeckName } from "../../src/duel/decks.ts";
 import { cards, core, newDuel, readScript, runDuel, seedFrom } from "./engine.ts";
 
@@ -32,6 +35,116 @@ export interface Result extends Job {
   think: [number, number];
   decisions: [number, number];
   slowest: [number, number];
+  /** [A, B] */
+  stats: [PassivityStats, PassivityStats];
+}
+
+/** How passive a side played (docs/ai-rework-plan.md phase 1); counted only from what that seat could see. */
+export interface PassivityStats {
+  /** Its own turns that ended. */
+  turns: number;
+  /** Turns it ended while its last main-phase prompt still offered a Normal Summon or Set it hadn't used. */
+  skippedSummons: number;
+  /** Turns it ended with no monster while the opponent held cards. */
+  openField: number;
+  /** Spells/Traps its last main-phase prompt offered to activate or set from the hand, still in hand at turn end. */
+  unusedSpells: number;
+  /** Spells/Traps in its hand when the duel ended. */
+  spellsAtEnd: number;
+  attacks: number;
+  /** Attacks declared while the opponent controlled face-down Spells/Traps. */
+  attacksIntoSets: number;
+}
+
+const noStats = (): PassivityStats =>
+  ({ turns: 0, skippedSummons: 0, openField: 0, unusedSpells: 0, spellsAtEnd: 0, attacks: 0, attacksIntoSets: 0 });
+
+type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
+
+/**
+ * Counts PassivityStats for both seats by wrapping their AiSeats: decide() sees each seat's own prompts and answers,
+ * observe() the turn changes (through the seat's memory), and the board comes from `snapshot()` as the turn player
+ * sees it at the turn's last decision. Nothing here reads hidden cards.
+ */
+class PassivityTracker {
+  readonly stats: [PassivityStats, PassivityStats] = [noStats(), noStats()];
+  /** The turn player's board at the latest decision (either seat's). */
+  private board: FieldSnapshot | null = null;
+  /** The turn player's last main-phase prompt this turn, and whether they Normal Summoned / Set this turn. */
+  private lastIdle: IdleMessage | null = null;
+  private summoned = false;
+
+  private readonly duel: DuelSession;
+
+  constructor(duel: DuelSession) {
+    this.duel = duel;
+  }
+
+  wrap(seat: AiSeat): AiSeat {
+    const decide = seat.decide.bind(seat);
+    const observe = seat.observe.bind(seat);
+    seat.decide = (prompt) => {
+      const response = decide(prompt);
+      this.decided(seat, prompt, response);
+      return response;
+    };
+    // Both seats see every turn change; only the turn player's own wrapper closes its turn.
+    seat.observe = (messages) => {
+      const { turn, turnPlayer } = seat.memory;
+      observe(messages);
+      if (seat.memory.turn !== turn && turn > 0 && turnPlayer === seat.seat) this.turnEnded(seat.seat);
+    };
+    return seat;
+  }
+
+  private decided(seat: AiSeat, prompt: OcgMessage, response: OcgResponse): void {
+    const turnPlayer = seat.memory.turnPlayer;
+    this.board = this.duel.snapshot(turnPlayer);
+    if (seat.seat !== turnPlayer) return;
+    const s = this.stats[seat.seat];
+    if (prompt.type === OcgMessageType.SELECT_IDLECMD && response.type === OcgResponseType.SELECT_IDLECMD) {
+      this.lastIdle = prompt;
+      if (response.action === SelectIdleCMDAction.SELECT_SUMMON || response.action === SelectIdleCMDAction.SELECT_MONSTER_SET) this.summoned = true;
+    } else if (prompt.type === OcgMessageType.SELECT_BATTLECMD && response.type === OcgResponseType.SELECT_BATTLECMD && response.action === SelectBattleCMDAction.SELECT_BATTLE) {
+      s.attacks++;
+      if (this.duel.snapshot(seat.seat).players[1 - seat.seat].spells.slice(0, 5).some((c) => c?.faceDown)) s.attacksIntoSets++;
+    }
+  }
+
+  private turnEnded(seat: 0 | 1): void {
+    const s = this.stats[seat];
+    s.turns++;
+    const idle = this.lastIdle;
+    if (idle && !this.summoned && (idle.summons.length || idle.monster_sets.length)) s.skippedSummons++;
+    if (this.board) {
+      const me = this.board.players[seat];
+      if (me.monsters.every((c) => !c) && this.board.players[1 - seat].hand.length) s.openField++;
+      if (idle) {
+        const offered = [...idle.activates, ...idle.spell_sets].filter((c) => c.location === OcgLocation.HAND && this.isSpell(c));
+        // Each offered card once (a card can be both activatable and settable), matched against the hand by code.
+        const left = me.hand.map((c) => c.code);
+        const seen = new Set<number>();
+        for (const c of offered) {
+          if (seen.has(c.sequence)) continue;
+          seen.add(c.sequence);
+          const i = left.indexOf(c.code);
+          if (i >= 0) { left.splice(i, 1); s.unusedSpells++; }
+        }
+      }
+    }
+    this.lastIdle = null;
+    this.summoned = false;
+  }
+
+  /** The duel is over: count each side's Spells/Traps in hand (as that side sees its own hand). */
+  ended(): void {
+    for (const seat of [0, 1] as const)
+      this.stats[seat].spellsAtEnd = this.duel.snapshot(seat).players[seat].hand.filter((c) => this.isSpell(c)).length;
+  }
+
+  private isSpell(c: Pick<OcgCardLoc, "code">): boolean {
+    return ((this.duel.cards.get(c.code)?.type ?? 0) & (TYPE.SPELL | TYPE.TRAP)) !== 0;
+  }
 }
 
 /** Every deck pairing and seat order, `n` duels each; duel k always gets the same seed and setup. */
@@ -49,12 +162,13 @@ export function playJob(job: Job, s: MatchSettings): Result {
   const decks = aFirst ? [DECKS[aDeck].deck, DECKS[bDeck].deck] : [DECKS[bDeck].deck, DECKS[aDeck].deck];
   const duel = newDuel({ decks: [decks[0], decks[1]], seed: seedFrom(s.baseSeed + k), startingLP: s.lp, onCoreLog: () => {} });
   const onTrace = s.trace ? (e: Parameters<typeof formatTrace>[0]) => console.log(formatTrace(e)) : undefined;
+  const tracker = new PassivityTracker(duel);
   const seatOf = (seat: 0 | 1) => {
     const isA = seat === aSeat;
     const brain = BRAINS[isA ? s.A : s.B]({ engine: { core, cards, readScript }, weights: isA ? s.weightsA : s.weightsB });
-    return new AiSeat({ seat, brain, duel, onTrace, deck: decks[seat].main });
+    return tracker.wrap(new AiSeat({ seat, brain, duel, onTrace, deck: decks[seat].main }));
   };
-  const result: Result = { ...job, outcome: "error", turns: 0, think: [0, 0], decisions: [0, 0], slowest: [0, 0] };
+  const result: Result = { ...job, outcome: "error", turns: 0, think: [0, 0], decisions: [0, 0], slowest: [0, 0], stats: [noStats(), noStats()] };
   const ab = <T,>(pair: [T, T]): [T, T] => (aSeat === 0 ? pair : [pair[1], pair[0]]);
   try {
     if (s.trace) console.log(`--- duel ${k} (seed ${s.baseSeed + k}): ${s.A} [${aDeck}] ${aFirst ? "first" : "second"} vs ${s.B} [${bDeck}]`);
@@ -64,6 +178,8 @@ export function playJob(job: Job, s: MatchSettings): Result {
     result.think = ab(run.thinkMs);
     result.decisions = ab(run.decisions);
     result.slowest = ab(run.maxMs);
+    tracker.ended();
+    result.stats = ab(tracker.stats);
     if (s.trace) console.log(`--- winner: ${result.outcome === "draw" ? "draw" : result.outcome === "a" ? `A (${s.A})` : `B (${s.B})`}`);
   } catch (e) {
     result.error = String(e instanceof Error ? e.stack ?? e.message : e);

@@ -1,7 +1,7 @@
 // Brain vs brain: plays seeded duels for every deck pairing, with each brain going first and second, and reports win
 // rates. Every claim about AI strength comes from here. Duels run in parallel worker threads (tools/lib/match.ts).
 // Usage: npm run arena -- [--a autobot] [--b autobot] [--n 10] [--decks yugi,kaiba,goat] [--seed 1] [--lp 8000]
-//        [--wa weights.json] [--wb weights.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses]
+//        [--wa weights.json] [--wb weights.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses] [--stats]
 //   --n      duels per deck pairing and seat order (so 3 decks = 9 pairings x 2 orders x n)
 //   --seed   base seed: duel k uses seed (base + k), so a run is repeatable
 //   --wa/wb  weights for A / B (a JSON file with any of board.ts's Weights; the rest stay default)
@@ -10,13 +10,16 @@
 //   --trace  print every decision of both brains
 //   --sim-trace  also print the decisions inside the simulated copies (with --trace)
 //   --losses list the duels A lost (replay one with --only K --trace)
+//   --stats  passivity per side, per 100 of its own turns: skipped Normal Summons/Sets, turns ended with an empty
+//            field (opponent holding cards), Spells/Traps it could play left in hand, attacks into set Spells/Traps;
+//            plus Spells/Traps in hand at the duel's end, per duel
 import { readFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { DEFAULT_WEIGHTS, type Weights } from "../src/duel/ai/board.ts";
 import { BRAINS, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
 import { Simulator } from "../src/duel/ai/sim/simulator.ts";
 import { DECKS, type DeckName } from "../src/duel/decks.ts";
-import { matchJobs, runMatch, winRate, type MatchSettings, type Result } from "./lib/match.ts";
+import { matchJobs, runMatch, winRate, type MatchSettings, type PassivityStats, type Result } from "./lib/match.ts";
 
 const args = new Map<string, string>();
 const argv = process.argv.slice(2);
@@ -76,6 +79,18 @@ function report(results: Result[], seconds: number, threads: number): void {
   console.log(`think time: A ${per(sum((r) => r.think[0]), sum((r) => r.decisions[0]))} ms/decision (slowest ${slow(0)} ms), ` +
     `B ${per(sum((r) => r.think[1]), sum((r) => r.decisions[1]))} ms/decision (slowest ${slow(1)} ms); ` +
     `${(played.length / seconds).toFixed(1)} duels/s on ${threads} thread${threads > 1 ? "s" : ""}`);
+  if (args.has("stats")) {
+    console.log("\npassivity, per 100 own turns    skipped summons  open field  unused S/T  attacks into sets      S/T in hand at end (per duel)");
+    for (const i of [0, 1] as const) {
+      const t = (k: keyof PassivityStats) => sum((r) => r.stats[i][k]);
+      const turns = t("turns");
+      const per100 = (k: keyof PassivityStats) => (turns ? ((100 * t(k)) / turns).toFixed(1) : "-");
+      const label = `${i ? "B" : "A"} = ${i ? s.B : s.A} (${turns} turns)`;
+      console.log(`${label.padEnd(32)} ${per100("skippedSummons").padStart(15)}  ${per100("openField").padStart(10)}  ` +
+        `${per100("unusedSpells").padStart(10)}  ${`${per100("attacksIntoSets")} (${pct(t("attacksIntoSets"), t("attacks"))} of attacks)`.padStart(21)}  ` +
+        `${per(t("spellsAtEnd"), played.length).padStart(13)}`);
+    }
+  }
   if (args.has("losses")) {
     const lost = played.filter((r) => r.outcome === "b").map((r) => `${r.k} (${r.aDeck} ${r.aFirst ? "first" : "second"} vs ${r.bDeck}, ${r.turns} turns)`);
     console.log(`\nA lost: ${lost.join(", ") || "none"}`);
