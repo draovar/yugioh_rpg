@@ -117,6 +117,20 @@ export class Simulator {
   }
 
   /**
+   * The board change of activating `card` on its own in our main phase, answering nothing, or null if the copy can't
+   * (e.g. it only works in response to something). Tells a response that does something from one that doesn't.
+   */
+  alone(view: AiView, card: CardOption): SimOutcome | null {
+    const layout = layoutFrom(view);
+    const key = fnv1a(JSON.stringify([layout, "alone", card], (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+    if (this.cache.has(key)) return this.cache.get(key)!;
+    if (this.cache.size > 2000) this.cache.clear();
+    const outcome = this.play(layout, SelectIdleCMDAction.SELECT_ACTIVATE, card);
+    this.cache.set(key, outcome);
+    return outcome;
+  }
+
+  /**
    * How each answer to a chain prompt works out: the opponent's action that opened it (attack, summon, activation,
    * phase) is replayed in a copy where they move first, the AI answers with each candidate or passes, and the board
    * is scored once that action is over. Null when the situation isn't one the copy can replay.

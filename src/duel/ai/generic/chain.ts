@@ -5,7 +5,7 @@
 import { OcgLocation, OcgMessageType, OcgPhase, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
 import { TYPE } from "../../cardData.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
-import { cardType } from "../board.ts";
+import { cardType, weightsOf } from "../board.ts";
 import { best, type BrainState, type Option } from "./common.ts";
 import type { Situation } from "../sim/replay.ts";
 
@@ -60,11 +60,22 @@ export function decideChain(m: ChainMessage, view: AiView, state: BrainState): D
     return { response: pass, reason: "the last link is ours" };
   const last = memory.lastAction;
   const theirLink = memory.chain.length > 0 && memory.chain[memory.chain.length - 1].controller !== view.seat;
-  const theirMove = last !== null && last.player !== view.seat;
+  // Their summon or attack; an activation of theirs only while it's on the chain (theirLink): once resolved, it's over.
+  const theirMove = last !== null && last.player !== view.seat && last.kind !== "activate";
   const theirEndPhase = memory.phase === OcgPhase.END && memory.turnPlayer !== view.seat;
   const responding = theirLink || theirMove || theirEndPhase;
 
-  if (m.spe_count > 0 && responding) return best(options, () => "the opponent acted and a card fits this moment");
+  if (m.spe_count > 0 && responding) {
+    // Only cards that do something: one the copy can play on its own must gain there (a DEF boost on an attacking
+    // monster doesn't); one it can't (it needs something to answer) keeps the rule.
+    const sim = state.simulator;
+    const useful = sim ? options.filter((_, i) => {
+      const alone = sim.alone(view, m.selects[i]);
+      return !alone || alone.delta > weightsOf(view).activateMin;
+    }) : options;
+    if (useful.length) return best(useful, () => "the opponent acted and a card fits this moment");
+    return { response: pass, reason: "played alone in a copy, no card gains", options: options.map((o) => ({ label: `${o.label} (no gain)`, score: o.score })) };
+  }
   return {
     response: pass,
     reason: responding ? "no card made for this moment" : "nothing to respond to",
