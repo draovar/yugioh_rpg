@@ -1,7 +1,7 @@
 // Brain vs brain matches for the arena and the tuner: seeded duels over every deck pairing and seat order, run in
 // parallel worker threads (one engine each). This file is also the workers' entry point.
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
-import { OcgLocation, OcgMessageType, OcgResponseType, SelectBattleCMDAction, SelectIdleCMDAction, type OcgCardLoc, type OcgMessage, type OcgResponse } from "ocgcore-wasm";
+import { OcgLocation, OcgMessageType, OcgPhase, OcgResponseType, SelectBattleCMDAction, SelectIdleCMDAction, type OcgCardLoc, type OcgMessage, type OcgResponse } from "ocgcore-wasm";
 import { AiSeat } from "../../src/duel/ai/AiSeat.ts";
 import type { Weights } from "../../src/duel/ai/board.ts";
 import { BRAINS, type BrainName } from "../../src/duel/ai/brains.ts";
@@ -25,6 +25,19 @@ export interface MatchSettings {
   lp?: number;
   /** Print every decision (single thread only). */
   trace?: boolean;
+  /** Keep each turn's starting position (`Result.positions`), for fitting the evaluation (tools/fit-eval.ts). */
+  record?: boolean;
+}
+
+/**
+ * A position for fitting the evaluation: the board as the turn player saw it at their first main-phase decision of a
+ * turn (hidden cards masked as for them), and whether that player went on to win the duel.
+ */
+export interface Position {
+  seat: 0 | 1;
+  turn: number;
+  board: FieldSnapshot;
+  won: boolean | null;
 }
 
 export interface Result extends Job {
@@ -37,6 +50,8 @@ export interface Result extends Job {
   slowest: [number, number];
   /** [A, B] */
   stats: [PassivityStats, PassivityStats];
+  /** With `record`: each turn's starting position (won = null until the duel is decided). */
+  positions?: Position[];
 }
 
 /** How passive a side played (docs/ai-rework-plan.md phase 1); counted only from what that seat could see. */
@@ -68,6 +83,8 @@ type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
  */
 class PassivityTracker {
   readonly stats: [PassivityStats, PassivityStats] = [noStats(), noStats()];
+  /** Each turn's starting position, when recording. */
+  readonly positions: Position[] = [];
   /** The turn player's board at the latest decision (either seat's). */
   private board: FieldSnapshot | null = null;
   /** The turn player's last main-phase prompt this turn, and whether they Normal Summoned / Set this turn. */
@@ -75,9 +92,11 @@ class PassivityTracker {
   private summoned = false;
 
   private readonly duel: DuelSession;
+  private readonly record: boolean;
 
-  constructor(duel: DuelSession) {
+  constructor(duel: DuelSession, record = false) {
     this.duel = duel;
+    this.record = record;
   }
 
   wrap(seat: AiSeat): AiSeat {
@@ -103,6 +122,8 @@ class PassivityTracker {
     if (seat.seat !== turnPlayer) return;
     const s = this.stats[seat.seat];
     if (prompt.type === OcgMessageType.SELECT_IDLECMD && response.type === OcgResponseType.SELECT_IDLECMD) {
+      if (this.record && !this.lastIdle && seat.memory.phase === OcgPhase.MAIN1)
+        this.positions.push({ seat: seat.seat, turn: seat.memory.turn, board: this.duel.snapshot(seat.seat), won: null });
       this.lastIdle = prompt;
       if (response.action === SelectIdleCMDAction.SELECT_SUMMON || response.action === SelectIdleCMDAction.SELECT_MONSTER_SET) this.summoned = true;
     } else if (prompt.type === OcgMessageType.SELECT_BATTLECMD && response.type === OcgResponseType.SELECT_BATTLECMD && response.action === SelectBattleCMDAction.SELECT_BATTLE) {
@@ -162,7 +183,7 @@ export function playJob(job: Job, s: MatchSettings): Result {
   const decks = aFirst ? [DECKS[aDeck].deck, DECKS[bDeck].deck] : [DECKS[bDeck].deck, DECKS[aDeck].deck];
   const duel = newDuel({ decks: [decks[0], decks[1]], seed: seedFrom(s.baseSeed + k), startingLP: s.lp, onCoreLog: () => {} });
   const onTrace = s.trace ? (e: Parameters<typeof formatTrace>[0]) => console.log(formatTrace(e)) : undefined;
-  const tracker = new PassivityTracker(duel);
+  const tracker = new PassivityTracker(duel, s.record);
   const seatOf = (seat: 0 | 1) => {
     const isA = seat === aSeat;
     const brain = BRAINS[isA ? s.A : s.B]({ engine: { core, cards, readScript }, weights: isA ? s.weightsA : s.weightsB });
@@ -180,6 +201,7 @@ export function playJob(job: Job, s: MatchSettings): Result {
     result.slowest = ab(run.maxMs);
     tracker.ended();
     result.stats = ab(tracker.stats);
+    if (s.record) result.positions = tracker.positions.map((p) => ({ ...p, won: run.winner === null ? null : run.winner === p.seat }));
     if (s.trace) console.log(`--- winner: ${result.outcome === "draw" ? "draw" : result.outcome === "a" ? `A (${s.A})` : `B (${s.B})`}`);
   } catch (e) {
     result.error = String(e instanceof Error ? e.stack ?? e.message : e);

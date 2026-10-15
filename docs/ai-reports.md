@@ -18,9 +18,9 @@ loses), **bug** (engine, UI, plain code error).
 | 2026-10-15 | 1108951983 | chained The Reliable Guardian to Just Desserts in its own turn, on the opponent's Opticlops | pass | chain rule + bug (target) | `no-buff-against-just-desserts` | fixed fa1adf5 |
 | 2026-10-15 | 1108951983 | never set The Reliable Guardian behind a defending Giant Soldier of Stone | maybe set it | opponent model | none (board not known) | open |
 | 2026-10-15 | 2134230429 | held Black Luster Ritual + Soldier for turns with enough tributes | ritual summon | evaluation | `ritual-summon-black-luster-soldier` | passes via stuckMonster2 (cdd3252), phase 3 to confirm |
-| 2026-10-15 | 214142266 | kept Mystic Clown / Celtic Guardian in hand with both fields empty | summon and attack | opponent model | `attack-an-empty-field` | passes via openField (cdd3252), phase 2a/3 to confirm |
-| 2026-10-15 | 1633241308 | attacked with three monsters into a set card | play around it | opponent model | needs a battle check in ai-bench | open, phase 2b |
+| 2026-10-15 | 214142266 | kept Mystic Clown / Celtic Guardian in hand with both fields empty | summon and attack | opponent model | `attack-an-empty-field` | passes with the fitted weights (phase 2); `openField` still in, phase 3 |
+| 2026-10-15 | 1633241308 | attacked with three monsters into a set card | play around it (user: MST it first, but never let it stop attacks) | opponent model + evaluation | `clear-the-set-card-first`, `attack-through-a-set-card` | passes with the fitted LP / hand weights (phase 2) |
 | 2026-10-15 | 1633241308 | summoned Dark Blade, then Pot of Greed | Pot first | horizon (draws are guesses) | `pot-of-greed-first` | fixed ee46283 |
 | 2026-10-15 | 1286403690 | chained The Reliable Guardian (+DEF) on its attacking monster after Mystic Tomato resolved | pass | chain rule | none (didn't reproduce) | fixed b20a943 |
-| 2026-10-15 | 605846013 | kept Magic Jammer in hand behind Warrior Dai Grepher | set it | evaluation + opponent model | `set-magic-jammer` | passes via setTrap (f1a0a58), phase 2b/3 to confirm |
-| 2026-10-15 | 605846013 | kept Celtic Guardian in hand next to Warrior Dai Grepher | summon it | opponent model | `summon-under-1600-next-to-a-monster` | known, phase 2a |
+| 2026-10-15 | 605846013 | kept Magic Jammer in hand behind Warrior Dai Grepher | set it | evaluation + opponent model | `set-magic-jammer` | passes (whole-turn check) with the fitted weights; `setTrap` still in, phase 3 |
+| 2026-10-15 | 605846013 | kept Celtic Guardian in hand next to Warrior Dai Grepher | summon it | opponent model | `summon-under-1600-next-to-a-monster` | passes with the fitted LP / hand weights (phase 2) |

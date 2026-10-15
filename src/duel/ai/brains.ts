@@ -4,6 +4,7 @@ import type { Brain } from "./AiSeat.ts";
 import { createGenericBrain } from "./generic/index.ts";
 import { Simulator, type SimEngine } from "./sim/simulator.ts";
 import type { Weights } from "./board.ts";
+import { WORLD_PLAN_SETTINGS } from "./sim/planner.ts";
 
 /** What a brain may be built with: the rules engine for simulations (never the duel itself), and its weights. */
 export interface BrainContext {
@@ -35,6 +36,15 @@ export const BRAINS = {
     createGenericBrain({
       simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, replayChains: true, planTurns: true, weights: ctx.weights,
       name: "planner",
+    }),
+  /**
+   * planner + its best plans scored again across sampled guesses of the opponent's hidden cards, and the battle phase
+   * planned too (rework phase 2; not the default until it measures better).
+   */
+  worlds: (ctx: BrainContext) =>
+    createGenericBrain({
+      simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, replayChains: true, planTurns: true, weights: ctx.weights,
+      planSettings: WORLD_PLAN_SETTINGS, name: "worlds",
     }),
 } satisfies Record<string, (ctx: BrainContext) => Brain>;
 

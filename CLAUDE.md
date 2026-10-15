@@ -24,9 +24,10 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession` (bots in `AiSeat`s); fails on RETRY/crash |
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
-| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--wa W.json] [--wb W.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses] [--stats]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders), on all CPU cores (worker threads); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened inside each simulated copy, `--stats` prints passivity per side (skipped summons, empty field, unused Spells/Traps, attacks into set cards; `PassivityStats` in `match.ts`) |
+| `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--wa W.json] [--wb W.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses] [--stats] [--record F.jsonl]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders), on all CPU cores (worker threads); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened inside each simulated copy, `--stats` prints passivity per side (skipped summons, empty field, unused Spells/Traps, attacks into set cards; `PassivityStats` in `match.ts`), `--record` writes each turn's starting position (as the turn player sees it) and who won, for `fit-eval` |
 | `npm run tune -- [--brain sim] [--rounds 20] [--quick 10] [--long 30] [--seed S]` | tune the AI's `Weights` by self-play: random 1-3 weight changes vs the current best, kept at ≥ 53.5% over 720 duels; writes `vendor/tune/best.json` (resumed) + `log.jsonl`; winners are copied into `DEFAULT_WEIGHTS` by hand |
-| `npm run ai-bench [-- --brain NAME] [-- --show]` | fixed positions with a known right/wrong main-phase choice, plan or chain answer (`tools/ai-bench.ts`); every reported misplay becomes one, logged in `docs/ai-reports.md`; `known: "<phase>"` positions are misplays waiting for a planned fix (`docs/ai-rework-plan.md`) and don't fail the run |
+| `node tools/fit-eval.ts F.jsonl [...] [--boot 20] [--fix w1,w2] [--set w=v] [--out W.json]` | fits `evaluate()`'s weights to who won ("Texel tuning": logistic regression on positions from `arena --record`, monster values are the unit; held-out duels and bootstrap error bars); the fitted scale is the planner's `worldScale` |
+| `npm run ai-bench [-- --brain NAME] [-- --show] [-- --only NAME-PART]` | fixed positions with a known right/wrong main-phase choice, plan, chain answer or whole turn (`turn: true`: every main-phase and battle choice in order) (`tools/ai-bench.ts`); every reported misplay becomes one, logged in `docs/ai-reports.md`; `known: "<phase>"` positions are misplays waiting for a planned fix (`docs/ai-rework-plan.md`) and don't fail the run |
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
@@ -47,7 +48,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`, `ritual` (`&deck=kaibaEvolution`); cards placed in hand/on the field first),
-`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `planner` (default, `DEFAULT_BRAIN`), `replay`, `sim`, `generic`, `autobot`),
+`&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `planner` (default, `DEFAULT_BRAIN`), `worlds`, `replay`, `sim`, `generic`, `autobot`),
 `&noworker` makes the AI think on the main thread instead of its Web Worker, `&reveal` shows the AI's hand and set cards
 (also the world menu's AI CARDS toggle), `&aitrace` prints every AI decision
 to the console (also in the deployed game, for misplay reports), after a first line with the duel seed, who went first,
@@ -88,8 +89,12 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     attacking), `battle` (best killable target, weakest attacker that kills it, target remembered for the 549 prompt),
     `chain` (responds only to the opponent and only when `spe_count` > 0, never to its own link), `select` (the
     HINT_SELECTMSG purpose: bad for the owner → their best / our worst, good → best), `misc` (position, declarations).
-    `sim/` = M2: `world.ts` lays the AiView out as a fresh duel (AI = team 0; the opponent's hidden cards and Decks
-    become blank stand-ins, codes 1-3 with empty scripts; the AI's Deck = its decklist minus the cards it can see),
+    `sim/` = M2: `world.ts` lays the AiView out as a fresh duel (AI = team 0; the AI's Deck = its decklist minus the
+    cards it can see; the opponent's Deck = blank stand-ins, codes 1-4 with empty scripts). Their hidden hand and
+    face-down cards: either the single guess (blanks, one of them a 1600 ATK monster in hand) or a sampled `World`
+    (`sampleWorlds(view, count, seed)`: real cards drawn at the odds the prebuilt decks play them (`cardOdds`; cards
+    they've shown count as played by their deck, visible copies are used up; face-down Spells/Traps from Spells/Traps,
+    face-down monsters from Level 1-4 monsters), from the AiView only, never their real cards),
     `simulator.ts` plays one main-phase action there (`idleAction`: activations, summons, special/flip summons; follow-up
     prompts by the generic brain, the opponent passes) and returns `evaluate(after) − evaluate(before)`; the `sim` brain
     scores activations by it, and adds to its summon scores the "surprise": what the copy shows beyond the rule of thumb
@@ -100,19 +105,28 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     not Maximum, Polymerization's helpers need it), and the `Simulator` keeps a pool of up to 24 prepared copies
     (`prepareOne`), filled while the human thinks (`Brain.idle` ← `AiSeat.idle` ← `DuelController`, one copy per 40 ms
     step) and freed at the duel's end (`dispose`). Copy from the pool ≈ 2.6 ms vs 19 ms built from scratch.
-    `sim/sequence.ts` = the turn planner's building block: `Simulator.sequence(view, steps, { opponentTurn })` plays
+    `sim/sequence.ts` = the turn planner's building block: `Simulator.sequence(view, steps, { opponentTurn, world })` plays
     a list of the AI's own moves (`PlanStep`: main-phase action, attack with a target zone, leaving the battle phase)
     in one copy, follow-ups answered by the generic brain, and returns how many steps worked, the board value (after
-    the opponent's next turn if asked) and the next possible steps. `sim/options.ts`: finding an option again in a
+    the opponent's next turn if asked) and the next possible steps. In a `world` the opponent's cards also answer our
+    moves (the generic chain rule: Trap Hole on a summon, Sakuretsu Armor on an attack) and steps the copy no longer
+    offers are skipped. `sim/options.ts`: finding an option again in a
     copy's prompt (`idleList`, `findSame`).
     `sim/planner.ts` = the turn planner (brain `planner`): `planTurn` beam-searches move sequences (root moves from the
     real prompt, deeper ones from each copy's `next`), scoring each plan by playing it, then a battle phase with the
     generic battle logic (`battleAfter`), then the opponent's turn; plans reaching the same board merge; all copies of one search share one order
     for the AI's unknown Deck (else a luckier Pot of Greed draw, not the better move, wins a comparison); budgets
     `DEFAULT_PLAN_SETTINGS` (beam 3, depth 6, 8 children, 60 copies, 2 s). It enforces what copies don't know (Normal
-    Summon used, monsters that attacked, no battle on turn 1 / after Main 2). `generic/plan.ts` follows the plan step by
-    step while the real board matches the plan's `checkpoints` (`boardDigest`), replans otherwise, battles with the
-    usual logic after a finished plan and plans Main Phase 2 afresh.
+    Summon used, monsters that attacked, no battle on turn 1 / after Main 2). The search runs on the single guess.
+    Brain `worlds` (`WORLD_PLAN_SETTINGS`, rework phase 2; the default `planner` keeps the single guess, worlds 1, until
+    worlds measure better) then plays the best plan per first move (6 plans) again in sampled worlds, the same worlds
+    for every plan, in rounds: all in 4 worlds, the better half in 4 more, the best two in 8 more and, only if within
+    `closeCall` (0.5), in 16 more (32 at most). Values are averaged as win chances (`averageValue`: logistic with
+    `Weights.worldScale`), so one lost world doesn't drown the rest. The world seed is fixed per turn
+    (`BrainState.worldSeed`). `generic/plan.ts` follows the plan step by step while the real board matches the plan's
+    `checkpoints` (`boardDigest`), replans otherwise, and plans Main Phase 2 afresh; with worlds it also plans the
+    battle phase (which attacks, in which order) and ends it when that plan is done (the single guess battles with the
+    usual logic after a finished plan).
     `worker/` = the AI in a Web Worker (the game's default): `AiWorkerClient` (main thread, an `AiPlayer` like `AiSeat`)
     redacts messages and masks the board before posting them, so hidden info never leaves the main thread; `aiWorker.ts`
     runs an AiSeat with its own engine and fills its copy pool between decisions; a shadow AiSeat on the main thread
@@ -316,8 +330,10 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ M3: `replay` brain (chain responses by replaying the opponent's action), then the turn planner (`planner`, the
    default opponent): 64% vs generic, but measurably passive (skips summons, holds Spells/Traps).
    **Now: `docs/ai-rework-plan.md`** (2026-10-15). ✅ phase 0 (tag `ai-baseline-2026-10-15`), ✅ phase 1
-   (`arena --stats`), ✅ phase 4 (report log `docs/ai-reports.md`, `known` bench positions). Next: phase 2 (sampled
-   opponent worlds), then phase 3 (retune). User reports go into the log; only clear bugs are fixed right away.
+   (`arena --stats`), ✅ phase 4 (report log `docs/ai-reports.md`, `known` bench positions), ✅ phase 2: sampled
+   opponent worlds built (brain `worlds`, not better yet); the passivity was the evaluation: LP and hand-card weights
+   fitted to who won (`tools/fit-eval.ts`), ~30% fewer skipped summons / unused Spells/Traps, even win rate, all bench
+   positions pass. Next: phase 3 (more fitting, then retune). User reports go into the log; only clear bugs are fixed right away.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.

@@ -2,7 +2,7 @@
 import type { OcgCardLoc, OcgResponse } from "ocgcore-wasm";
 import type { Decision } from "../AiSeat.ts";
 import type { Simulator } from "../sim/simulator.ts";
-import type { Plan } from "../sim/planner.ts";
+import { DEFAULT_PLAN_SETTINGS, type Plan, type PlanSettings } from "../sim/planner.ts";
 
 export interface Option {
   label: string;
@@ -29,8 +29,13 @@ export class BrainState {
   readonly replayChains: boolean;
   /** Plans whole turns (sim/planner.ts) for main-phase and battle decisions; needs the simulator. */
   readonly planTurns: boolean;
+  /** The turn planner's budgets and number of sampled worlds. */
+  readonly planSettings: Readonly<PlanSettings>;
   /** The plan being followed and the index of its next step. */
   plan: { plan: Plan; at: number } | null = null;
+  /** Seed of this turn's sampled worlds (drawn at the turn's first plan), and that turn. */
+  worldSeed = 0;
+  worldSeedTurn = -1;
   /** Our Normal Summon (or monster set) is used this turn (the copies don't know). */
   normalSummonUsed = false;
   turn = -1;
@@ -43,8 +48,9 @@ export class BrainState {
   /** The monster the battle plan wants the current attack to hit. */
   attackTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
 
-  constructor(simulator: Simulator | null = null, replayChains = false, planTurns = false) {
+  constructor(simulator: Simulator | null = null, replayChains = false, planTurns = false, planSettings = DEFAULT_PLAN_SETTINGS) {
     this.simulator = simulator;
+    this.planSettings = planSettings;
     this.replayChains = replayChains;
     this.planTurns = planTurns;
   }

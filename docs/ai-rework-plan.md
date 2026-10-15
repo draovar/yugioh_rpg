@@ -89,6 +89,75 @@ per plan (well inside the 2 s budget).
 Done when: the new bench positions below pass, all old ones still pass, passivity numbers clearly drop versus the
 baseline, and the arena against the baseline is **≥ 50%** (not weaker; better is the goal).
 
+**Outcome 2026-10-15: sampled worlds built but not the default (brain `worlds`); the passivity was fixed in the
+evaluation instead** (fitted weights below: every bench position passes, ~30% fewer skipped summons and unused
+Spells/Traps, even win rate). Changed from the plan above, with the user:
+- Worlds are **real cards** drawn at the odds the prebuilt decks play them (`sampleWorlds` in `world.ts`; cards
+  they've shown count as played by their deck, visible copies are used up), not hand-made stand-ins: no probabilities
+  picked by hand, and real Trap Hole / Sakuretsu Armor / Smashing Ground scripts. The opponent's cards answer the
+  AI's moves in a world (generic chain rule).
+- Rescoring in rounds (4 → 8 → 16 worlds, 32 for close calls): 4 worlds were too noisy (set-the-wall flipped between
+  seeds; with 32 worlds set beats summon in every seed). Values averaged as win chances (`worldScale`).
+- With worlds the planner also plans the battle phase.
+- The user's expectations (memory `feedback-ai-expected-behavior`): summon and attack an empty board with an attacker,
+  set a wall unless its attack is lethal, clear set cards first but never let them stop attacks. Bench positions:
+  `summon-and-attack-an-empty-board`, `set-the-wall`, `wall-attacks-for-lethal`, `clear-the-set-card-first`,
+  `attack-through-a-set-card` (whole-turn checks, `turn: true`).
+
+Results (`--decks yugiEvolution,kaibaEvolution,yugi,kaiba --stats`, A = the planner with worlds, B = the single guess; the brains were
+later renamed: `worlds` and `planner`):
+
+| Run | A win rate | Skipped summons A / B | Open field A / B | Unused S/T A / B | Attacks into sets A / B |
+|---|---|---|---|---|---|
+| default weights, 320 duels | **43.8% ± 5.4** | 14.5 / 11.9 | 24.8 / 21.6 | 173 / 179 | 36.5 (55%) / 45.8 (58%) |
+| plain average (`worldScale` 1000), 128 | 44.5% ± 8.6 | 16.5 / 10.1 | 25.5 / 27.1 | 186 / 188 | 34.0 / 44.9 |
+| `handMonsterFactor` 0.4 both sides, 128 | 51.6% ± 8.7 | 8.7 / 7.2 | 26.9 / 29.0 | 186 / 199 | 37.3 / 41.2 |
+
+Bench: `summon-under-1600-next-to-a-monster` and `summon-and-attack-an-empty-board` now pass (the single guess fails both),
+`set-the-wall` passes; failing: `attack-an-empty-field` 2/4 (summon vs set within 0.1-0.3), `set-magic-jammer`,
+`clear-the-set-card-first` 4/4. Think time ≈ 180 ms per decision (single guess 51), slowest ≈ 3.9 s.
+
+**Why it's weaker: the evaluation, not the guess.** A card in hand is a safe store of value within one turn of
+look-ahead: a monster in hand counts 0.3 + 0.7 × its field value (Beaver Warrior 1.28 in hand, 1.40 on the field), so
+summoning gains ~0.1 and any world where it then dies (Trap Hole, removal, a bigger attacker) makes holding look
+better. The single guess had no removal and no traps, so it hid this; realistic worlds expose it (trace: three turns
+holding Summoned Skull and Beaver Warrior at +4.7 ahead, "do nothing" 4.72 vs "summon" 4.07). Holding only postpones
+the risk (the card must reach the field to do anything), which a one-turn horizon can't see. Risk aversion from the
+win-chance average is not the cause (plain averaging measured the same); lowering the hand value cuts skipped summons
+for both brains and brings worlds to par. Unused Spells/Traps (~180 per 100 turns) didn't move in any run: same cause
+for Spells/Traps in hand (`handSpell` 1.3 ≥ a set card or a 1-for-1 trade).
+
+**The fix: weights fitted to who won** (`tools/fit-eval.ts`, "Texel tuning"). `arena --record` keeps each turn's
+starting position as the turn player saw it and whether they won; a logistic regression finds the weights (monster
+values = the unit) that predict the winner best, checked on held-out duels, error bars by bootstrap over duels.
+Data: 72k positions from 5000 generic-vs-generic duels, 5.6k from 320 planner-vs-planner duels.
+- **LP**: a flatter curve predicts better, levelling off around `lpHalf` 10000 (held-out loss 0.574 at 1500 → 0.564
+  at 10000); `lpScale` there 11.9 ± 0.7 (generic) and 12.5 ± 4.2 (planner). Damage at 8000 LP is now worth ~0.43
+  cards per 1000 (was 0.10): the user's "deal damage" rule. (Fitting `lpHalf` freely ran into the bound: an
+  optimiser overshoot, the fixed grid predicts better.)
+- **Hand cards**: both data sets put them well below the old values: a 1400 ATK monster in hand ≈ 1.0-1.07 (field
+  1.57; old 1.28), `handSpell` ≈ 1.0 (old 1.3), `handUnknown` ≈ 1.0 (old 1.2). Traps disagree (generic 0.88 in
+  hand, planner 1.56 ± 0.32) and stay as they were, like everything the fits couldn't pin down (`defFactor`) or that
+  looked confounded (`equip` came out negative).
+- Adopted: `lpScale` 12, `lpHalf` 10000, `handMonsterBase` 0.5, `handMonsterFactor` 0.4, `handSpell` 1,
+  `handUnknown` 1. The fitted scale (cards → win chance) is 2.4-4, so `worldScale` 3 stays.
+
+Results with the fitted weights (4 decks as above):
+
+| Run | A win rate | Skipped summons A / B | Open field A / B | Unused S/T A / B | Attacks into sets A / B | S/T in hand at end A / B |
+|---|---|---|---|---|---|---|
+| `planner` fitted vs `planner` old, 736 duels (seeds 1 and 1001) | **49.7% ± 3.6** | **8.3 / 12.7** | 24.8 / 23.3 | **132 / 185** | 37.9 (52%) / 44.6 (59%) | 1.34 / 1.82 |
+| `worlds` vs `planner`, both fitted, 320 duels | 46.6% ± 5.5 | 9.0 / 7.9 | 25.1 / 22.9 | 105 / 126 | 38.6 (53%) / 49.5 (66%) | 1.06 / 1.29 |
+
+Against the phase 1 baseline (11.1 skipped summons, 183 unused S/T per 100 turns) the default planner now skips
+about a quarter fewer summons and leaves about 28% fewer Spells/Traps unused, at the same strength. `ai-bench`: all
+19 positions (56 runs) pass with the default planner, including every one that failed before (`summon-under-1600-…`,
+`summon-and-attack-an-empty-board`, `clear-the-set-card-first`, `attack-an-empty-field`, `set-magic-jammer`).
+
+Sampled worlds on top still don't pay: fewer unused Spells/Traps and fewer attacks into set cards, but 46.6% and
+3.5× the think time. Kept as brain `worlds` for later (with a longer horizon, or once the opponent model in the
+copies plays its cards better).
+
 ### Phase 3: retune all weights together (mostly machine time)
 
 Run `npm run tune -- --brain planner` (overnight) on the full `Weights`, including today's additions. Keep a winner
@@ -109,12 +178,12 @@ to "no effect" (e.g. `openField` after phase 2) go back to neutral.
 
 ## Bench positions from the 2026-10-15 reports
 
-- `summon-under-1600-next-to-a-monster` (added, `known: "phase 2a"`): Warrior Dai Grepher on the field, Celtic
-  Guardian in hand, opponent with a set monster and 4 cards → summon Celtic Guardian.
-- `set-magic-jammer` (passes today only because of `setTrap`; phase 3 decides whether that weight stays).
-- `respect-a-set-card` (to add in phase 2b): three monsters vs one set card and an empty field, lethal not
-  available → don't attack with everything. Needs ai-bench to check battle decisions (today it checks the first
-  main-phase choice, its plan line, or chain answers).
+- `summon-under-1600-next-to-a-monster`: Warrior Dai Grepher on the field, Celtic Guardian in hand, opponent with a
+  set monster and 4 cards → summon Celtic Guardian. Passes with worlds (`known` dropped).
+- `set-magic-jammer` (now a whole-turn check: setting it in Main Phase 2 counts): fails with worlds; with
+  the single guess it passes, only through `setTrap`; phase 3.
+- `respect-a-set-card` was dropped: the user doesn't want set cards to stop attacks. Instead
+  `clear-the-set-card-first` (MST before the attacks) and its control `attack-through-a-set-card`.
 
 ## Order and size
 
@@ -123,8 +192,8 @@ to "no effect" (e.g. `openField` after phase 2) go back to neutral.
 | 0 baseline tag | minutes | ✅ `ai-baseline-2026-10-15` (e6d005a) |
 | 4 report log + `known` flag | small | ✅ 45582db |
 | 1 statistics | a few hours | ✅ c756d38 |
-| 2 sampled worlds | large | **next**, its own session |
-| 3 tuning | overnight run | after phase 2 |
+| 2 sampled worlds | large | built as brain `worlds` (not better yet); passivity fixed by fitted LP / hand weights |
+| 3 tuning | overnight run | next: `fit-eval` on more planner duels (Traps, set cards), then self-play tuning |
 
 ## Starting phase 2 (notes for the next session)
 

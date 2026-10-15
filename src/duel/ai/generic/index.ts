@@ -12,6 +12,7 @@ import { decideByPlan } from "./plan.ts";
 import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
 import { SELECT_HINT, chooseCards, pickUtility, purposeIn } from "./select.ts";
 import type { Simulator } from "../sim/simulator.ts";
+import type { PlanSettings } from "../sim/planner.ts";
 import { valueAt, type Weights } from "../board.ts";
 
 export interface GenericBrainOptions {
@@ -19,13 +20,15 @@ export interface GenericBrainOptions {
   replayChains?: boolean;
   /** Plan whole turns for main-phase and battle decisions (needs the simulator). */
   planTurns?: boolean;
+  /** The turn planner's budgets and sampled worlds; default DEFAULT_PLAN_SETTINGS. */
+  planSettings?: Readonly<PlanSettings>;
   /** How it values things (board.ts); default DEFAULT_WEIGHTS. */
   weights?: Readonly<Weights>;
   name?: string;
 }
 
 export function createGenericBrain(opts: GenericBrainOptions = {}): Brain {
-  const state = new BrainState(opts.simulator ?? null, opts.replayChains ?? false, opts.planTurns ?? false);
+  const state = new BrainState(opts.simulator ?? null, opts.replayChains ?? false, opts.planTurns ?? false, opts.planSettings);
   const weights = opts.weights;
   return {
     name: opts.name ?? "generic",
