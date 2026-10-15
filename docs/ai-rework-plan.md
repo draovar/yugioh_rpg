@@ -118,10 +118,25 @@ to "no effect" (e.g. `openField` after phase 2) go back to neutral.
 
 ## Order and size
 
-| Phase | Size | Session |
+| Phase | Size | Status |
 |---|---|---|
-| 0 baseline tag | minutes | this one |
-| 4 report log + `known` flag | small | this one or next |
-| 1 statistics | a few hours | next |
-| 2 sampled worlds | large | its own session |
+| 0 baseline tag | minutes | ✅ `ai-baseline-2026-10-15` (e6d005a) |
+| 4 report log + `known` flag | small | ✅ 45582db |
+| 1 statistics | a few hours | ✅ c756d38 |
+| 2 sampled worlds | large | **next**, its own session |
 | 3 tuning | overnight run | after phase 2 |
+
+## Starting phase 2 (notes for the next session)
+
+- Where the guess lives: `src/duel/ai/sim/world.ts` (`opponentSide`: the hidden hand becomes one `BLANK.ATTACKER`
+  1600/1200 + `BLANK.CARD`s, hidden set cards `BLANK.TRAP` / `BLANK.MONSTER`; `withBlanks` defines them,
+  `copyScripts` gives them empty scripts). Stand-ins that act need small Lua scripts there.
+- Where plans are scored: `sim/planner.ts` (`planTurn`: beam search, every node played with
+  `Simulator.sequence(..., { opponentTurn: true })` in `sim/sequence.ts`). Rescoring the best ~6 plans in K worlds
+  fits at the end of `planTurn`; `deckSeed` already keeps our own draws identical across copies.
+- Make it switchable (e.g. a `worlds` count in `PlanSettings`, 1 = today's single guess) so the arena can play the
+  new planner against the old one in the same code.
+- Judge it with `npm run arena -- --a planner --b planner ... --stats` against the phase 1 baselines above, with
+  **720+ duels** for the win rate (320 duels have ±5.5%: planner vs itself came out 46.6%); the passivity gaps are
+  large enough for 320. The known-failing bench position `summon-under-1600-next-to-a-monster` should start passing.
+- Never read the opponent's real hidden cards: the worlds are built from the `AiView` only (`redact()` is the gate).

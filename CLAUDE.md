@@ -313,8 +313,11 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ M1 generic brain: ~82% vs autobot over 1008 duels.
    ✅ M2 `sim` brain: main-phase activations judged by playing them on a rebuilt copy of the board
    (`docs/ai-plan.md` §6a); 54% vs generic, 84% vs autobot.
-   M3 in progress: `replay` brain (chain responses by replaying the opponent's action), 53% ± 3 vs sim; the default
-   opponent since 2026-10-14 (the user's first test duel showed the simple chain rule Shrinking its own monster).
+   ✅ M3: `replay` brain (chain responses by replaying the opponent's action), then the turn planner (`planner`, the
+   default opponent): 64% vs generic, but measurably passive (skips summons, holds Spells/Traps).
+   **Now: `docs/ai-rework-plan.md`** (2026-10-15). ✅ phase 0 (tag `ai-baseline-2026-10-15`), ✅ phase 1
+   (`arena --stats`), ✅ phase 4 (report log `docs/ai-reports.md`, `known` bench positions). Next: phase 2 (sampled
+   opponent worlds), then phase 3 (retune). User reports go into the log; only clear bugs are fixed right away.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.
