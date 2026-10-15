@@ -21,7 +21,8 @@ const GOOD = new Set<number>([
 /** Hints where it doesn't matter much which (pay the least). */
 const NEUTRAL = new Set<number>([SELECT_HINT.REVEAL, SELECT_HINT.FUSION_MATERIAL]);
 
-export type Purpose = "good" | "bad" | "neutral";
+/** good: the card comes out ahead (whoever owns it); boost: our card is made stronger (never theirs). */
+export type Purpose = "good" | "bad" | "neutral" | "boost";
 
 export function purposeOf(hint: bigint | null): Purpose {
   const h = hint === null ? -1 : Number(hint);
@@ -32,6 +33,7 @@ export function purposeOf(hint: bigint | null): Purpose {
 export function pickUtility(view: AiView, c: OcgCardLoc, purpose: Purpose): number {
   const v = valueAt(view, c);
   if (purpose === "good") return v;
+  if (purpose === "boost") return c.controller === view.seat ? v : -v;
   if (purpose === "neutral") return -v;
   return c.controller === view.seat ? -v : v;
 }
@@ -45,4 +47,23 @@ export function chooseCards(view: AiView, candidates: OcgCardLoc[], min: number,
   const wanted = ranked.filter((r) => r.u > 0).length;
   const count = Math.max(min, Math.min(max, wanted));
   return ranked.slice(0, count).map((r) => r.i);
+}
+
+const KNOWN_HINTS = new Set<number>(Object.values(SELECT_HINT));
+/** Card text that raises a monster's ATK/DEF (Rush Recklessly, The Reliable Guardian), and that lowers it. */
+const BOOST = /\b(increase|gains?)\b[^.]*\b(ATK|DEF)\b/i;
+const DROP = /\b(decrease|loses?|reduce)\b/i;
+
+/**
+ * The purpose of the pick at hand. A vague hint ("select a face-up card", "select the target") while our own card is
+ * the newest chain link (its target being chosen) is a boost if that card's text only raises ATK/DEF:
+ * Rush Recklessly goes on our monster, not theirs.
+ */
+export function purposeIn(view: AiView): Purpose {
+  const purpose = purposeOf(view.hint);
+  const h = view.hint === null ? -1 : Number(view.hint);
+  if (purpose !== "bad" || (KNOWN_HINTS.has(h) && h !== SELECT_HINT.TARGET)) return purpose;
+  const top = view.memory.chain[view.memory.chain.length - 1];
+  const desc = top && top.controller === view.seat ? view.cards.records.get(top.code)?.desc ?? "" : "";
+  return BOOST.test(desc) && !DROP.test(desc) ? "boost" : purpose;
 }

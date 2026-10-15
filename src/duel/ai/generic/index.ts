@@ -10,7 +10,7 @@ import { BrainState } from "./common.ts";
 import { decideIdle } from "./idle.ts";
 import { decideByPlan } from "./plan.ts";
 import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
-import { SELECT_HINT, chooseCards, pickUtility, purposeOf } from "./select.ts";
+import { SELECT_HINT, chooseCards, pickUtility, purposeIn } from "./select.ts";
 import type { Simulator } from "../sim/simulator.ts";
 import type { Weights } from "../board.ts";
 
@@ -49,7 +49,7 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
     case OcgMessageType.SELECT_CARD: {
       if (view.hint !== null && Number(view.hint) === SELECT_HINT.ATTACK_TARGET)
         return { response: { type: OcgResponseType.SELECT_CARD, indicies: [pickAttackTarget(m.selects, view, state)] }, reason: "planned attack target" };
-      const purpose = purposeOf(view.hint);
+      const purpose = purposeIn(view);
       // Something bad that could only hit our own cards (e.g. Breaker with no opposing Spell/Trap): back out.
       if (purpose === "bad" && m.can_cancel && !m.selects.some((c) => pickUtility(view, c, purpose) > 0)) {
         if (state.lastActivation) state.activations.set(state.lastActivation, 10);
@@ -64,7 +64,7 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
     }
     case OcgMessageType.SELECT_UNSELECT_CARD: {
       // One card per prompt: take the next card of the set we'd pick in one go, finish once it's complete.
-      const purpose = purposeOf(view.hint);
+      const purpose = purposeIn(view);
       const all = [...m.select_cards, ...m.unselect_cards];
       const picked = m.unselect_cards.length;
       const wanted = new Set(chooseCards(view, all, Math.max(m.min, picked), m.max, purpose));

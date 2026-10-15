@@ -6,7 +6,7 @@
 // opponent with the generic brain, the AI with its usual chain rule after the action. Then the board is scored.
 // One copy per answer; the best one wins if it beats passing.
 //
-// Only the opponent's turn is replayed for now. Everything the copy doesn't know stays a stand-in (world.ts), so the
+// Mostly the opponent's turn: in ours, only a chain link of theirs (scored as soon as it has resolved). Everything the copy doesn't know stays a stand-in (world.ts), so the
 // replay never uses hidden information: the opponent's face-down cards and hand never respond.
 import {
   OcgLocation,
@@ -20,7 +20,7 @@ import {
   type OcgMessage,
   type OcgResponse,
 } from "ocgcore-wasm";
-import { pickTributes } from "../../autoBot.ts";
+import { autoRespond, pickTributes } from "../../autoBot.ts";
 import type { Deck, StartCard } from "../../DuelSession.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
 import { evaluate, tributesFor } from "../board.ts";
@@ -35,7 +35,8 @@ import { BLANK, layoutFrom, type SimLayout } from "./world.ts";
 export type Situation =
   | { kind: "attack"; attacker: number; target: number | null }
   | { kind: "summon"; how: "summon" | "flip summon" | "special summon"; code: number; zone: number }
-  | { kind: "activate"; code: number; location: number; sequence: number }
+  /** ourTurn: their chain link in our turn (e.g. Just Desserts answering our Axe): scored once their chain is over. */
+  | { kind: "activate"; code: number; location: number; sequence: number; ourTurn?: boolean }
   | { kind: "phase"; phase: number };
 
 export interface ResponseOutcome {
@@ -51,12 +52,17 @@ type Prompt = OcgMessage & { player: number };
 const BATTLE = 0xf8;
 const MAX_STEPS = 800;
 
-/** The opponent's action this chain prompt answers, as far as the copy can replay it (their turn only). */
+/** The opponent's action this chain prompt answers, as far as the copy can replay it (their turn; in ours, their chain link). */
 export function situationOf(view: AiView): Situation | null {
   const { memory } = view;
   const opp = 1 - view.seat;
-  if (memory.turnPlayer !== opp) return null;
   const top = memory.chain[memory.chain.length - 1];
+  if (memory.turnPlayer !== opp) {
+    // In our turn only a chain link of theirs on top of our own: what's below it isn't in the copy, so this works
+    // for links that don't depend on it (free-chain cards); others aren't offered in the copy and fall back.
+    if (!top || top.controller !== opp) return null;
+    return { kind: "activate", code: top.code, location: top.place.location, sequence: top.place.sequence, ourTurn: true };
+  }
   if (top) {
     if (top.controller !== opp) return null;
     return { kind: "activate", code: top.code, location: top.place.location, sequence: top.place.sequence };
@@ -73,16 +79,78 @@ export function situationOf(view: AiView): Situation | null {
 
 /** The outcome of passing and of each candidate the copy could play; null if the copy can't replay the situation. */
 export function replayResponses(sim: Simulator, view: AiView, prompt: ChainMessage, situation: Situation): ResponseOutcome[] | null {
-  const layout = opponentFirst(view, situation);
+  const ourTurn = situation.kind === "activate" && situation.ourTurn;
+  const layout = ourTurn ? theirLinkInOurTurn(view, situation) : opponentFirst(view, situation);
   if (!layout) return null;
-  const pass = replayOne(sim, view, layout, situation, null);
+  const one = (c: OcgCardLocPosActive | null) => ourTurn ? replayLink(sim, layout, situation, c) : replayOne(sim, view, layout, situation, c);
+  const pass = one(null);
   if (pass === null) return null;
   const outcomes: ResponseOutcome[] = [{ index: null, value: pass }];
   prompt.selects.forEach((c, i) => {
-    const value = replayOne(sim, view, layout, situation, c);
+    const value = one(c);
     if (value !== null) outcomes.push({ index: i, value });
   });
   return outcomes;
+}
+
+/** Their chain link in our turn: our board as usual (we move first), their card set again so they can activate it. */
+function theirLinkInOurTurn(view: AiView, situation: Situation & { kind: "activate" }): SimLayout | null {
+  if (situation.location !== OcgLocation.SZONE) return null;
+  const base = layoutFrom(view);
+  const start = [...(base.decks[1].start ?? [])];
+  const i = start.findIndex((s) => s.location === OcgLocation.SZONE && s.sequence === situation.sequence);
+  if (i < 0) return null;
+  start[i] = { ...start[i], code: situation.code, position: OcgPosition.FACEDOWN_DEFENSE };
+  return { decks: [base.decks[0], { ...base.decks[1], start }], lp: base.lp };
+}
+
+/**
+ * Replays their chain link in our turn: they activate it at the first chain window they get (our Standby Phase in the
+ * copy), we answer with `candidate` (or pass), and the board is scored once that chain has resolved: the rest of the
+ * turn is ours to play, not part of the comparison. Null if the copy never got there.
+ */
+function replayLink(sim: Simulator, layout: SimLayout, situation: Situation & { kind: "activate" }, candidate: OcgCardLocPosActive | null): number | null {
+  const duel = sim.build(layout);
+  try {
+    const debug = sim.debugSink;
+    const ai = new AiSeat({ seat: 0, brain: createGenericBrain({ weights: sim.weights }), duel, onTrace: debug ? (e) => debug(`      (replay) ${formatTrace(e)}`) : undefined });
+    let done = false, used = false;
+    for (let steps = 0; steps < MAX_STEPS; steps++) {
+      const s = duel.advance();
+      ai.observe(s.messages);
+      for (const m of s.messages) {
+        if (!done) done = m.type === OcgMessageType.CHAINING && m.controller === 1 && m.code === situation.code;
+        else if (m.type === OcgMessageType.CHAIN_END) {
+          if (candidate && !used) return null;
+          const value = evaluate({ seat: 0, board: duel.snapshot(0), memory: ai.memory, cards: sim.cardDb, hint: null, rng: () => 0.5, deckList: null, weights: sim.weights });
+          debug?.(`      (replay) their link in our turn: ${candidate ? sim.cardDb.name(candidate.code) : "pass"} -> ${value.toFixed(2)}`);
+          return value;
+        }
+      }
+      if (s.ended) return s.winner === 0 ? 1000 : s.winner === 1 ? -1000 : 0;
+      const p = s.prompt as Prompt;
+      if (p.player === 1) {
+        if (p.type === OcgMessageType.SELECT_CHAIN && !p.forced) {
+          const j = done ? -1 : p.selects.findIndex((c) => c.code === situation.code);
+          duel.respond({ type: OcgResponseType.SELECT_CHAIN, index: j >= 0 ? j : null });
+        } else duel.respond(autoRespond(p, () => 0, sim.cardDb));
+        continue;
+      }
+      if (p.type === OcgMessageType.SELECT_IDLECMD || p.type === OcgMessageType.SELECT_BATTLECMD) return null; // no window came
+      if (p.type === OcgMessageType.SELECT_CHAIN && !p.forced) {
+        const j = candidate && done && !used ? findSame(p.selects, candidate) : -1;
+        if (j >= 0) used = true;
+        duel.respond({ type: OcgResponseType.SELECT_CHAIN, index: j >= 0 ? j : null });
+        continue;
+      }
+      duel.respond(ai.decide(p));
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    duel.destroy();
+  }
 }
 
 /** The board with the opponent as team 0, set up so they can repeat the action. Null if it can't be. */

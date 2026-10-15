@@ -118,7 +118,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     runs an AiSeat with its own engine and fills its copy pool between decisions; a shadow AiSeat on the main thread
     sees the same messages and answers if the worker can't start or fails. `DuelController` takes any `AiPlayer` and
     awaits its decision (started at once, answered after `aiDelayMs` at the earliest).
-    `sim/replay.ts` = M3 (brain `replay`): a chain prompt in the opponent's turn is answered by replaying what they did
+    `sim/replay.ts` = M3 (brain `replay`): a chain prompt in the opponent's turn (or their chain link in the AI's turn, `replayLink`) is answered by replaying what they did
     (`situationOf`: their chain link, attack, summon, or the phase) in a copy where they move first, trying each
     candidate during that action, playing on to the end of their turn, and comparing; timing margins per situation in
     `generic/chain.ts`.

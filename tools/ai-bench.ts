@@ -19,7 +19,7 @@ const C = {
   kuriboh: 40640057, gaia: 6368038, blueEyes: 89631139, smashingGround: 97169186,
   wingedDragon1: 87796900, axeOfDespair: 40619825, giantRat: 97017120,
   feralImp: 41392891, backupSoldier: 36280194, lastWill: 85602018, blackLusterRitual: 55761792, mysticTomato: 83011277,
-  laJinn: 97590747,
+  laJinn: 97590747, summonedSkull: 70781052, opticlops: 14531242, justDesserts: 24068492, reliableGuardian: 16430187,
 } as const;
 
 interface Position {
@@ -43,6 +43,10 @@ interface Position {
   forbid?: RegExp;
   /** Check the whole turn plan behind that choice (the planner's "plan:" trace line) instead. */
   plan?: boolean;
+  /** The opponent activates this card at the first chain prompt in the AI's turn that offers it... */
+  opponentActivates?: number;
+  /** ...and the check is on the AI's next chain answer after that (with something to chain), not a main-phase choice. */
+  checkChain?: boolean;
 }
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
@@ -125,6 +129,16 @@ const POSITIONS: Position[] = [
     forbid: /summon Celtic Guardian|summon Feral Imp/,
   },
   {
+    name: "no-buff-against-just-desserts",
+    why: "user report 2026-10-15: chained The Reliable Guardian to Just Desserts in its own turn (it changes nothing) and gave the +700 DEF to the opponent's Opticlops",
+    ai: [hand(C.axeOfDespair), hand(C.reliableGuardian), monster(C.summonedSkull, 0)],
+    opponent: [monster(C.opticlops, 1), monster(C.mysticTomato, 2), setCard(C.justDesserts, 0)],
+    aiSecond: true,
+    opponentActivates: C.justDesserts,
+    checkChain: true,
+    expect: /^pass/,
+  },
+  {
     name: "monarch-with-target",
     why: "control for the above: with an opposing monster, Zaborg's effect pays off",
     ai: [hand(C.zaborg), monster(C.celticGuardian)],
@@ -160,13 +174,16 @@ for (const p of POSITIONS) for (let run = 1; run <= (p.seeds ?? 1); run++) {
     deck: aiDeck, onTrace: (e) => traces.push(e),
   });
   let choice: TraceEntry | null = null;
+  let activated = false;
   for (let steps = 0; steps < 50 && !choice; steps++) {
     const s = duel.advance();
     ai.observe(s.messages);
     if (s.ended) break;
     const prompt = s.prompt as typeof s.prompt & { player: number };
     if (prompt.player !== aiSeat) {
-      // The opponent never does anything: passes chains, ends its turn, answers anything else with the first legal option.
+      const j = prompt.type === OcgMessageType.SELECT_CHAIN && !activated && ai.memory.turnPlayer === aiSeat ? prompt.selects.findIndex((c) => c.code === p.opponentActivates) : -1;
+      if (j >= 0) { activated = true; duel.respond({ type: OcgResponseType.SELECT_CHAIN, index: j }); continue; }
+      // Otherwise the opponent never does anything: passes chains, ends its turn, answers anything else with the first legal option.
       duel.respond(prompt.type === OcgMessageType.SELECT_CHAIN && !prompt.forced ? { type: OcgResponseType.SELECT_CHAIN, index: null }
         : prompt.type === OcgMessageType.SELECT_IDLECMD ? { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null }
         : autoRespond(prompt, () => 0, cards));
@@ -174,7 +191,7 @@ for (const p of POSITIONS) for (let run = 1; run <= (p.seeds ?? 1); run++) {
     }
     duel.respond(ai.decide(prompt));
     const last = traces[traces.length - 1];
-    if (prompt.type === OcgMessageType.SELECT_IDLECMD) choice = last;
+    if (p.checkChain ? activated && prompt.type === OcgMessageType.SELECT_CHAIN && prompt.selects.length > 0 : prompt.type === OcgMessageType.SELECT_IDLECMD) choice = last;
   }
   duel.destroy();
   const planLine = choice && p.plan ? formatTrace(choice).split("\n").find((l) => l.includes("plan:"))?.trim() : undefined;
