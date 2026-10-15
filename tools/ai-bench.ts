@@ -18,6 +18,8 @@ const C = {
   flute: 43973174, heavyStorm: 19613556, dnaTransplant: 56769674, fissure: 66788016, magicCylinder: 62279055,
   kuriboh: 40640057, gaia: 6368038, blueEyes: 89631139, smashingGround: 97169186,
   wingedDragon1: 87796900, axeOfDespair: 40619825, giantRat: 97017120,
+  feralImp: 41392891, backupSoldier: 36280194, lastWill: 85602018, blackLusterRitual: 55761792, mysticTomato: 83011277,
+  laJinn: 97590747,
 } as const;
 
 interface Position {
@@ -109,6 +111,18 @@ const POSITIONS: Position[] = [
     seeds: 4,
     plan: true,
     forbid: /change position/,
+  },
+  {
+    name: "set-the-blocker-facing-blue-eyes",
+    why: "user report 2026-10-15: after Fissure, summoned Celtic Guardian in attack position facing Blue-Eyes (no attack, 1600 damage next turn); every plan scored as a loss, summon and set tied",
+    ai: [hand(C.fissure), hand(C.celticGuardian), hand(C.feralImp), hand(C.backupSoldier), hand(C.lastWill), hand(C.blackLusterRitual)],
+    opponent: [monster(C.mysticTomato, 0), monster(C.laJinn, 2), monster(C.blueEyes, 3), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [4200, 6800],
+    seeds: 4,
+    plan: true,
+    forbid: /summon Celtic Guardian|summon Feral Imp/,
   },
   {
     name: "monarch-with-target",
