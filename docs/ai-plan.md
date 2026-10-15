@@ -273,7 +273,7 @@ after Scapegoat) and replan at once when a planned move is refused. The planner 
 | M3 | **Chain responses by simulation** (rebuilt attacks / activations) + **short knowledge list** for timing and future value; check-cards lists cards the sim can't judge | beats M2 clearly; bench positions pass |
 | M4 | **Levels, styles, deck plans** (Rookie / Duelist / Expert), trainer profile format, think delay | each level beats the one below; the user plays every level |
 | M5 | **Multi-turn lookahead** for Expert (§6: sampled worlds, play until our next turn), Web Worker | Expert with lookahead beats Expert without it |
-| M6 | **Tuning with the user**: reported misplays become bench positions | ongoing |
+| M6 | **Tuning with the user**: reported misplays become bench positions | ongoing; reworked 2026-10-15, see `ai-rework-plan.md` (passivity statistics, sampled opponent worlds, retuning, report log) |
 
 ## 8. How we test it
 
