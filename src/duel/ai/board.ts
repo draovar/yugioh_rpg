@@ -86,10 +86,17 @@ export interface Weights {
   handMonsterBase: number;
   handMonsterFactor: number;
   /**
-   * A monster in hand needing more Tributes than we have monsters on the field: its value times this (stuck there).
-   * Not for monsters that never Tribute Summon (Special Summon only, Ritual).
+   * A monster in hand needing more Tributes than we have monsters on the field: its value times this (stuck there),
+   * for one Tribute (Level 5-6; also a Ritual Monster or Spell without the other), and for two (Level 7+), harder to
+   * get out. Not for monsters that never Tribute Summon (Special Summon only).
    */
   stuckMonster: number;
+  stuckMonster2: number;
+  /**
+   * The turn planner: ending our turn with no monster while they hold cards (taken off the board after their turn).
+   * Their turn in a copy brings one guessed attacker; a real hand can do more against an open field.
+   */
+  openField: number;
   /** Per card short of 5 left in the Deck. */
   deckLowPenalty: number;
   /** Main phase: a simulated activation is used when it gains more than this. */
@@ -100,7 +107,7 @@ export const DEFAULT_WEIGHTS: Readonly<Weights> = {
   lpScale: 6, lpHalf: 2500,
   monsterBase: 0.4, atkDivisor: 1200, defFactor: 0.8, hiddenMonster: 1.3, token: 0.4,
   setCard: 1, hiddenSetCard: 1.2, continuous: 1.2, equip: 0.6, faceUpSpell: 0.5,
-  handUnknown: 1.2, handSpell: 1.3, handTrap: 1.1, handMonsterBase: 0.3, handMonsterFactor: 0.7, stuckMonster: 0.8,
+  handUnknown: 1.2, handSpell: 1.3, handTrap: 1.1, handMonsterBase: 0.3, handMonsterFactor: 0.7, stuckMonster: 0.75, stuckMonster2: 0.5, openField: 0.5,
   deckLowPenalty: 0.5,
   activateMin: 0.05,
 };
@@ -173,16 +180,35 @@ function sideValue(view: AiView, p: PlayerView): number {
   const w = weightsOf(view);
   let v = lpValue(p.lp, w);
   for (const c of p.monsters) if (c) v += monsterValue(view, c);
-  for (const c of p.spells) if (c) v += spellTrapValue(view, c);
+  // A Ritual Monster and its Ritual Spell (in hand, or our own set one) are one card's worth together (the monster's),
+  // each stuck without the other.
+  const ritualSpells = [...p.hand, ...p.spells.filter((c): c is CardView => !!c && c.faceDown)]
+    .filter((c) => c.code && cardType(view, c.code) & TYPE.RITUAL);
+  const ritual = (code: number, partners: readonly CardView[]) => {
+    const value = codeValue(view, code);
+    const paired = partners.some((h) => h.code && h.code !== code && ritualPair(view, code, h.code));
+    return cardType(view, code) & TYPE.MONSTER ? (paired ? value : value * w.stuckMonster) : paired ? 0 : value * w.stuckMonster;
+  };
+  for (const c of p.spells) if (c) v += c.faceDown && c.code && cardType(view, c.code) & TYPE.RITUAL ? ritual(c.code, p.hand) : spellTrapValue(view, c);
   // Monsters we could tribute (tokens can't be Tributed for a Tribute Summon in GOAT).
   const fodder = p.monsters.filter((c) => c && !(c.code && cardType(view, c.code) & TYPE.TOKEN)).length;
   for (const c of p.hand) {
     if (!c.code) { v += w.handUnknown; continue; }
+    if (cardType(view, c.code) & TYPE.RITUAL) { v += ritual(c.code, cardType(view, c.code) & TYPE.MONSTER ? ritualSpells : p.hand); continue; }
     const value = codeValue(view, c.code);
-    v += needsTributes(view, c.code) > fodder ? value * w.stuckMonster : value;
+    const need = needsTributes(view, c.code);
+    v += need > fodder ? value * (need >= 2 ? w.stuckMonster2 : w.stuckMonster) : value;
   }
   if (p.deckCount < 5) v -= (5 - p.deckCount) * w.deckLowPenalty;
   return v;
+}
+
+/** Whether one of the two codes is a Ritual Spell naming the other (its text: 'used to Ritual Summon "Name"'). */
+function ritualPair(view: AiView, a: number, b: number): boolean {
+  const ra = view.cards.records.get(a), rb = view.cards.records.get(b);
+  if (!ra || !rb) return false;
+  const [spell, monster] = ra.type & TYPE.SPELL ? [ra, rb] : [rb, ra];
+  return !!(spell.type & TYPE.SPELL) && !!(monster.type & TYPE.MONSTER) && spell.desc.includes(`"${monster.name}"`);
 }
 
 /** The board from the AI's side: positive = it's ahead. A player at 0 LP decides it outright. */

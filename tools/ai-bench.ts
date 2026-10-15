@@ -19,7 +19,8 @@ const C = {
   kuriboh: 40640057, gaia: 6368038, blueEyes: 89631139, smashingGround: 97169186,
   wingedDragon1: 87796900, axeOfDespair: 40619825, giantRat: 97017120,
   feralImp: 41392891, backupSoldier: 36280194, lastWill: 85602018, blackLusterRitual: 55761792, mysticTomato: 83011277,
-  laJinn: 97590747, summonedSkull: 70781052, opticlops: 14531242, justDesserts: 24068492, reliableGuardian: 16430187,
+  blackLusterSoldier: 5405694, disappear: 24623598, shift: 59560625, giantSoldier: 13039848, koumori: 67724379, madSwordBeast: 79870141,
+  mysticClown: 47060154, laJinn: 97590747, summonedSkull: 70781052, opticlops: 14531242, justDesserts: 24068492, reliableGuardian: 16430187,
 } as const;
 
 interface Position {
@@ -137,6 +138,34 @@ const POSITIONS: Position[] = [
     opponentActivates: C.justDesserts,
     checkChain: true,
     expect: /^pass/,
+  },
+  {
+    name: "ritual-summon-black-luster-soldier",
+    why: "user report 2026-10-15: held Black Luster Ritual + Black Luster Soldier for turns with Gaia in hand and Giant Soldier of Stone on the field (7 + 3 levels), facing three 1400-1800 ATK monsters",
+    ai: [
+      hand(C.wingedDragon1), hand(C.blackLusterRitual), hand(C.disappear), hand(C.shift), hand(C.blackLusterSoldier), hand(C.gaia),
+      monster(C.giantSoldier, 0, OcgPosition.FACEUP_DEFENSE),
+    ],
+    opponent: [
+      monster(C.koumori, 2), monster(C.laJinn, 3), monster(C.madSwordBeast, 4),
+      ...Array.from({ length: 7 }, () => hand(C.mysticalElf)),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [7200, 6800],
+    plan: true,
+    expect: /activate Black Luster Ritual/,
+  },
+  {
+    name: "attack-an-empty-field",
+    why: "user report 2026-10-15: at 4100 LP vs 8000, with an empty field on both sides, kept Mystic Clown and Celtic Guardian in hand instead of summoning one and attacking directly",
+    ai: [hand(C.lastWill), hand(C.celticGuardian), hand(C.mysticClown)],
+    opponent: Array.from({ length: 5 }, () => hand(C.mysticalElf)),
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [4100, 8000],
+    seeds: 4,
+    expect: /summon (Mystic Clown|Celtic Guardian)/,
   },
   {
     name: "monarch-with-target",

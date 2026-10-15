@@ -2,7 +2,7 @@
 // signals, and the selection hints (M1). With a Simulator it judges main-phase activations by playing them on a copy
 // of the board (M2), and with `replayChains` it answers the opponent's moves by replaying them there (M3).
 import { OcgMessageType, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
-import { autoRespond, pickTributes } from "../../autoBot.ts";
+import { autoRespond, pickSum, pickTributes } from "../../autoBot.ts";
 import type { AiView, Brain, Decision } from "../AiSeat.ts";
 import { pickAttackTarget, decideBattle } from "./battle.ts";
 import { decideChain } from "./chain.ts";
@@ -12,7 +12,7 @@ import { decideByPlan } from "./plan.ts";
 import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
 import { SELECT_HINT, chooseCards, pickUtility, purposeIn } from "./select.ts";
 import type { Simulator } from "../sim/simulator.ts";
-import type { Weights } from "../board.ts";
+import { valueAt, type Weights } from "../board.ts";
 
 export interface GenericBrainOptions {
   simulator?: Simulator;
@@ -75,6 +75,14 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
       let bestI = 0;
       m.select_cards.forEach((c, i) => { if (pickUtility(view, c, purpose) > pickUtility(view, m.select_cards[bestI], purpose)) bestI = i; });
       return { response: { type: OcgResponseType.SELECT_UNSELECT_CARD, index: bestI }, reason: "must pick more" };
+    }
+    case OcgMessageType.SELECT_SUM: {
+      // Ritual tributes and the like: the cheapest set that adds up.
+      const atLeast = m.select_max !== 0;
+      const picked = pickSum(m.selects_must.map((c) => c.amount), m.selects.map((c) => c.amount), m.amount, atLeast,
+        atLeast ? 0 : m.min, atLeast ? Infinity : m.max, (i) => valueAt(view, m.selects[i]));
+      if (picked) return { response: { type: OcgResponseType.SELECT_SUM, indicies: picked }, reason: "the least valuable cards that add up" };
+      return { response: autoRespond(m, view.rng, view.cards), reason: "default answer" };
     }
     case OcgMessageType.SELECT_EFFECTYN:
       return { response: { type: OcgResponseType.SELECT_EFFECTYN, yes: true }, reason: "optional effects are usually worth it" };

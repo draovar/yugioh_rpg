@@ -36,16 +36,20 @@ export function sumMatches(amounts: number[], target: number, atLeast: boolean):
 }
 
 /**
- * SELECT_SUM: the fewest optional cards (indexes into `selects`) that make a valid sum together with the `must`
- * cards, `min`-`max` of them; null if none does.
+ * SELECT_SUM: the optional cards (indexes into `selects`) that make a valid sum together with the `must` cards,
+ * `min`-`max` of them, costing least (`cost` per card; default: the fewest cards); null if none does.
  */
-export function pickSum(must: number[], selects: number[], target: number, atLeast: boolean, min: number, max: number): number[] | null {
+export function pickSum(must: number[], selects: number[], target: number, atLeast: boolean, min: number, max: number,
+  cost: (i: number) => number = () => 1): number[] | null {
   const n = Math.min(selects.length, 16);
   let best: number[] | null = null;
+  let bestCost = Infinity;
   for (let mask = 0; mask < 1 << n; mask++) {
     const picked = selects.slice(0, n).flatMap((_, i) => (mask & (1 << i) ? [i] : []));
-    if (picked.length < min || picked.length > max || (best && picked.length >= best.length)) continue;
-    if (sumMatches([...must, ...picked.map((i) => selects[i])], target, atLeast)) best = picked;
+    if (picked.length < min || picked.length > max) continue;
+    const c = picked.reduce((t, i) => t + cost(i), 0);
+    if (c > bestCost || (c === bestCost && best && picked.length >= best.length)) continue;
+    if (sumMatches([...must, ...picked.map((i) => selects[i])], target, atLeast)) { best = picked; bestCost = c; }
   }
   return best;
 }

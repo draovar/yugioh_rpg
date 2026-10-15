@@ -17,7 +17,7 @@ import type { CardDb } from "../../cardData.ts";
 import type { FieldSnapshot, PlayerView } from "../../DuelSession.ts";
 import { fnv1a } from "../../hash.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
-import { evaluate, lpValue } from "../board.ts";
+import { DEFAULT_WEIGHTS, evaluate, lpValue } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
 import { SELECT_HINT } from "../generic/select.ts";
 import { formatTrace } from "../trace.ts";
@@ -107,6 +107,8 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
      * lose (their stand-in attacker is a guess, not a certainty) still rank by how much they leave them to get through.
      */
     let endOfTurn = 0;
+    /** `Weights.openField` if our turn ended with no monster of ours on the field (and cards in their hand). */
+    let openField = 0;
     /** Our LP when our turn ended, and the damage we took after it. */
     let lpAtEnd = 0;
     let damageTaken = 0;
@@ -123,7 +125,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
       opp?.observe(s.messages);
       if (finishing) for (const m of s.messages) if (m.type === OcgMessageType.DAMAGE && m.player === 0) damageTaken += m.amount;
       if (s.ended) return result(s.winner === 0 ? 1000 + endOfTurn : s.winner === 1 ? lost() : 0);
-      if (ai.memory.turn > 2) return result(score()); // the opponent's turn is over
+      if (ai.memory.turn > 2) return result(score() - openField); // the opponent's turn is over
       const p = s.prompt as Prompt;
 
       if (p.player === 1) {
@@ -155,7 +157,10 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
         }
         finishing = true;
         endOfTurn = score();
-        lpAtEnd = duel.snapshot(0).players[0].lp;
+        const board = duel.snapshot(0);
+        lpAtEnd = board.players[0].lp;
+        // Ending our turn with no monster in front of their hand: one guessed attacker understates what they can do.
+        if (!board.players[0].monsters.some((c) => c) && board.players[1].hand.length) openField = (sim.weights ?? DEFAULT_WEIGHTS).openField;
         duel.respond(p.type === OcgMessageType.SELECT_IDLECMD
           ? { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null }
           : { type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.TO_EP, index: null });
