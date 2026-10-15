@@ -17,6 +17,7 @@ const C = {
   potOfGreed: 55144522, compulsory: 94192409, darkMagician: 46986414, magicianOfFaith: 31560081,
   flute: 43973174, heavyStorm: 19613556, dnaTransplant: 56769674, fissure: 66788016, magicCylinder: 62279055,
   kuriboh: 40640057, gaia: 6368038, blueEyes: 89631139, smashingGround: 97169186,
+  wingedDragon1: 87796900, axeOfDespair: 40619825, giantRat: 97017120,
 } as const;
 
 interface Position {
@@ -38,12 +39,17 @@ interface Position {
   expect?: RegExp;
   /** ...and must not match this. */
   forbid?: RegExp;
+  /** Check the whole turn plan behind that choice (the planner's "plan:" trace line) instead. */
+  plan?: boolean;
 }
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
 const monster = (code: number, sequence = 0, position: OcgPosition = OcgPosition.FACEUP_ATTACK): StartCard =>
   ({ code, location: OcgLocation.MZONE, sequence, position });
 const setCard = (code: number, sequence = 0): StartCard => ({ code, location: OcgLocation.SZONE, sequence, position: OcgPosition.FACEDOWN_DEFENSE });
+/** A face-up Equip Spell in zone `sequence`, equipped to the monster in zone `to` of duel team `team`. */
+const equip = (code: number, sequence: number, to: number, team: 0 | 1): StartCard =>
+  ({ code, location: OcgLocation.SZONE, sequence, equipTo: { team, sequence: to } });
 
 const POSITIONS: Position[] = [
   {
@@ -91,6 +97,18 @@ const POSITIONS: Position[] = [
     aiDeck: DECKS.kaiba.deck.main,
     seeds: 4,
     forbid: /end turn/,
+  },
+  {
+    name: "attack-with-equipped-monster",
+    why: "user report 2026-10-15: turned Winged Dragon #1 with Axe of Despair (2400) to defense instead of attacking an empty field; the copies lost the equip link",
+    ai: [hand(C.giantRat), monster(C.wingedDragon1, 0), equip(C.axeOfDespair, 0, 0, 1)], // team 1: the AI goes second
+    opponent: Array.from({ length: 6 }, () => hand(C.mysticalElf)),
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [8000, 6600],
+    seeds: 4,
+    plan: true,
+    forbid: /change position/,
   },
   {
     name: "monarch-with-target",
@@ -145,7 +163,8 @@ for (const p of POSITIONS) for (let run = 1; run <= (p.seeds ?? 1); run++) {
     if (prompt.type === OcgMessageType.SELECT_IDLECMD) choice = last;
   }
   duel.destroy();
-  const text = choice?.choice ?? "(no main-phase decision)";
+  const planLine = choice && p.plan ? formatTrace(choice).split("\n").find((l) => l.includes("plan:"))?.trim() : undefined;
+  const text = planLine ?? choice?.choice ?? "(no main-phase decision)";
   const ok = !!choice && (!p.expect || p.expect.test(text)) && (!p.forbid || !p.forbid.test(text));
   if (!ok) failed++;
   console.log(`${ok ? "ok  " : "FAIL"} ${p.name}${p.seeds ? ` #${run}` : ""}: ${text}${ok ? "" : `   (${p.expect ? `expected ${p.expect}` : ""}${p.forbid ? ` forbidden ${p.forbid}` : ""}; ${p.why})`}`);

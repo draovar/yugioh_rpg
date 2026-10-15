@@ -95,7 +95,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     scores activations by it, and adds to its summon scores the "surprise": what the copy shows beyond the rule of thumb
     (a Monarch's effect, with no other target, destroying itself; a flip effect). Brains are built with a
     `BrainContext` holding the rules engine (`core`, `cards`, `readScript`), never the duel. The copy loses
-    once-per-turn uses, equip links, counters and the turn number; such moves fall back to the M1 score.
+    once-per-turn uses, counters and the turn number (equip links are kept: `StartCard.equipTo`); such moves fall back to the M1 score.
     Copies are fast: `copyScripts` skips the rule files GOAT never uses (Synchro, Xyz, Pendulum, Link, Skill, Rush;
     not Maximum, Polymerization's helpers need it), and the `Simulator` keeps a pool of up to 24 prepared copies
     (`prepareOne`), filled while the human thinks (`Brain.idle` ← `AiSeat.idle` ← `DuelController`, one copy per 40 ms

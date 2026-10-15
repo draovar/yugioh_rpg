@@ -167,7 +167,7 @@ planned per-card table becomes unnecessary; only *timing* and *future value* nee
    blank duels with the base scripts loaded are prepared ahead of time. Target ≤ 100 ms per decision in the browser.
    The arena gets parallel workers (Node `worker_threads`) so tuning stays fast.
 5. Known gaps, covered by a short knowledge list instead of a full card table:
-   - lost in the rebuild: once-per-turn uses, equip links, counters (Breaker), Prohibition's declared name, the turn
+   - lost in the rebuild: once-per-turn uses, counters (Breaker), Prohibition's declared name, the turn
      number → those options fall back to the M1 score;
    - stand-ins never respond, so the copy can't see a Mirror Force coming → timing rules now, sampled worlds in M5;
    - value that only shows later: Swords of Revealing Light, set traps, Change of Heart's monster going back,

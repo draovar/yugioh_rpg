@@ -34,6 +34,11 @@ export interface StartCard {
   location: OcgLocation;
   sequence?: number;
   position?: OcgPosition;
+  /**
+   * An Equip Spell in the Spell & Trap Zone: equipped to the monster in this Monster Zone (`team` = the duel's team
+   * controlling it) as the duel starts, at the first draw phase. (The AI's copies keep a board's equip links this way.)
+   */
+  equipTo?: { team: 0 | 1; sequence: number };
 }
 
 export type DuelSeed = [bigint, bigint, bigint, bigint];
@@ -196,6 +201,21 @@ export class DuelSession {
     });
 
     this.core.startDuel(this.handle);
+    // Equip links: Duel.Equip has to run inside the duel (it yields), so a one-off effect does it at the first draw phase.
+    const equips = cfg.decks.flatMap((deck, team) => (deck.start ?? []).flatMap((c) =>
+      c.equipTo && c.location === OcgLocation.SZONE ? [`{${team},${c.sequence ?? 0},${c.equipTo.team},${c.equipTo.sequence}}`] : []));
+    if (equips.length) this.core.loadScript(this.handle, "start_equips.lua", `local e=Effect.GlobalEffect()
+e:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+e:SetCode(EVENT_PHASE_START+PHASE_DRAW)
+e:SetOperation(function(e)
+  for _,q in ipairs({${equips.join(",")}}) do
+    local ec=Duel.GetFieldCard(q[1],LOCATION_SZONE,q[2])
+    local tc=Duel.GetFieldCard(q[3],LOCATION_MZONE,q[4])
+    if ec and tc then Duel.Equip(q[1],ec,tc) end
+  end
+  e:Reset()
+end)
+Duel.RegisterEffect(e,0)`);
     // A prepared duel was created with other LP: set the real ones before anything happens.
     const lp = cfg.startingLP ?? 8000;
     const [lp0, lp1] = typeof lp === "number" ? [lp, lp] : lp;

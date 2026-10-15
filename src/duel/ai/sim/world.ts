@@ -60,22 +60,28 @@ export interface SimLayout {
 export function layoutFrom(view: AiView): SimLayout {
   const me = view.board.players[view.seat];
   const opp = view.board.players[1 - view.seat];
-  return { decks: [ownSide(view, me), opponentSide(opp)], lp: [me.lp, opp.lp] };
+  return { decks: [ownSide(view, me), opponentSide(opp, view.seat)], lp: [me.lp, opp.lp] };
 }
 
 const place = (c: CardView, code = c.code, position = c.position): StartCard =>
   ({ code, location: c.location, sequence: c.sequence, position });
 
-function piles(p: PlayerView, hidden: (c: CardView) => StartCard | null): StartCard[] {
+/** `p`'s field, GY and banished cards (hidden ones through `hidden`); equip links kept (`seat` = the AI's real seat). */
+function piles(p: PlayerView, seat: number, hidden: (c: CardView) => StartCard | null): StartCard[] {
   const out: StartCard[] = [];
-  for (const c of [...p.monsters, ...p.spells]) if (c) { const s = c.code ? place(c) : hidden(c); if (s) out.push(s); }
+  for (const c of [...p.monsters, ...p.spells]) if (c) {
+    const s = c.code ? place(c) : hidden(c);
+    const t = c.equipTarget;
+    if (s && t?.location === OcgLocation.MZONE) s.equipTo = { team: t.controller === seat ? 0 : 1, sequence: t.sequence };
+    if (s) out.push(s);
+  }
   for (const c of [...p.grave, ...p.banished]) if (c.code) out.push(place(c));
   return out;
 }
 
 function ownSide(view: AiView, me: PlayerView): Deck {
   const start: StartCard[] = me.hand.map((c) => ({ code: c.code, location: OcgLocation.HAND, sequence: c.sequence, position: OcgPosition.FACEDOWN_DEFENSE }));
-  start.push(...piles(me, () => null));
+  start.push(...piles(me, view.seat, () => null));
   // What's left in the Deck: the decklist minus every card of ours we can see (order unknown: shuffled).
   const left = [...(view.deckList ?? [])];
   for (const s of start) {
@@ -88,8 +94,8 @@ function ownSide(view: AiView, me: PlayerView): Deck {
   return { main, extra: me.extra.map((c) => c.code).filter((c) => c), start };
 }
 
-function opponentSide(opp: PlayerView): Deck {
-  const start = piles(opp, (c) => place(c, c.location === OcgLocation.MZONE ? BLANK.MONSTER : BLANK.TRAP));
+function opponentSide(opp: PlayerView, seat: number): Deck {
+  const start = piles(opp, seat, (c) => place(c, c.location === OcgLocation.MZONE ? BLANK.MONSTER : BLANK.TRAP));
   // Their hidden hand: one average monster (they'll usually have one to summon), the rest cards that do nothing.
   start.push(...opp.hand.map((_c, i) => ({
     code: i === 0 ? BLANK.ATTACKER : BLANK.CARD, location: OcgLocation.HAND, sequence: i, position: OcgPosition.FACEDOWN_DEFENSE,

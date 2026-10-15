@@ -3,8 +3,8 @@
 // Heavy Storm, Raigeki, Monster Reborn... without card-specific rules.
 //
 // Inside the copy the AI answers its own follow-up prompts (zones, targets, costs) with the generic brain; the
-// opponent's stand-ins never respond (it passes every chain). What the copy can't hold: once-per-turn uses, equip
-// links, counters, declared names, the turn number; moves that depend on them may not be found in the copy (null).
+// opponent's stand-ins never respond (it passes every chain). What the copy can't hold: once-per-turn uses,
+// counters, declared names, the turn number; moves that depend on them may not be found in the copy (null).
 import {
   OcgMessageType,
   OcgResponseType,
