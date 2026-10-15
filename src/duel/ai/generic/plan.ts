@@ -22,6 +22,12 @@ type BattleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_BATTLECMD
 const describePlan = (steps: readonly PlanStep[], view: AiView, battle: boolean) =>
   [...steps.map((s) => describeStep(s, view.cards)), battle ? "battle" : "end turn"].join(" → ");
 
+/** A main-phase activation of a Spell whose text starts with "Draw": Pot of Greed, Upstart Goblin, Graceful Charity. */
+function drawsFirst(s: PlanStep, view: AiView): boolean {
+  if (s.kind !== "idle" || s.action !== SelectIdleCMDAction.SELECT_ACTIVATE || !s.card) return false;
+  return /^Draw \d+ cards?\b/.test(view.cards.records.get(s.card.code)?.desc ?? "");
+}
+
 export function decideByPlan(m: IdleMessage | BattleMessage, view: AiView, state: BrainState, retry = true): Decision | null {
   if (!state.simulator || !state.planTurns || view.memory.turnPlayer !== view.seat) return null;
   // A finished plan went on to the battle phase: battle with the usual logic, then plan Main Phase 2 afresh.
@@ -40,7 +46,15 @@ export function decideByPlan(m: IdleMessage | BattleMessage, view: AiView, state
     reason = `new plan (${plan.nodes} copies, ${Math.round(plan.ms)} ms)`;
   }
   const { plan } = current;
-  const step = plan.steps[current.at];
+  let step = plan.steps[current.at];
+  // A draw spell later in the plan goes first: the cards it brings may change the rest of the turn (the copies drew a
+  // guess), so plan again once they're in hand.
+  const draw = plan.steps.findIndex((s, i) => i > current!.at && drawsFirst(s, view) && responseFor(m, s));
+  if (step && draw >= 0) {
+    step = plan.steps[draw];
+    state.plan = null;
+    reason = "drawing first, then a new plan";
+  }
   let response: OcgResponse | null;
   if (step) {
     response = responseFor(m, step);
@@ -57,14 +71,14 @@ export function decideByPlan(m: IdleMessage | BattleMessage, view: AiView, state
     current.at++;
     return null; // in the battle phase: the usual battle logic finishes it
   }
-  current.at++;
+  if (state.plan) current.at++;
   if (step?.kind === "attack")
     state.attackTarget = step.target === null ? null : { controller: (1 - view.seat) as 0 | 1, location: OcgLocation.MZONE, sequence: step.target };
   if (step?.kind === "idle" && (step.action === SelectIdleCMDAction.SELECT_SUMMON || step.action === SelectIdleCMDAction.SELECT_MONSTER_SET))
     state.normalSummonUsed = true;
   return {
     response,
-    reason: `${reason}: step ${current.at} of ${plan.steps.length + 1}`,
+    reason: state.plan ? `${reason}: step ${current.at} of ${plan.steps.length + 1}` : reason,
     options: [
       { label: `plan: ${describePlan(plan.steps, view, plan.battleAfter)}`, score: plan.value },
       ...plan.alternatives.map((a) => ({ label: `     ${describePlan(a.steps, view, plan.battleAfter)}`, score: a.value })),

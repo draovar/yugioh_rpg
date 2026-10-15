@@ -20,7 +20,7 @@ const C = {
   wingedDragon1: 87796900, axeOfDespair: 40619825, giantRat: 97017120,
   feralImp: 41392891, backupSoldier: 36280194, lastWill: 85602018, blackLusterRitual: 55761792, mysticTomato: 83011277,
   blackLusterSoldier: 5405694, disappear: 24623598, shift: 59560625, giantSoldier: 13039848, koumori: 67724379, madSwordBeast: 79870141,
-  mysticClown: 47060154, laJinn: 97590747, summonedSkull: 70781052, opticlops: 14531242, justDesserts: 24068492, reliableGuardian: 16430187,
+  mysticClown: 47060154, darkBlade: 11321183, neo: 50930991, laJinn: 97590747, summonedSkull: 70781052, opticlops: 14531242, justDesserts: 24068492, reliableGuardian: 16430187,
 } as const;
 
 interface Position {
@@ -166,6 +166,16 @@ const POSITIONS: Position[] = [
     lp: [4100, 8000],
     seeds: 4,
     expect: /summon (Mystic Clown|Celtic Guardian)/,
+  },
+  {
+    name: "pot-of-greed-first",
+    why: "user report 2026-10-15: summoned Dark Blade, then played Pot of Greed; drawing first could change which monster is best to summon",
+    ai: [hand(C.darkBlade), hand(C.neo), hand(C.potOfGreed), hand(C.darkHole), hand(C.lastWill)],
+    opponent: [monster(C.mysticalElf, 2, OcgPosition.FACEDOWN_DEFENSE), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    seeds: 4,
+    expect: /activate Pot of Greed/,
   },
   {
     name: "monarch-with-target",
