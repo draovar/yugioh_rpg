@@ -20,7 +20,7 @@ const C = {
   wingedDragon1: 87796900, axeOfDespair: 40619825, giantRat: 97017120,
   feralImp: 41392891, backupSoldier: 36280194, lastWill: 85602018, blackLusterRitual: 55761792, mysticTomato: 83011277,
   blackLusterSoldier: 5405694, disappear: 24623598, shift: 59560625, giantSoldier: 13039848, koumori: 67724379, madSwordBeast: 79870141,
-  mysticClown: 47060154, darkBlade: 11321183, neo: 50930991, laJinn: 97590747, summonedSkull: 70781052, opticlops: 14531242, justDesserts: 24068492, reliableGuardian: 16430187,
+  mysticClown: 47060154, magicJammer: 77414722, spiritRyu: 67957315, warriorDaiGrepher: 75953262, trapHole: 4206964, darkBlade: 11321183, neo: 50930991, laJinn: 97590747, summonedSkull: 70781052, opticlops: 14531242, justDesserts: 24068492, reliableGuardian: 16430187,
 } as const;
 
 interface Position {
@@ -176,6 +176,20 @@ const POSITIONS: Position[] = [
     aiDeck: DECKS.yugiEvolution.deck.main,
     seeds: 4,
     expect: /activate Pot of Greed/,
+  },
+  {
+    name: "set-magic-jammer",
+    why: "user report 2026-10-15: held Magic Jammer in hand (a set card counted less than a Trap in hand) instead of setting it behind Warrior Dai Grepher",
+    ai: [hand(C.backupSoldier), hand(C.celticGuardian), hand(C.magicJammer), monster(C.warriorDaiGrepher, 0)],
+    opponent: [
+      monster(C.spiritRyu, 0, OcgPosition.FACEDOWN_DEFENSE), setCard(C.trapHole, 4),
+      hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [6800, 3700],
+    plan: true,
+    expect: /set Magic Jammer/,
   },
   {
     name: "monarch-with-target",

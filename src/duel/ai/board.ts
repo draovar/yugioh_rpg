@@ -75,6 +75,12 @@ export interface Weights {
   token: number;
   /** Spells/Traps on the field: our own set ones, the opponent's we can't see, face-up continuous/field, equips, others. */
   setCard: number;
+  /**
+   * Our own set Traps: ready to use (a Trap can't be activated from the hand), the first worth setTrap, each further
+   * one setTrapStep less down to setCard, so piling them up stops paying.
+   */
+  setTrap: number;
+  setTrapStep: number;
   hiddenSetCard: number;
   continuous: number;
   equip: number;
@@ -106,7 +112,7 @@ export interface Weights {
 export const DEFAULT_WEIGHTS: Readonly<Weights> = {
   lpScale: 6, lpHalf: 2500,
   monsterBase: 0.4, atkDivisor: 1200, defFactor: 0.8, hiddenMonster: 1.3, token: 0.4,
-  setCard: 1, hiddenSetCard: 1.2, continuous: 1.2, equip: 0.6, faceUpSpell: 0.5,
+  setCard: 1, setTrap: 1.3, setTrapStep: 0.15, hiddenSetCard: 1.2, continuous: 1.2, equip: 0.6, faceUpSpell: 0.5,
   handUnknown: 1.2, handSpell: 1.3, handTrap: 1.1, handMonsterBase: 0.3, handMonsterFactor: 0.7, stuckMonster: 0.75, stuckMonster2: 0.5, openField: 0.5,
   deckLowPenalty: 0.5,
   activateMin: 0.05,
@@ -132,8 +138,8 @@ export function monsterValue(view: AiView, c: CardView): number {
 export function spellTrapValue(view: AiView, c: CardView): number {
   const w = weightsOf(view);
   if (!c.code) return w.hiddenSetCard;
-  if (c.faceDown) return w.setCard;
   const type = cardType(view, c.code);
+  if (c.faceDown) return type & TYPE.TRAP ? w.setTrap : w.setCard;
   if (type & TYPE.EQUIP) return w.equip; // most of its worth is in the monster it's attached to
   return type & (TYPE.CONTINUOUS | TYPE.FIELD) ? w.continuous : w.faceUpSpell;
 }
@@ -189,7 +195,14 @@ function sideValue(view: AiView, p: PlayerView): number {
     const paired = partners.some((h) => h.code && h.code !== code && ritualPair(view, code, h.code));
     return cardType(view, code) & TYPE.MONSTER ? (paired ? value : value * w.stuckMonster) : paired ? 0 : value * w.stuckMonster;
   };
-  for (const c of p.spells) if (c) v += c.faceDown && c.code && cardType(view, c.code) & TYPE.RITUAL ? ritual(c.code, p.hand) : spellTrapValue(view, c);
+  let setTraps = 0;
+  for (const c of p.spells) {
+    if (!c) continue;
+    if (c.faceDown && c.code && cardType(view, c.code) & TYPE.RITUAL) v += ritual(c.code, p.hand);
+    // Our own set Traps: each one after the first is worth less (a sixth Trap rarely adds what the first does).
+    else if (c.faceDown && c.code && cardType(view, c.code) & TYPE.TRAP) v += Math.max(w.setCard, w.setTrap - w.setTrapStep * setTraps++);
+    else v += spellTrapValue(view, c);
+  }
   // Monsters we could tribute (tokens can't be Tributed for a Tribute Summon in GOAT).
   const fodder = p.monsters.filter((c) => c && !(c.code && cardType(view, c.code) & TYPE.TOKEN)).length;
   for (const c of p.hand) {
