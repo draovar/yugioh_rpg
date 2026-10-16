@@ -1,6 +1,6 @@
 // Brain vs brain: plays seeded duels for every deck pairing, with each brain going first and second, and reports win
 // rates. Every claim about AI strength comes from here. Duels run in parallel worker threads (tools/lib/match.ts).
-// Usage: npm run arena -- [--a autobot] [--b autobot] [--n 10] [--decks yugi,kaiba,goat] [--seed 1] [--lp 8000]
+// Usage: npm run arena -- [--a autobot] [--b autobot] (or baseline: the planner in vendor/baseline, an older checkout) [--n 10] [--decks yugi,kaiba,goat] [--seed 1] [--lp 8000]
 //        [--wa weights.json] [--wb weights.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses] [--stats]
 //        [--record positions.jsonl]
 //   --n      duels per deck pairing and seat order (so 3 decks = 9 pairings x 2 orders x n)
@@ -18,10 +18,10 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { DEFAULT_WEIGHTS, type Weights } from "../src/duel/ai/board.ts";
-import { BRAINS, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
+import { BRAINS } from "../src/duel/ai/brains.ts";
 import { Simulator } from "../src/duel/ai/sim/simulator.ts";
 import { DECKS, type DeckName } from "../src/duel/decks.ts";
-import { matchJobs, runMatch, winRate, type MatchSettings, type PassivityStats, type Result } from "./lib/match.ts";
+import { isMatchBrain, matchJobs, runMatch, winRate, type MatchBrain, type MatchSettings, type PassivityStats, type Result } from "./lib/match.ts";
 
 const args = new Map<string, string>();
 const argv = process.argv.slice(2);
@@ -30,9 +30,9 @@ for (let i = 0; i < argv.length; i++) {
   const next = argv[i + 1];
   args.set(argv[i].slice(2), next && !next.startsWith("--") ? argv[++i] : "");
 }
-const brainArg = (key: string): BrainName => {
+const brainArg = (key: string): MatchBrain => {
   const name = args.get(key) ?? "autobot";
-  if (!isBrainName(name)) throw new Error(`unknown brain "${name}" (have: ${Object.keys(BRAINS).join(", ")})`);
+  if (!isMatchBrain(name)) throw new Error(`unknown brain "${name}" (have: ${Object.keys(BRAINS).join(", ")}, baseline with vendor/baseline)`);
   return name;
 };
 const weightsArg = (key: string): Weights | undefined =>

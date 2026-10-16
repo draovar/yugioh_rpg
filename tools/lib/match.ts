@@ -1,22 +1,40 @@
 // Brain vs brain matches for the arena and the tuner: seeded duels over every deck pairing and seat order, run in
 // parallel worker threads (one engine each). This file is also the workers' entry point.
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { OcgLocation, OcgMessageType, OcgPhase, OcgResponseType, SelectBattleCMDAction, SelectIdleCMDAction, type OcgCardLoc, type OcgMessage, type OcgResponse } from "ocgcore-wasm";
 import { AiSeat } from "../../src/duel/ai/AiSeat.ts";
 import type { Weights } from "../../src/duel/ai/board.ts";
-import { BRAINS, type BrainName } from "../../src/duel/ai/brains.ts";
+import { BRAINS, type BrainContext, type BrainName } from "../../src/duel/ai/brains.ts";
 import { formatTrace } from "../../src/duel/ai/trace.ts";
 import { TYPE } from "../../src/duel/cardData.ts";
 import type { DuelSession, FieldSnapshot } from "../../src/duel/DuelSession.ts";
 import { DECKS, type DeckName } from "../../src/duel/decks.ts";
 import { cards, core, newDuel, readScript, runDuel, seedFrom } from "./engine.ts";
 
+/**
+ * "baseline": the planner of an older commit checked out in vendor/baseline (`git worktree add vendor/baseline <commit>`),
+ * so old and new AI code play each other. Its brain gets this checkout's engine, card data and AiSeat.
+ */
+const BASELINE = path.resolve(import.meta.dirname, "../../vendor/baseline/src/duel/ai/brains.ts");
+const baseline = existsSync(BASELINE)
+  ? ((await import(pathToFileURL(BASELINE).href)) as { BRAINS: typeof BRAINS }).BRAINS.planner : null;
+export type MatchBrain = BrainName | "baseline";
+export const isMatchBrain = (name: string): name is MatchBrain => name in BRAINS || (name === "baseline" && !!baseline);
+function makeBrain(name: MatchBrain, ctx: BrainContext) {
+  if (name !== "baseline") return BRAINS[name](ctx);
+  if (!baseline) throw new Error("no vendor/baseline checkout (git worktree add vendor/baseline <commit>)");
+  return baseline(ctx);
+}
+
 /** Duel k of a match: brain A plays `aDeck` and goes first when `aFirst`. */
 export interface Job { k: number; aDeck: DeckName; bDeck: DeckName; aFirst: boolean }
 
 export interface MatchSettings {
-  A: BrainName;
-  B: BrainName;
+  A: MatchBrain;
+  B: MatchBrain;
   /** Each side's weights (default: the built-in ones). */
   weightsA?: Readonly<Weights>;
   weightsB?: Readonly<Weights>;
@@ -186,7 +204,7 @@ export function playJob(job: Job, s: MatchSettings): Result {
   const tracker = new PassivityTracker(duel, s.record);
   const seatOf = (seat: 0 | 1) => {
     const isA = seat === aSeat;
-    const brain = BRAINS[isA ? s.A : s.B]({ engine: { core, cards, readScript }, weights: isA ? s.weightsA : s.weightsB });
+    const brain = makeBrain(isA ? s.A : s.B, { engine: { core, cards, readScript }, weights: isA ? s.weightsA : s.weightsB });
     return tracker.wrap(new AiSeat({ seat, brain, duel, onTrace, deck: decks[seat].main }));
   };
   const result: Result = { ...job, outcome: "error", turns: 0, think: [0, 0], decisions: [0, 0], slowest: [0, 0], stats: [noStats(), noStats()] };
