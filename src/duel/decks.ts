@@ -19,7 +19,9 @@ const C = {
   manEaterBug: 54652250, giantRat: 97017120, feralImp: 41392891, wingedDragon1: 87796900, beaverWarrior: 32452818,
   greatWhite: 13429800, giantSoldierOfStone: 13039848, mysticClown: 47060154, neo: 50930991, gazelle: 5818798,
   warriorDaiGrepher: 75953262, darkBlade: 11321183, wallOfIllusion: 13945283, sonicBird: 57617178,
-  zombyra: 88472456, royalMagicalLibrary: 70791313,
+  zombyra: 88472456, royalMagicalLibrary: 70791313, vampireGenesis: 22056710, masterKyonshee: 24530661,
+  vampireLord: 53839837, darkDustSpirit: 89111398, pyramidTurtle: 77044671, despairFromTheDark: 71200730,
+  ryuKokki: 57281778, boneTower: 63012333, vampireLady: 26495087, doubleCoston: 44436472, regeneratingMummy: 70821187,
   // rituals
   paladinOfWhiteDragon: 73398797, blackLusterSoldier: 5405694,
   // fusions (Extra Deck)
@@ -34,6 +36,8 @@ const C = {
   tributeToTheDoomed: 79759861, rushRecklessly: 70046172, megamorph: 22046459, fairyMeteorCrush: 97687912,
   blackLusterRitual: 55761792, dianKeto: 84257639, lastWill: 85602018, cardDestruction: 72892473, removeTrap: 51482758,
   reliableGuardian: 16430187, axeOfDespair: 40619825, malevolentNuzzler: 99597615, mysticPlasmaZone: 18161786,
+  creatureSwap: 31036355, giantTrunade: 42703248, cardOfSafeReturn: 57953380, bookOfLife: 2204140,
+  callOfTheMummy: 4861205, reload: 22589918,
   // traps
   mirrorForce: 44095762, sakuretsu: 56120475, trapHole: 4206964, callOfTheHaunted: 97077563, ringOfDestruction: 83555666,
   torrential: 53582587, bottomless: 29401950, magicCylinder: 62279055, waboku: 12607053, dustTornado: 60082869,
@@ -134,6 +138,19 @@ export const DECKS = {
         mysticPlasmaZone: 1, swords: 1, potOfGreed: 1,
         trapHole: 1, waboku: 1, magicJammer: 1, sevenTools: 1, spellbindingCircle: 1, backupSoldier: 1, shift: 1,
         disappear: 1, raigekiBreak: 1,
+      }),
+    },
+  },
+  /** Structure Deck: Zombie Madness (2005), as printed. Vampire Genesis is its ace. */
+  zombieMadness: {
+    label: "Zombie Madness",
+    deck: {
+      main: list({
+        vampireGenesis: 1, masterKyonshee: 1, vampireLord: 1, darkDustSpirit: 1, pyramidTurtle: 3, spiritReaper: 1,
+        despairFromTheDark: 2, ryuKokki: 2, boneTower: 1, vampireLady: 1, doubleCoston: 1, regeneratingMummy: 2,
+        snatchSteal: 1, mst: 1, giantTrunade: 1, nobleman: 1, potOfGreed: 1, cardOfSafeReturn: 1, heavyStorm: 1,
+        creatureSwap: 2, bookOfLife: 2, callOfTheMummy: 3, reload: 2,
+        dustTornado: 1, torrential: 1, magicJammer: 1, recklessGreed: 1, compulsory: 3,
       }),
     },
   },
