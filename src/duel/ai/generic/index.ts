@@ -1,6 +1,7 @@
 // The generic brain: plays any deck from card data alone (types, ATK/DEF, levels), the engine's legality and timing
-// signals, and the selection hints (M1). With a Simulator it judges main-phase activations by playing them on a copy
-// of the board (M2), and with `replayChains` it answers the opponent's moves by replaying them there (M3).
+// signals, and the selection hints (M1). With a Simulator (the planner) it plans whole turns on copies of the board,
+// answers the opponent's moves by replaying them there, and judges single main-phase activations there when no plan
+// can be made.
 import { OcgMessageType, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
 import { autoRespond, pickSum, pickTributes } from "../../autoBot.ts";
 import type { AiView, Brain, Decision } from "../AiSeat.ts";
@@ -12,23 +13,18 @@ import { decideByPlan } from "./plan.ts";
 import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
 import { SELECT_HINT, chooseCards, pickUtility, purposeIn } from "./select.ts";
 import type { Simulator } from "../sim/simulator.ts";
-import type { PlanSettings } from "../sim/planner.ts";
 import { valueAt, type Weights } from "../board.ts";
 
 export interface GenericBrainOptions {
+  /** Copies of the board to plan turns and replay the opponent's moves in; none = card data alone. */
   simulator?: Simulator;
-  replayChains?: boolean;
-  /** Plan whole turns for main-phase and battle decisions (needs the simulator). */
-  planTurns?: boolean;
-  /** The turn planner's budgets and sampled worlds; default DEFAULT_PLAN_SETTINGS. */
-  planSettings?: Readonly<PlanSettings>;
   /** How it values things (board.ts); default DEFAULT_WEIGHTS. */
   weights?: Readonly<Weights>;
   name?: string;
 }
 
 export function createGenericBrain(opts: GenericBrainOptions = {}): Brain {
-  const state = new BrainState(opts.simulator ?? null, opts.replayChains ?? false, opts.planTurns ?? false, opts.planSettings);
+  const state = new BrainState(opts.simulator ?? null);
   const weights = opts.weights;
   return {
     name: opts.name ?? "generic",

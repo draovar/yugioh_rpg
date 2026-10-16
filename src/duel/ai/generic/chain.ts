@@ -39,7 +39,7 @@ export function decideChain(m: ChainMessage, view: AiView, state: BrainState): D
   if (m.spe_count === TRIGGER_SELECTION) return best(options, () => "optional trigger: use it");
 
   // Simulated: replay what the opponent did and try every answer (M3).
-  const replayed = state.replayChains ? state.simulator?.responses(view, m) ?? null : null;
+  const replayed = state.simulator?.responses(view, m) ?? null;
   if (replayed) {
     const passValue = replayed.outcomes.find((o) => o.index === null)!.value;
     const tried = replayed.outcomes.filter((o) => o.index !== null);

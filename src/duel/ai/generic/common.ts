@@ -2,7 +2,7 @@
 import type { OcgCardLoc, OcgResponse } from "ocgcore-wasm";
 import type { Decision } from "../AiSeat.ts";
 import type { Simulator } from "../sim/simulator.ts";
-import { DEFAULT_PLAN_SETTINGS, type Plan, type PlanSettings } from "../sim/planner.ts";
+import type { Plan } from "../sim/planner.ts";
 
 export interface Option {
   label: string;
@@ -23,19 +23,13 @@ export function best(options: Option[], reason: (o: Option) => string = () => ""
 
 /** What the brain remembers between decisions (reset every turn). */
 export class BrainState {
-  /** Plays main-phase activations on a copy of the board to judge them (M2); null = judge by card type (M1). */
+  /**
+   * Copies of the board: plans whole turns (sim/planner.ts), replays the opponent's moves for chain answers, and judges
+   * single activations when no plan can be made. Null = judge by card data (M1).
+   */
   readonly simulator: Simulator | null;
-  /** Answers the opponent's moves by replaying them in a copy (M3); needs the simulator. */
-  readonly replayChains: boolean;
-  /** Plans whole turns (sim/planner.ts) for main-phase and battle decisions; needs the simulator. */
-  readonly planTurns: boolean;
-  /** The turn planner's budgets and number of sampled worlds. */
-  readonly planSettings: Readonly<PlanSettings>;
   /** The plan being followed and the index of its next step. */
   plan: { plan: Plan; at: number } | null = null;
-  /** Seed of this turn's sampled worlds (drawn at the turn's first plan), and that turn. */
-  worldSeed = 0;
-  worldSeedTurn = -1;
   /** Our Normal Summon (or monster set) is used this turn (the copies don't know). */
   normalSummonUsed = false;
   turn = -1;
@@ -48,11 +42,8 @@ export class BrainState {
   /** The monster the battle plan wants the current attack to hit. */
   attackTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
 
-  constructor(simulator: Simulator | null = null, replayChains = false, planTurns = false, planSettings = DEFAULT_PLAN_SETTINGS) {
+  constructor(simulator: Simulator | null = null) {
     this.simulator = simulator;
-    this.planSettings = planSettings;
-    this.replayChains = replayChains;
-    this.planTurns = planTurns;
   }
 
   /** Resets the per-turn state when a new turn has started. */

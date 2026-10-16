@@ -61,7 +61,8 @@ export function monsterStats(c: CardView): { atk: number; def: number; known: bo
  * How the AI values things, in "cards" (1 = an average card). Every value judgement goes through these numbers: the
  * board score that simulations compare, battle outcomes, which cards to pick. Defaults were picked by hand, except the
  * LP curve and the hand cards: those were fitted to who won (tools/fit-eval.ts on 5000 generic and 320 planner duels,
- * 2026-10-15; docs/ai-rework-plan.md phase 2). `npm run tune` searches by self-play, trainer styles (M4) can shift them.
+ * 2026-10-15; docs/ai-rework-plan.md phase 2). A fit on 1460 more planner duels (phase 3) confirmed the Spell/Trap
+ * values. `npm run tune` searches by self-play, trainer styles (M4) can shift them.
  */
 export interface Weights {
   /**
@@ -81,7 +82,7 @@ export interface Weights {
   setCard: number;
   /**
    * Our own set Traps: ready to use (a Trap can't be activated from the hand), the first worth setTrap, each further
-   * one setTrapStep less down to setCard, so piling them up stops paying.
+   * one setTrapStep less down to setCard, so piling them up stops paying. Fitted: a set Trap ≈ 0.2 more than in hand.
    */
   setTrap: number;
   setTrapStep: number;
@@ -92,7 +93,7 @@ export interface Weights {
   /**
    * Cards in hand: an unknown one, a known Spell, a known Trap, a known monster (handMonsterBase + factor * its field
    * value). Fitted: a card in hand is worth clearly less than the same card in play (a 1400 ATK monster 1.13 in hand,
-   * 1.57 on the field), so holding cards isn't a safe store of value. Traps kept (the fits disagreed).
+   * 1.57 on the field), so holding cards isn't a safe store of value.
    */
   handUnknown: number;
   handSpell: number;
@@ -111,11 +112,6 @@ export interface Weights {
    * Their turn in a copy brings one guessed attacker; a real hand can do more against an open field.
    */
   openField: number;
-  /**
-   * The turn planner with sampled worlds: a plan's values in the worlds are averaged as win chances,
-   * 1 / (1 + e^(-value / worldScale)) (sim/planner.ts `averageValue`).
-   */
-  worldScale: number;
   /** Per card short of 5 left in the Deck. */
   deckLowPenalty: number;
   /** Main phase: a simulated activation is used when it gains more than this. */
@@ -127,7 +123,6 @@ export const DEFAULT_WEIGHTS: Readonly<Weights> = {
   monsterBase: 0.4, atkDivisor: 1200, defFactor: 0.8, hiddenMonster: 1.3, token: 0.4,
   setCard: 1, setTrap: 1.3, setTrapStep: 0.15, hiddenSetCard: 1.2, continuous: 1.2, equip: 0.6, faceUpSpell: 0.5,
   handUnknown: 1, handSpell: 1, handTrap: 1.1, handMonsterBase: 0.5, handMonsterFactor: 0.4, stuckMonster: 0.75, stuckMonster2: 0.5, openField: 0.5,
-  worldScale: 3,
   deckLowPenalty: 0.5,
   activateMin: 0.05,
 };

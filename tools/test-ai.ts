@@ -4,10 +4,9 @@
 //    point (face-up on the field, in the GY/banished, or revealed), or public on its own side (a
 //    stolen card), and redact() must not change its input.
 // 3. The simulator's copies (sim/world.ts): every card a copy places on the opponent's side is a stand-in or one the
-//    AI could see right then; sampled worlds only draw cards the decks play or the opponent has shown, Spells/Traps
-//    for face-down Spells/Traps and monsters for face-down monsters, and the same seed gives the same worlds.
+//    AI could see right then.
 // 4. Move sequences in one copy (sim/sequence.ts) on a fixed board: what's offered, plans that can't work stop early,
-//    attacks and the opponent's reply turn change the score as they should, a world's set trap answers an attack.
+//    attacks and the opponent's reply turn change the score as they should.
 // Usage: npm run test-ai [-- <duels>]
 import {
   OcgHintType,
@@ -20,8 +19,7 @@ import {
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
 import { autoBotBrain } from "../src/duel/ai/brains.ts";
 import { redact } from "../src/duel/ai/redact.ts";
-import { BLANK, layoutFrom, sampleWorlds } from "../src/duel/ai/sim/world.ts";
-import { TYPE } from "../src/duel/cardData.ts";
+import { BLANK, layoutFrom } from "../src/duel/ai/sim/world.ts";
 import { AiMemory } from "../src/duel/ai/memory.ts";
 import { Simulator } from "../src/duel/ai/sim/simulator.ts";
 import { describeStep, type PlanStep } from "../src/duel/ai/sim/sequence.ts";
@@ -30,8 +28,6 @@ import { DECKS, type DeckName } from "../src/duel/decks.ts";
 import { cards, core, newDuel, readScript, runDuel, seedFrom } from "./lib/engine.ts";
 
 let failures = 0;
-/** Every card a prebuilt deck plays (the worlds' odds). */
-const deckCards = new Set(Object.values(DECKS).flatMap((d) => d.deck.main));
 const check = (ok: boolean, what: string) => {
   if (!ok) { failures++; console.error(`FAIL: ${what}`); }
 };
@@ -123,16 +119,6 @@ for (let i = 0; i < runs; i++) {
         const theirSide = layoutFrom(view).decks[1];
         for (const c of [...theirSide.main, ...(theirSide.extra ?? []), ...(theirSide.start ?? []).map((s) => s.code)])
           check(blanks.has(c) || visible.has(c), `duel ${i}: P${v}'s copy places P${1 - v}'s ${cards.name(c)}, which it can't see`);
-        const worlds = sampleWorlds(view, 2, 99);
-        check(JSON.stringify(worlds) === JSON.stringify(sampleWorlds(view, 2, 99)), `duel ${i}: the same seed gave different worlds`);
-        const shownByThem = seats[v].memory.seen[1 - v];
-        for (const w of worlds) {
-          const type = (c: number) => cards.records.get(c)?.type ?? 0;
-          for (const c of [...w.hand, ...w.spells, ...w.monsters]) if (c)
-            check(deckCards.has(c) || shownByThem.has(c), `duel ${i}: P${v}'s world places ${cards.name(c)}, which no deck plays and they haven't shown`);
-          for (const c of w.spells) if (c) check((type(c) & (TYPE.SPELL | TYPE.TRAP)) !== 0, `duel ${i}: a world sets ${cards.name(c)} as a Spell/Trap`);
-          for (const c of w.monsters) if (c) check((type(c) & TYPE.MONSTER) !== 0, `duel ${i}: a world sets ${cards.name(c)} as a monster`);
-        }
       }
       check(JSON.stringify(step.messages, (_k, v) => (typeof v === "bigint" ? v.toString() : v)) === before, `duel ${i}: redact mutated messages`);
       record();
@@ -175,30 +161,6 @@ for (let i = 0; i < runs; i++) {
   check(attack?.done === 3 && attack.value > start!.value, `sequence: Jinzo attacking Dark Magician Girl gains (${attack?.value} vs ${start?.value})`);
   const theirTurn = sim.sequence(view, [], { opponentTurn: true });
   check(theirTurn !== null && theirTurn.value < start!.value, `sequence: doing nothing loses Lord of D. in their turn (${theirTurn?.value} vs ${start?.value})`);
-  sim.dispose();
-  duel.destroy();
-}
-
-// --- 5. A sampled world's cards answer our moves ---------------------------------------------------------------
-{
-  const C = { celtic: 91152256, elf: 15025844, trapHole: 4206964, sakuretsu: 56120475 };
-  // The AI (seat 0): Celtic Guardian. Opponent: one set card (its real code doesn't matter: the copies only see a
-  // face-down card) and an empty Monster Zone.
-  const duel = newDuel({ decks: [
-    { main: Array<number>(20).fill(C.elf), start: [{ code: C.celtic, location: OcgLocation.MZONE, sequence: 0 }] },
-    { main: Array<number>(20).fill(C.elf), start: [{ code: C.trapHole, location: OcgLocation.SZONE, sequence: 2, position: OcgPosition.FACEDOWN_DEFENSE }] },
-  ], seed: seedFrom(4), draws: { opening: 0, perTurn: 0 }, onCoreLog: () => {} });
-  duel.advance();
-  const view = { seat: 0 as const, board: duel.snapshot(0), memory: new AiMemory(0), cards, hint: null, rng: () => 0.5, deckList: Array<number>(20).fill(C.elf) };
-  const sim = new Simulator({ core, cards, readScript });
-  const steps: PlanStep[] = [
-    { kind: "idle", action: SelectIdleCMDAction.TO_BP },
-    { kind: "attack", attacker: { code: C.celtic, location: OcgLocation.MZONE, sequence: 0, controller: 0 }, target: null },
-  ];
-  const blank = sim.sequence(view, steps, { world: { hand: [], spells: [], monsters: [] } });
-  const armor = sim.sequence(view, steps, { world: { hand: [], spells: [0, 0, C.sakuretsu], monsters: [] } });
-  check(blank?.done === 2 && armor?.done === 2 && armor.value < blank.value - 0.3,
-    `world: a set Sakuretsu Armor destroys the attacker (a card for a card, no damage: ${armor?.value} vs ${blank?.value} with a blank)`);
   sim.dispose();
   duel.destroy();
 }

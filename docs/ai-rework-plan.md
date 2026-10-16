@@ -89,7 +89,7 @@ per plan (well inside the 2 s budget).
 Done when: the new bench positions below pass, all old ones still pass, passivity numbers clearly drop versus the
 baseline, and the arena against the baseline is **≥ 50%** (not weaker; better is the goal).
 
-**Outcome 2026-10-15: sampled worlds built but not the default (brain `worlds`); the passivity was fixed in the
+**Outcome 2026-10-15: sampled worlds built but not better (since removed); the passivity was fixed in the
 evaluation instead** (fitted weights below: every bench position passes, ~30% fewer skipped summons and unused
 Spells/Traps, even win rate). Changed from the plan above, with the user:
 - Worlds are **real cards** drawn at the odds the prebuilt decks play them (`sampleWorlds` in `world.ts`; cards
@@ -156,13 +156,78 @@ about a quarter fewer summons and leaves about 28% fewer Spells/Traps unused, at
 
 Sampled worlds on top still don't pay: fewer unused Spells/Traps and fewer attacks into set cards, but 46.6% and
 3.5× the think time. Kept as brain `worlds` for later (with a longer horizon, or once the opponent model in the
-copies plays its cards better).
+copies plays its cards better). **Removed 2026-10-16** at the user's request, with the `sim` and `replay` brains (only
+`generic` and `planner` are left, plus `autobot` for the smoke tests): the whole worlds code (`sampleWorlds`, rescoring
+rounds, battle-phase planning, `worldScale`) is in git history at 1095a52 if a longer horizon makes it worth retrying.
 
 ### Phase 3: retune all weights together (mostly machine time)
 
 Run `npm run tune -- --brain planner` (overnight) on the full `Weights`, including today's additions. Keep a winner
 only if the arena says ≥ 53.5% against the baseline **and** the passivity numbers don't get worse. Weights that tune
 to "no effect" (e.g. `openField` after phase 2) go back to neutral.
+
+**Outcome 2026-10-16 (first part: the fit; self-play `tune` not run yet): no weight changes. The Trap and set-card
+weights are settled at their current values, and the hand-picked `openField`, `setTrap`/`setTrapStep` and
+`stuckMonster` stay.**
+
+Data: 1460 new planner-vs-planner duels with the phase 2 weights (960 with the 4 decks, seeds from 5001, and 500 with
+all 5 decks including Goat Control, seeds from 7001; 23k positions), plus phase 2's 320 planner and 5000 generic duels.
+Fits: `node tools/fit-eval.ts FILES --set lpHalf=10000 --fix defFactor,token,continuous,equip,faceUpSpell,deckLowPenalty`,
+40 bootstrap samples.
+
+- **The current weights are already at the data's optimum**: on held-out duels the fitted weights predict the winner
+  no better than the current ones (all 1780 planner duels: log loss 0.5306 vs 0.5320, accuracy 72.9% vs 72.7%).
+- **Phase 2's Trap disagreement was small-sample noise.** The 320 old planner duels gave `setTrap` 3.6 ± 0.4 and
+  `handTrap` 1.5 ± 0.3; the 960 new ones give 1.09 ± 0.23 and 1.06 ± 0.12.
+- **`setTrap` can't be fitted in its own formula.** A set Trap is worth `max(setCard, setTrap − setTrapStep·k)`, so once
+  the data puts it below `setCard` its slope is zero and the fit returns 0 ± 0. Fitted instead with the floor off
+  (`--set setCard=0,setTrapStep=0`, which values our own set Spells at 0 for this check only):
+
+| Weight (current) | Planner, 1780 duels | Generic, 5000 duels |
+|---|---|---|
+| own set Trap, `setTrap` (1.3) | 1.25 ± 0.14 | 1.12 ± 0.11 |
+| Trap in hand, `handTrap` (1.1) | 1.04 ± 0.09 | 0.86 ± 0.06 |
+| set − hand | +0.21 | +0.26 |
+| their set card, `hiddenSetCard` (1.2) | 1.15 ± 0.09 | 1.00 ± 0.06 |
+| our set Spell, `setCard` (1) (normal fit) | 1.22 ± 0.13 | 1.08 |
+| `setTrapStep` (0.15) | 0 ± 0.24 (clamped; free, it goes negative) | 0 ± 0.14 (clamped) |
+
+  Both data sets now agree: a set Trap is worth about 0.2-0.25 more than the same Trap in hand. That is the current
+  gap (1.3 vs 1.1), and `set-magic-jammer` needs it (with `setTrap` = `setCard` = 1 it fails: setting Jammer would lose
+  0.1). No change differs from the current value by more than about one sd, so none is adopted. `setTrapStep` isn't
+  supported by the data (later Traps count no less, if anything more), but it isn't ruled out either.
+- **`stuckMonster`** is the one weight the data pins down: 0.36 ± 0.13 (planner) and 0.48 ± 0.06 (generic) vs 0.75.
+  `stuckMonster2` disagrees (0.70 ± 0.10 vs 0.25 ± 0.07) and stays at 0.5. `lpScale` came out 9.5 ± 1.2 on planner
+  duels (generic 11.9 ± 0.7) and stays at 12.
+- `tools/fit-eval.ts`: `setTrapStep` is now clamped at ≥ 0 between relinearisations (a negative step ran away: held-out
+  loss 0.996 on the generic data). `ai-bench` takes `--weights W.json` to bench candidate weights.
+
+Arena (each candidate as A against the defaults as B, 736 duels, 4 decks, seeds from 1, `--stats`). The **null run**
+(defaults on both sides, same seeds) is the reference: on these seeds A comes out at 48.2%, not 50%.
+
+| A | A win rate | Skipped summons A / B | Open field A / B | Unused S/T A / B | Attacks into sets A / B | S/T in hand at end A / B |
+|---|---|---|---|---|---|---|
+| defaults (null) | 48.2% ± 3.6 | 8.6 / 8.1 | 22.6 / 23.9 | 125 / 124 | 43.1 (56%) / 42.9 (55%) | 1.25 / 1.25 |
+| `openField` 0 | 48.2% ± 3.6 | **10.0** / 8.0 | 23.3 / 23.6 | 124 / 125 | 43.1 (56%) / 42.8 (55%) | 1.23 / 1.26 |
+| `stuckMonster` 0.45 (fitted) | 48.4% ± 3.6 | 8.6 / 8.0 | 22.7 / 23.8 | 124 / 124 | 42.3 (55%) / 43.2 (55%) | 1.21 / 1.25 |
+| `setTrapStep` 0 | 48.6% ± 3.6 | 8.9 / 8.2 | 22.6 / 23.8 | 120 / 124 | 43.5 (57%) / 43.0 (55%) | 1.19 / 1.26 |
+
+- `openField` earns its place: without it the planner skips about 16% more summons (10.0 vs 8.6), at the same strength.
+- `stuckMonster` 0.45 predicts the winner better but plays the same: not adopted. (A stuck Level 5-6 in hand marks a
+  clumsy hand, which predicts losing without being a decision the AI can do better on.) All 56 bench runs pass with it.
+- `setTrapStep` 0: the same strength, 4% fewer unused Spells/Traps, slightly more skipped summons; within noise, so it
+  stays at 0.15. All 56 bench runs pass with it.
+- On the same seeds the three candidates win 355, 356 and 358 duels against the null's 355: small weight changes
+  barely change the planner's games. Telling them apart needs paired runs and several thousand duels each, which also
+  sets the bar for `npm run tune` (its 53.5% over 720 duels is far above anything these weights move).
+
+Planner-vs-planner self-play with the phase 2 weights, for reference (the recordings): 49.0% ± 3.2 (960 duels),
+49.4% ± 4.4 (500, 5 decks); skipped summons 7-8, open field 24, unused S/T 122-126 per 100 turns, 1.24-1.37 S/T in
+hand at the end. The phase 1 baseline was 11.1 / 26 / 183 / 1.8.
+
+Next for phase 3, if wanted: the self-play `tune` run (overnight) with paired seeds and a null run as the bar, or
+leave the weights and move on (worlds with a longer horizon, M4 difficulty levels); the evaluation's static weights
+look exhausted as a source of strength.
 
 ### Phase 4: new report workflow (starts now)
 
@@ -181,7 +246,8 @@ to "no effect" (e.g. `openField` after phase 2) go back to neutral.
 - `summon-under-1600-next-to-a-monster`: Warrior Dai Grepher on the field, Celtic Guardian in hand, opponent with a
   set monster and 4 cards → summon Celtic Guardian. Passes with worlds (`known` dropped).
 - `set-magic-jammer` (now a whole-turn check: setting it in Main Phase 2 counts): fails with worlds; with
-  the single guess it passes, only through `setTrap`; phase 3.
+  the single guess it passes, only through `setTrap`. Phase 3: the data backs that gap (a set Trap ≈ 0.2 more than
+  in hand), so it stays.
 - `respect-a-set-card` was dropped: the user doesn't want set cards to stop attacks. Instead
   `clear-the-set-card-first` (MST before the attacks) and its control `attack-through-a-set-card`.
 
@@ -192,8 +258,8 @@ to "no effect" (e.g. `openField` after phase 2) go back to neutral.
 | 0 baseline tag | minutes | ✅ `ai-baseline-2026-10-15` (e6d005a) |
 | 4 report log + `known` flag | small | ✅ 45582db |
 | 1 statistics | a few hours | ✅ c756d38 |
-| 2 sampled worlds | large | built as brain `worlds` (not better yet); passivity fixed by fitted LP / hand weights |
-| 3 tuning | overnight run | next: `fit-eval` on more planner duels (Traps, set cards), then self-play tuning |
+| 2 sampled worlds | large | built, not better, removed (git 1095a52); passivity fixed by fitted LP / hand weights |
+| 3 tuning | overnight run | fit on 1460 more planner duels: weights confirmed, no changes (2026-10-16); self-play `tune` not run |
 
 ## Starting phase 2 (notes for the next session)
 

@@ -4,7 +4,6 @@ import type { Brain } from "./AiSeat.ts";
 import { createGenericBrain } from "./generic/index.ts";
 import { Simulator, type SimEngine } from "./sim/simulator.ts";
 import type { Weights } from "./board.ts";
-import { WORLD_PLAN_SETTINGS } from "./sim/planner.ts";
 
 /** What a brain may be built with: the rules engine for simulations (never the duel itself), and its weights. */
 export interface BrainContext {
@@ -21,31 +20,15 @@ export const autoBotBrain: Brain = {
 
 export const BRAINS = {
   autobot: () => autoBotBrain,
-  /** M1: plays from card data alone. */
+  /** M1: plays from card data alone, no simulation (fast; the planner's own fallback). */
   generic: (ctx: BrainContext) => createGenericBrain({ weights: ctx.weights }),
-  /** M2: generic + main-phase activations judged by simulating them (needs the engine, else plays like generic). */
-  sim: (ctx: BrainContext) =>
-    createGenericBrain({ simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, weights: ctx.weights, name: "sim" }),
-  /** M3: sim + answers the opponent's attacks, summons, activations and phases by replaying them in a copy. */
-  replay: (ctx: BrainContext) =>
-    createGenericBrain({
-      simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, replayChains: true, weights: ctx.weights, name: "replay",
-    }),
-  /** replay + plans whole turns (sim/planner.ts): main-phase and battle moves as the best sequence for the turn. */
-  planner: (ctx: BrainContext) =>
-    createGenericBrain({
-      simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, replayChains: true, planTurns: true, weights: ctx.weights,
-      name: "planner",
-    }),
   /**
-   * planner + its best plans scored again across sampled guesses of the opponent's hidden cards, and the battle phase
-   * planned too (rework phase 2; not the default until it measures better).
+   * generic + the simulator: plans whole turns (sim/planner.ts: main-phase and battle moves as the best sequence for
+   * the turn) and answers the opponent's moves by replaying them in a copy (sim/replay.ts). Needs the engine, else it
+   * plays like generic.
    */
-  worlds: (ctx: BrainContext) =>
-    createGenericBrain({
-      simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, replayChains: true, planTurns: true, weights: ctx.weights,
-      planSettings: WORLD_PLAN_SETTINGS, name: "worlds",
-    }),
+  planner: (ctx: BrainContext) =>
+    createGenericBrain({ simulator: ctx.engine ? new Simulator(ctx.engine, ctx.weights) : undefined, weights: ctx.weights, name: "planner" }),
 } satisfies Record<string, (ctx: BrainContext) => Brain>;
 
 export type BrainName = keyof typeof BRAINS;

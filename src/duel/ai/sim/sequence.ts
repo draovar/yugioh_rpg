@@ -23,7 +23,7 @@ import { SELECT_HINT } from "../generic/select.ts";
 import { formatTrace } from "../trace.ts";
 import { findSame, idleList, type CardOption } from "./options.ts";
 import type { Simulator } from "./simulator.ts";
-import { layoutFrom, type World } from "./world.ts";
+import { layoutFrom } from "./world.ts";
 
 /** One move at a main-phase or battle prompt. Zones are the copy's (the same as the real board's). */
 export type PlanStep =
@@ -42,19 +42,10 @@ export interface SequenceOptions {
    * generic brain would, then end the turn. So a plan is scored with its attacks, not only its main-phase moves.
    */
   battleAfter?: boolean;
-  /**
-   * The opponent's hidden cards (world.ts); default the single guess. In a world their cards are real, so they also
-   * answer our moves (the generic brain's chain rule: a Trap Hole on our summon, a Mirror Force on our attack), and a
-   * step the copy no longer offers (its monster was destroyed) is skipped: the turn goes on as the plan would.
-   */
-  world?: World;
 }
 
 export interface SequenceResult {
-  /**
-   * Steps carried out. Fewer than given: the copy didn't offer step `done` there (the plan doesn't work). In a world,
-   * skipped steps count as carried out.
-   */
+  /** Steps carried out. Fewer than given: the copy didn't offer step `done` there (the plan doesn't work). */
   done: number;
   /** The board at the end, for the AI (±1000 if the duel ended there). */
   value: number;
@@ -92,21 +83,19 @@ const pass: OcgResponse = { type: OcgResponseType.SELECT_CHAIN, index: null };
 
 /** Plays `steps` from the board in `view`; null if the copy failed. The AI is seat 0 in the copy. */
 export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanStep[], opts: SequenceOptions = {}): SequenceResult | null {
-  const duel = sim.build(layoutFrom(view, opts.world));
+  const duel = sim.build(layoutFrom(view));
   try {
     const debug = sim.debugSink;
     const brain = () => createGenericBrain({ weights: sim.weights });
     const ai = new AiSeat({ seat: 0, brain: brain(), duel, onTrace: debug ? (e) => debug(`      (plan) ${formatTrace(e)}`) : undefined });
-    const opp = opts.opponentTurn || opts.world ? new AiSeat({ seat: 1, brain: brain(), duel }) : null;
-    /** Steps the copy refused in a world (skipped, not a failed plan). */
-    let skipped = 0;
+    const opp = opts.opponentTurn ? new AiSeat({ seat: 1, brain: brain(), duel }) : null;
     const score = () => evaluate({
       seat: 0, board: duel.snapshot(0), memory: ai.memory, cards: sim.cardDb, hint: null, rng: () => 0.5, deckList: null, weights: sim.weights,
     });
     let done = 0;
     let next: PlanStep[] = [];
     const checkpoints: number[] = [];
-    const result = (value: number): SequenceResult => ({ done: done + skipped, value, next, checkpoints });
+    const result = (value: number): SequenceResult => ({ done, value, next, checkpoints });
     /** Our turn is over (all steps done, opponentTurn): from here on both sides play on their own. */
     let finishing = false;
     /** The attack the last step declared waits for its target prompt. */
@@ -140,22 +129,17 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
       const p = s.prompt as Prompt;
 
       if (p.player === 1) {
-        // The single guess's stand-ins never respond during our moves; a world's cards do. In their own turn they play
-        // with the generic brain.
-        duel.respond(opp && (finishing || opts.world) ? opp.decide(p)
-          : p.type === OcgMessageType.SELECT_CHAIN && !p.forced ? pass : autoRespond(p, () => 0, sim.cardDb));
+        // Stand-ins never respond during our moves; in their own turn they play with the generic brain.
+        duel.respond(opp && finishing ? opp.decide(p) : p.type === OcgMessageType.SELECT_CHAIN && !p.forced ? pass : autoRespond(p, () => 0, sim.cardDb));
         continue;
       }
       if (p.type === OcgMessageType.SELECT_IDLECMD || p.type === OcgMessageType.SELECT_BATTLECMD) {
         if (finishing) { duel.respond(ai.decide(p)); continue; } // only reached if our turn didn't end (shouldn't)
-        if (checkpoints.length === done + skipped) checkpoints.push(boardDigest(duel.snapshot(0), 0));
-        // In a world, steps the copy refuses are skipped (their trap took the monster the next step attacks with).
-        while (opts.world && done + skipped < steps.length && !responseFor(p, steps[done + skipped])) skipped++;
-        if (done + skipped < steps.length) {
-          const r = responseFor(p, steps[done + skipped]);
+        if (checkpoints.length === done) checkpoints.push(boardDigest(duel.snapshot(0), 0));
+        if (done < steps.length) {
+          const r = responseFor(p, steps[done]);
           if (!r) { next = nextSteps(p, duel.snapshot(0)); return result(score()); }
-          const step = steps[done + skipped];
-          done++;
+          const step = steps[done++];
           target = step.kind === "attack" ? step.target : undefined;
           duel.respond(r);
           continue;

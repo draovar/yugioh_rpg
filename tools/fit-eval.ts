@@ -1,7 +1,7 @@
 // Fits the evaluation's weights (board.ts `Weights`) to who actually won: "Texel tuning". Input: positions recorded by
 // `npm run arena -- --record FILE` (each turn's starting board as the turn player saw it, and whether they won). The
 // model: P(win) = 1 / (1 + e^-(evaluate(position) / scale + bias)); the fit finds the weights and the scale (cards → win
-// chance, the planner's `worldScale`) that predict the results best. Monster values are the unit and stay fixed
+// chance) that predict the results best. Monster values are the unit and stay fixed
 // (monsterBase, atkDivisor); everything else in `evaluate` is fitted.
 //
 // How: evaluate() is nearly linear in its weights, so around the current weights each position becomes a feature
@@ -141,6 +141,8 @@ function fit(w0: Weights, sample: number[], rounds: number) {
     // Keep the nonlinear ones in a sane range (a relinearisation step can overshoot).
     next.lpHalf = Math.min(20000, Math.max(300, next.lpHalf));
     next.defFactor = Math.min(1.5, Math.max(0, next.defFactor));
+    // A negative step (each further Trap worth more) runs away over the relinearisations.
+    next.setTrapStep = Math.max(0, next.setTrapStep);
     w = next;
   }
   return { w, scale, bias };
@@ -193,6 +195,6 @@ for (const k of FITTED) {
   console.log(`${k.padEnd(18)} ${String(DEFAULT_WEIGHTS[k]).padStart(8)} ${full.w[k].toFixed(3).padStart(10)}   ± ${s.toFixed(3)}`);
 }
 if (opt("out")) {
-  writeFileSync(opt("out")!, JSON.stringify({ ...set, ...Object.fromEntries([...FITTED.map((k) => [k, Number(full.w[k].toFixed(3))]), ["worldScale", Number(full.scale.toFixed(2))]]) }, null, 2));
+  writeFileSync(opt("out")!, JSON.stringify({ ...set, ...Object.fromEntries([...FITTED.map((k) => [k, Number(full.w[k].toFixed(3))])]) }, null, 2));
   console.log(`wrote ${opt("out")}`);
 }

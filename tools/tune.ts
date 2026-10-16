@@ -2,7 +2,7 @@
 // random, plays the variant against the current best (same brain, every deck pairing, both seat orders, fresh seeds),
 // and keeps it only if it wins clearly. A quick first stage weeds out losers; promising variants play a longer second
 // stage. Results go to vendor/tune/ (gitignored): best.json (resumed on the next run) and log.jsonl.
-// Usage: npm run tune -- [--brain sim] [--rounds 20] [--quick 10] [--long 30] [--seed 1] [--jobs N]
+// Usage: npm run tune -- [--brain planner] [--rounds 20] [--quick 10] [--long 30] [--seed 1] [--jobs N]
 //   --quick / --long  duels per deck pairing and seat order in the first / second stage (x18 duels each)
 // Afterwards: compare best.json with the built-in weights (`npm run arena -- --a sim --b sim --wa vendor/tune/best.json`)
 // and copy the winners into DEFAULT_WEIGHTS by hand.
@@ -22,7 +22,7 @@ for (let i = 0; i < argv.length; i++) {
   const next = argv[i + 1];
   args.set(argv[i].slice(2), next && !next.startsWith("--") ? argv[++i] : "");
 }
-const brain = (args.get("brain") ?? "sim") as BrainName;
+const brain = (args.get("brain") ?? "planner") as BrainName;
 if (!isBrainName(brain)) throw new Error(`unknown brain ${brain}`);
 const rounds = Number(args.get("rounds") ?? 20);
 const quick = Number(args.get("quick") ?? 10);

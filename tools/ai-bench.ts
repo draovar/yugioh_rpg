@@ -4,9 +4,12 @@
 // answer, or its whole turn (every main-phase and battle choice in order, e.g. "summon Celtic Guardian → to battle
 // phase → attack with Celtic Guardian → ...").
 // Usage: npm run ai-bench [-- --brain NAME (default: the game's)] [-- --show] [-- --only NAME-PART]
+//        [-- --weights W.json (any of board.ts's Weights; the rest stay default)]
+import { readFileSync } from "node:fs";
 import { OcgLocation, OcgMessageType, OcgPosition, OcgResponseType, SelectIdleCMDAction } from "ocgcore-wasm";
 import { autoRespond } from "../src/duel/autoBot.ts";
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
+import { DEFAULT_WEIGHTS, type Weights } from "../src/duel/ai/board.ts";
 import { BRAINS, DEFAULT_BRAIN, isBrainName, type BrainName } from "../src/duel/ai/brains.ts";
 import { formatTrace, type TraceEntry } from "../src/duel/ai/trace.ts";
 import type { Deck, StartCard } from "../src/duel/DuelSession.ts";
@@ -284,6 +287,8 @@ const brainName = (args.includes("--brain") ? args[args.indexOf("--brain") + 1] 
 if (!isBrainName(brainName)) throw new Error(`unknown brain ${brainName}`);
 const show = args.includes("--show");
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
+const weights: Weights | undefined = args.includes("--weights")
+  ? { ...DEFAULT_WEIGHTS, ...(JSON.parse(readFileSync(args[args.indexOf("--weights") + 1], "utf-8")) as Partial<Weights>) } : undefined;
 const filler = (): Deck["main"] => Array<number>(30).fill(C.mysticalElf);
 
 let failed = 0;
@@ -305,7 +310,7 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
   const traces: TraceEntry[] = [];
   let firstTurnTrace: TraceEntry | null = null;
   const ai = new AiSeat({
-    seat: aiSeat, brain: BRAINS[brainName]({ engine: { core, cards, readScript } }), duel,
+    seat: aiSeat, brain: BRAINS[brainName]({ engine: { core, cards, readScript }, weights }), duel,
     deck: aiDeck, onTrace: (e) => traces.push(e),
   });
   let choice: TraceEntry | null = null;
