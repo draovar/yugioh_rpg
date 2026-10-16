@@ -1,22 +1,30 @@
 // The smaller prompts: battle position, card / attribute / type declarations.
-import { OcgMessageType, OcgPosition, OcgResponseType, type OcgMessage, type OcgResponse } from "ocgcore-wasm";
+import { OcgMessageType, OcgPhase, OcgPosition, OcgResponseType, type OcgMessage, type OcgResponse } from "ocgcore-wasm";
 import { TYPE } from "../../cardData.ts";
 import { declarableCards } from "../../autoBot.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
-import { bestAtk, codeValue, mine, theirs } from "../board.ts";
+import { DEFENSE, bestAtk, codeValue, mine, theirs } from "../board.ts";
 
 type Msg<T extends OcgMessageType> = Extract<OcgMessage, { type: T }>;
 
-/** Attack position when the monster beats their best face-up attacker, else defense (face-down for flip effects). */
+/**
+ * Attack position when the monster beats their best face-up monster, or when it can destroy one of theirs in battle
+ * this turn (ATK against a Defense Position monster's DEF) and their best one attacking it next turn wouldn't cost all
+ * our LP; else defense (face-down for flip effects).
+ */
 export function decidePosition(m: Msg<OcgMessageType.SELECT_POSITION>, view: AiView): Decision {
   const r = view.cards.records.get(m.code);
-  const theirBest = bestAtk(theirs(view));
+  const opp = theirs(view);
+  const theirBest = bestAtk(opp);
+  const canBattle = view.memory.phase === OcgPhase.MAIN1 && view.memory.turn > 1 && view.memory.turnPlayer === view.seat;
+  const destroys = (atk: number) => canBattle && opp.monsters.some((c) => c && !c.faceDown && atk > (c.position & DEFENSE ? c.defense : c.attack));
   const wants: OcgPosition[] = [];
-  if (r && r.atk > theirBest && r.atk >= r.def) wants.push(OcgPosition.FACEUP_ATTACK);
+  const survives = (atk: number) => theirBest - atk < mine(view).lp;
+  if (r && r.atk >= r.def && (r.atk > theirBest || (destroys(r.atk) && survives(r.atk)))) wants.push(OcgPosition.FACEUP_ATTACK);
   if (r && r.type & TYPE.FLIP) wants.push(OcgPosition.FACEDOWN_DEFENSE);
   wants.push(OcgPosition.FACEUP_DEFENSE, OcgPosition.FACEDOWN_DEFENSE, OcgPosition.FACEUP_ATTACK, OcgPosition.FACEDOWN_ATTACK);
   const position = wants.find((p) => m.positions & p)!;
-  const reason = position === OcgPosition.FACEUP_ATTACK ? "it beats their monsters" : "it can't win fights";
+  const reason = position !== OcgPosition.FACEUP_ATTACK ? "it can't win fights" : r && r.atk > theirBest ? "it beats their monsters" : "it can destroy one of theirs";
   return { response: { type: OcgResponseType.SELECT_POSITION, position }, reason };
 }
 

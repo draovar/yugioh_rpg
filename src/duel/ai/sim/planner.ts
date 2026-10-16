@@ -35,9 +35,20 @@ export interface PlanSettings {
   /** Most copies per search, and most milliseconds. */
   maxNodes: number;
   maxMs: number;
+  /**
+   * Plans kept besides the beam because their last move unlocked a summon or activation the plan before it couldn't
+   * make (Soul Exchange → a Tribute Summon): scored as if the turn ended there they often look lost, before the move
+   * they enable is tried.
+   */
+  unlockKeep: number;
 }
 
-export const DEFAULT_PLAN_SETTINGS: Readonly<PlanSettings> = { beam: 3, depth: 6, children: 8, maxNodes: 60, maxMs: 2000 };
+export const DEFAULT_PLAN_SETTINGS: Readonly<PlanSettings> = { beam: 3, depth: 6, children: 8, maxNodes: 60, maxMs: 2000, unlockKeep: 2 };
+
+const UNLOCKS: ReadonlySet<SelectIdleCMDAction> = new Set([
+  SelectIdleCMDAction.SELECT_SUMMON, SelectIdleCMDAction.SELECT_SPECIAL_SUMMON, SelectIdleCMDAction.SELECT_ACTIVATE,
+]);
+const stepKey = (s: PlanStep) => (s.kind === "idle" ? `${s.action}:${s.card?.code ?? 0}` : "");
 
 export interface PlanContext {
   /** Our Normal Summon (or monster set) is already used this turn. */
@@ -66,7 +77,14 @@ interface Node {
   value: number;
   next: PlanStep[];
   checkpoints: number[];
+  /** Damage the opponent took in our turn. */
+  damage: number;
 }
+
+/** Plans scoring within this of the best count as tied: the one dealing more damage wins, then the one summoning more. */
+const TIE = 0.05;
+const summons = (n: Node) => n.steps.filter((s) => s.kind === "idle"
+  && (s.action === SelectIdleCMDAction.SELECT_SUMMON || s.action === SelectIdleCMDAction.SELECT_SPECIAL_SUMMON)).length;
 
 const BATTLE = 0xf8;
 
@@ -127,7 +145,7 @@ export function planTurn(
     nodes++;
     const r = sim.sequence({ ...view, rng: mulberry32(deckSeed) }, [...prefix, ...steps], { opponentTurn: true, battleAfter: canBattle });
     if (!r || r.done < prefix.length + steps.length) return null;
-    return { steps, value: r.value, next: r.next, checkpoints: r.checkpoints.slice(prefix.length) };
+    return { steps, value: r.value, next: r.next, checkpoints: r.checkpoints.slice(prefix.length), damage: r.damageDealt };
   };
   const overBudget = () => nodes >= settings.maxNodes || performance.now() - started > settings.maxMs;
 
@@ -142,7 +160,10 @@ export function planTurn(
   let frontier: Node[] = [root];
   for (let depth = 0; depth < settings.depth && frontier.length && !overBudget(); depth++) {
     const children: Node[] = [];
+    /** Children whose last move made a summon or activation possible that their parent couldn't make. */
+    const unlocking = new Set<Node>();
     for (const node of frontier) {
+      const before = new Set(node.next.map(stepKey));
       const moves = node.next.filter((s) => allowed(s, node.steps)).sort((a, b) => priority(a) - priority(b)).slice(0, settings.children);
       for (const move of moves) {
         if (overBudget()) break;
@@ -155,17 +176,25 @@ export function planTurn(
           seen.add(reached);
         }
         children.push(child);
+        if (child.next.some((s) => s.kind === "idle" && UNLOCKS.has(s.action) && !before.has(stepKey(s)) && allowed(s, child.steps)))
+          unlocking.add(child);
       }
     }
     all.push(...children);
-    frontier = children.sort((a, b) => b.value - a.value).slice(0, settings.beam);
+    children.sort((a, b) => b.value - a.value);
+    frontier = [
+      ...children.slice(0, settings.beam),
+      ...children.slice(settings.beam).filter((c) => unlocking.has(c)).slice(0, settings.unlockKeep),
+    ];
   }
 
   all.sort((a, b) => b.value - a.value);
-  const best = all[0];
+  // A near-tie goes to the more active plan (damage, then summons): holding back is no safer when the scores agree.
+  const best = all.filter((n) => n.value >= all[0].value - TIE)
+    .reduce((a, b) => (b.damage > a.damage || (b.damage === a.damage && summons(b) > summons(a)) ? b : a));
   return {
     steps: best.steps, battleAfter: !!canBattle, value: best.value, checkpoints: best.checkpoints,
-    alternatives: all.slice(1, 6).map((n) => ({ steps: n.steps, value: n.value })),
+    alternatives: all.filter((n) => n !== best).slice(0, 5).map((n) => ({ steps: n.steps, value: n.value })),
     nodes, ms: performance.now() - started,
   };
 }

@@ -57,6 +57,8 @@ export interface SequenceResult {
    * happened (a response, a different draw): plan again.
    */
   checkpoints: number[];
+  /** Damage the opponent took in our turn (the planner's tie-breaker). */
+  damageDealt: number;
 }
 
 /**
@@ -95,7 +97,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
     let done = 0;
     let next: PlanStep[] = [];
     const checkpoints: number[] = [];
-    const result = (value: number): SequenceResult => ({ done, value, next, checkpoints });
+    const result = (value: number): SequenceResult => ({ done, value, next, checkpoints, damageDealt });
     /** Our turn is over (all steps done, opponentTurn): from here on both sides play on their own. */
     let finishing = false;
     /** The attack the last step declared waits for its target prompt. */
@@ -112,6 +114,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
     /** Our LP when our turn ended, and the damage we took after it. */
     let lpAtEnd = 0;
     let damageTaken = 0;
+    let damageDealt = 0;
     /**
      * A loss in their turn: minus how far past lethal they got (damage beyond our LP, valued like LP). Facing the same
      * attackers, a set blocker loses by less than one in Attack Position, and is that much closer to surviving if the
@@ -123,7 +126,10 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
       const s = duel.advance();
       ai.observe(s.messages);
       opp?.observe(s.messages);
-      if (finishing) for (const m of s.messages) if (m.type === OcgMessageType.DAMAGE && m.player === 0) damageTaken += m.amount;
+      for (const m of s.messages) if (m.type === OcgMessageType.DAMAGE) {
+        if (finishing && m.player === 0) damageTaken += m.amount;
+        if (!finishing && m.player === 1) damageDealt += m.amount;
+      }
       if (s.ended) return result(s.winner === 0 ? 1000 + endOfTurn : s.winner === 1 ? lost() : 0);
       if (ai.memory.turn > 2) return result(score() - openField); // the opponent's turn is over
       const p = s.prompt as Prompt;

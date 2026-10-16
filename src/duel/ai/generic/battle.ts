@@ -10,7 +10,7 @@ import {
 } from "ocgcore-wasm";
 import type { CardView } from "../../DuelSession.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
-import { cardAt, damageCost, monsterStats, monsterValue, theirs, weightsOf } from "../board.ts";
+import { WALL_DEF, cardAt, damageCost, mine, monsterStats, monsterValue, theirs, weightsOf } from "../board.ts";
 import { best, sameLoc, type BrainState, type Option } from "./common.ts";
 
 type BattleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_BATTLECMD }>;
@@ -56,6 +56,18 @@ export function decideBattle(m: BattleMessage, view: AiView, state: BrainState):
       options.push({ label: `${name(x.a.code)} attacks directly`, score: 1 + x.card.attack / 1000, response: attack(x.index) });
   } else {
     for (const t of targets) {
+      if (!monsterStats(t).known) {
+        // An unknown face-down monster, often a wall: probe it with the weakest attacker above WALL_DEF, else
+        // the strongest one; not when bouncing off a wall would cost the duel.
+        const sorted = [...attackers].sort((p, q) => p.card.attack - q.card.attack);
+        const x = sorted.find((s) => s.card.attack > WALL_DEF) ?? sorted[sorted.length - 1];
+        const v = x ? attackValue(view, x.card, t) : 0;
+        if (!x || v <= 0.05 || mine(view).lp <= WALL_DEF - x.card.attack) continue;
+        const option = { label: `${name(x.a.code)} attacks a face-down monster`, score: v, response: attack(x.index) };
+        options.push(option);
+        planned.set(option, t);
+        continue;
+      }
       // The weakest attacker that destroys it (by value, then ATK) gets this target.
       const scored = attackers.map((x) => ({ x, v: attackValue(view, x.card, t) })).filter((s) => s.v > 0.05);
       if (!scored.length) continue;

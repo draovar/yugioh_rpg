@@ -29,7 +29,7 @@ const START: Weights = { ...DEFAULT_WEIGHTS, ...set };
 
 /** The weights evaluate() uses, minus the unit (monster values), those it never reads, and `--fix`ed ones. */
 const FITTED = ([
-  "lpScale", "lpHalf", "defFactor", "hiddenMonster", "token", "setCard", "setTrap", "setTrapStep", "hiddenSetCard",
+  "lpScale", "lpHalf", "defFactor", "hiddenMonster", "token", "beatsTheirBest", "setCard", "setTrap", "setTrapStep", "hiddenSetCard",
   "continuous", "equip", "faceUpSpell", "handUnknown", "handSpell", "handTrap", "handMonsterBase", "handMonsterFactor",
   "stuckMonster", "stuckMonster2", "deckLowPenalty",
 ] as const satisfies readonly (keyof Weights)[]).filter((k) => !fixed.has(k));

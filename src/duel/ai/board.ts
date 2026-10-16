@@ -10,6 +10,11 @@ export const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE
 
 /** Guessed DEF of a face-down monster we can't see: GOAT decks mostly set low-DEF flip monsters. */
 export const UNKNOWN_DEF = 1300;
+/**
+ * The DEF a face-down monster may well have: a wall (Giant Soldier of Stone, Mystical Elf). Attacks into one go with an
+ * attacker stronger than this when there is one, and not at all when bouncing off it would cost all our LP.
+ */
+export const WALL_DEF = 2000;
 
 export const mine = (view: AiView): PlayerView => view.board.players[view.seat];
 export const theirs = (view: AiView): PlayerView => view.board.players[1 - view.seat];
@@ -78,6 +83,11 @@ export interface Weights {
   /** A face-down monster we can't see (most likely a flip effect monster). */
   hiddenMonster: number;
   token: number;
+  /**
+   * Added for each face-up monster with more ATK than every face-up monster on the other side: it wins its fights and
+   * can't be beaten in battle, worth more than its ATK alone says (one 3000 beats two 1900s).
+   */
+  beatsTheirBest: number;
   /** Spells/Traps on the field: our own set ones, the opponent's we can't see, face-up continuous/field, equips, others. */
   setCard: number;
   /**
@@ -120,7 +130,7 @@ export interface Weights {
 
 export const DEFAULT_WEIGHTS: Readonly<Weights> = {
   lpScale: 12, lpHalf: 10000,
-  monsterBase: 0.4, atkDivisor: 1200, defFactor: 0.8, hiddenMonster: 1.3, token: 0.4,
+  monsterBase: 0.4, atkDivisor: 1200, defFactor: 0.8, hiddenMonster: 1.3, token: 0.4, beatsTheirBest: 1.2,
   setCard: 1, setTrap: 1.3, setTrapStep: 0.15, hiddenSetCard: 1.2, continuous: 1.2, equip: 0.6, faceUpSpell: 0.5,
   handUnknown: 1, handSpell: 1, handTrap: 1.1, handMonsterBase: 0.5, handMonsterFactor: 0.4, stuckMonster: 0.75, stuckMonster2: 0.5, openField: 0.5,
   deckLowPenalty: 0.5,
@@ -135,12 +145,12 @@ export function statValue(atk: number, def: number, w: Readonly<Weights> = DEFAU
   return w.monsterBase + Math.max(atk, w.defFactor * def) / w.atkDivisor;
 }
 
-/** A monster on the field. */
+/** A monster on the field. Its DEF only counts in Defense Position: a wall in Attack Position is just its ATK. */
 export function monsterValue(view: AiView, c: CardView): number {
   const w = weightsOf(view);
   if (!c.code) return w.hiddenMonster;
   if (cardType(view, c.code) & TYPE.TOKEN) return w.token;
-  return statValue(c.attack, c.defense, w);
+  return c.position & DEFENSE ? statValue(c.attack, c.defense, w) : w.monsterBase + c.attack / w.atkDivisor;
 }
 
 /** A Spell/Trap on the field. Ones we can't see are a threat (a Mirror Force?). */
@@ -191,10 +201,12 @@ export function bestAtk(p: PlayerView): number {
  * One side's material: LP, monsters, Spells/Traps, hand, and a penalty for an almost empty Deck. Hand cards we can see
  * count by what they are (so drawing 3 and discarding the 2 worst is a gain), hidden ones as an average card.
  */
-function sideValue(view: AiView, p: PlayerView): number {
+function sideValue(view: AiView, p: PlayerView, other: PlayerView): number {
   const w = weightsOf(view);
   let v = lpValue(p.lp, w);
-  for (const c of p.monsters) if (c) v += monsterValue(view, c);
+  // Face-up monsters stronger than anything the other side shows: nothing of theirs wins a fight against them.
+  const theirBest = bestAtk(other);
+  for (const c of p.monsters) if (c) v += monsterValue(view, c) + (!c.faceDown && c.attack > theirBest ? w.beatsTheirBest : 0);
   // A Ritual Monster and its Ritual Spell (in hand, or our own set one) are one card's worth together (the monster's),
   // each stuck without the other.
   const ritualSpells = [...p.hand, ...p.spells.filter((c): c is CardView => !!c && c.faceDown)]
@@ -238,5 +250,5 @@ export function evaluate(view: AiView): number {
   const me = mine(view), opp = theirs(view);
   if (opp.lp <= 0) return 1000;
   if (me.lp <= 0) return -1000;
-  return sideValue(view, me) - sideValue(view, opp);
+  return sideValue(view, me, opp) - sideValue(view, opp, me);
 }

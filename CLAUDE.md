@@ -114,7 +114,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     real prompt, deeper ones from each copy's `next`), scoring each plan by playing it, then a battle phase with the
     generic battle logic (`battleAfter`), then the opponent's turn; plans reaching the same board merge; all copies of one search share one order
     for the AI's unknown Deck (else a luckier Pot of Greed draw, not the better move, wins a comparison); budgets
-    `DEFAULT_PLAN_SETTINGS` (beam 3, depth 6, 8 children, 60 copies, 2 s). It enforces what copies don't know (Normal
+    `DEFAULT_PLAN_SETTINGS` (beam 3, depth 6, 8 children, 60 copies, 2 s; plus up to 2 plans whose last move unlocked a new
+    summon or activation, e.g. Soul Exchange → a Tribute Summon, kept however bad they look so far). Plans within 0.05 of
+    the best count as tied: the one dealing more damage in our turn wins, then the one with more summons. It enforces what copies don't know (Normal
     Summon used, monsters that attacked, no battle on turn 1 / after Main 2). `generic/plan.ts` follows the plan step by
     step while the real board matches the plan's `checkpoints` (`boardDigest`), replans otherwise, battles with the
     usual logic after a finished plan and plans Main Phase 2 afresh.
