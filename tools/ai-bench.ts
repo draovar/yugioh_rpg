@@ -30,7 +30,8 @@ const C = {
   wallOfIllusion: 13945283, soulExchange: 68005187, lusterDragon2: 17658803, fairyMeteorCrush: 97687912, burstBreath: 80163754,
   lightOfIntervention: 62867251, dianKeto: 84257639, changeOfHeart: 4031928,
   zombyra: 88472456, malevolentNuzzler: 99597615, sevenTools: 3819470, trapMaster: 46461247, paladinOfWhiteDragon: 73398797,
-  noblemanOfCrossout: 71044499,
+  noblemanOfCrossout: 71044499, removeTrap: 51482758, witchOfTheBlackForest: 78010363, mysteriousPuppeteer: 54098121,
+  shadowSpell: 29267084, spellbindingCircle: 18807108, rushRecklessly: 70046172, hyozanryu: 62397231, snatchSteal: 45986603, swords: 72302403, sonicBird: 57617178,
 } as const;
 
 interface Position {
@@ -56,6 +57,8 @@ interface Position {
   plan?: boolean;
   /** Check the AI's whole turn instead: its main-phase and battle choices in order, joined by " → ". */
   turn?: boolean;
+  /** With `turn`: also list its card picks (SELECT_CARD answers other than attack targets) as "pick <cards>" and positions as "position <pos>". */
+  picks?: boolean;
   /**
    * A known misplay waiting for a planned fix (docs/ai-rework-plan.md, e.g. "phase 2a"): reported as "known", not a
    * failure; when it passes, "now passes" says the flag can go.
@@ -74,6 +77,9 @@ const setCard = (code: number, sequence = 0): StartCard => ({ code, location: Oc
 /** A face-up Equip Spell in zone `sequence`, equipped to the monster in zone `to` of duel team `team`. */
 const equip = (code: number, sequence: number, to: number, team: 0 | 1): StartCard =>
   ({ code, location: OcgLocation.SZONE, sequence, equipTo: { team, sequence: to } });
+/** A face-up persistent Trap in zone `sequence` targeting the monster in zone `to` of duel team `team` (Shadow Spell...). */
+const lock = (code: number, sequence: number, to: number, team: 0 | 1): StartCard =>
+  ({ code, location: OcgLocation.SZONE, sequence, position: OcgPosition.FACEUP_ATTACK, cardTargets: [{ team, sequence: to }] });
 
 const POSITIONS: Position[] = [
   {
@@ -412,6 +418,102 @@ const POSITIONS: Position[] = [
     plan: true,
     expect: /plan: summon Winged Dragon/,
   },
+  {
+    name: "free-the-locked-monster-for-lethal",
+    why: "review 2026-10-16 (seed 105 T14): Summoned Skull under the opponent's Shadow Spell, Remove Trap in hand, the opponent at 800 LP with Witch of the Black Forest (1100) in attack; the copies lost Shadow Spell's lock, every plan 'won', and Remove Trap went off in Main 2",
+    ai: [monster(C.summonedSkull, 0), monster(C.kuriboh, 2, OcgPosition.FACEUP_DEFENSE), hand(C.removeTrap)],
+    opponent: [
+      monster(C.mysteriousPuppeteer, 0, OcgPosition.FACEUP_DEFENSE), monster(C.witchOfTheBlackForest, 1), lock(C.shadowSpell, 2, 0, 1),
+      hand(C.blueEyes), hand(C.mysticalElf),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [7800, 800],
+    turn: true,
+    expect: /activate Remove Trap.*attack with Summoned Skull/,
+  },
+  {
+    name: "mst-the-circle",
+    why: "review 2026-10-16 (seed 106 T7-T9): with Battle Ox under the opponent's Spellbinding Circle, the copies' Ox attacked anyway (plans scored as wins, T9 turned both Mystic Tomatoes to defense); here: free it with MST for lethal",
+    ai: [monster(C.battleOx, 0), hand(C.mst)],
+    opponent: [lock(C.spellbindingCircle, 1, 0, 1), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiSecond: true,
+    aiDeck: DECKS.kaibaEvolution.deck.main,
+    lp: [8000, 1700],
+    turn: true,
+    expect: /activate Mystical Space Typhoon.*attack with Battle Ox/,
+  },
+  {
+    name: "trade-then-attack-for-lethal",
+    why: "review 2026-10-16 (seed 105 T12): the opponent at 300 LP behind Mysterious Puppeteer (1000, attack); Sangan (1000) trading with it lets Kuriboh (300) attack directly for lethal, but the battle logic never trades equal monsters: no attack",
+    ai: [
+      monster(C.summonedSkull, 0), monster(C.kuriboh, 2), monster(C.sangan, 3),
+      setCard(C.trapHole, 0), setCard(C.reliableGuardian, 1),
+    ],
+    opponent: [
+      monster(C.mysteriousPuppeteer, 0), lock(C.shadowSpell, 2, 0, 1), setCard(C.rushRecklessly, 3),
+      hand(C.hyozanryu), hand(C.blueEyes),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [7800, 300],
+    turn: true,
+    expect: /attack with Sangan.*attack with Kuriboh/,
+  },
+  {
+    name: "no-even-trade-without-lethal",
+    why: "control for trade-then-attack-for-lethal: at 2000 LP the trade wins nothing, Sangan stays",
+    ai: [
+      monster(C.summonedSkull, 0), monster(C.kuriboh, 2), monster(C.sangan, 3),
+      setCard(C.trapHole, 0), setCard(C.reliableGuardian, 1),
+    ],
+    opponent: [
+      monster(C.mysteriousPuppeteer, 0), lock(C.shadowSpell, 2, 0, 1), setCard(C.rushRecklessly, 3),
+      hand(C.hyozanryu), hand(C.blueEyes),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [7800, 2000],
+    turn: true,
+    forbid: /attack with Sangan/,
+  },
+  {
+    name: "equip-our-own-monster",
+    why: "review 2026-10-16 (seed 108 T4): equipped Fairy Meteor Crush to the opponent's Giant Rat (the select logic counted an equip as good for whoever owns the monster); here Axe of Despair belongs on Celtic Guardian (2400 beats La Jinn), not on La Jinn",
+    ai: [monster(C.celticGuardian, 0), hand(C.axeOfDespair)],
+    opponent: [monster(C.laJinn, 1), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    turn: true,
+    picks: true,
+    expect: /activate Axe of Despair → pick Celtic Guardian.*attack with Celtic Guardian/,
+  },
+  {
+    name: "snatch-their-best",
+    why: "control for equip-our-own-monster: an equip that only fits their monsters (Snatch Steal) takes their best",
+    ai: [hand(C.snatchSteal)],
+    opponent: [monster(C.mysticalElf, 0, OcgPosition.FACEUP_DEFENSE), monster(C.blueEyes, 1), hand(C.mysticalElf)],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    turn: true,
+    picks: true,
+    expect: /activate Snatch Steal → pick Blue-Eyes White Dragon/,
+  },
+  {
+    name: "no-attack-position-under-swords",
+    why: "review 2026-10-16 (seed 107 T14): with Light of Intervention up (summons ask for a position), La Jinn (1800) went to Attack Position 'it can destroy one of theirs' (Sonic Bird, 1400) though the opponent's Swords of Revealing Light stopped every attack; Summoned Skull (3500) killed it next turn for 1700",
+    ai: [{ code: C.lightOfIntervention, location: OcgLocation.SZONE, sequence: 0, position: OcgPosition.FACEUP_ATTACK }, hand(C.laJinn)],
+    opponent: [
+      monster(C.summonedSkull, 0), monster(C.sonicBird, 1),
+      { code: C.swords, location: OcgLocation.SZONE, sequence: 2, position: OcgPosition.FACEUP_ATTACK },
+      hand(C.mysticalElf),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.kaibaEvolution.deck.main,
+    turn: true,
+    picks: true,
+    forbid: /position face-up attack/,
+  },
 ];
 
 const args = process.argv.slice(2);
@@ -472,6 +574,9 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
         turnChoices.push(last.choice);
         firstTurnTrace ??= last;
       }
+      if (p.picks && prompt.type === OcgMessageType.SELECT_CARD && ai.memory.turn === aiTurn && !/attack target/.test(last.reason))
+        turnChoices.push(`pick ${last.choice}`);
+      if (p.picks && prompt.type === OcgMessageType.SELECT_POSITION && ai.memory.turn === aiTurn) turnChoices.push(`position ${last.choice}`);
       continue;
     }
     if (p.checkChain ? activated && prompt.type === OcgMessageType.SELECT_CHAIN && prompt.selects.length > 0 : prompt.type === OcgMessageType.SELECT_IDLECMD) choice = last;

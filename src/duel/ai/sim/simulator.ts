@@ -6,7 +6,9 @@
 // opponent's stand-ins never respond (it passes every chain). What the copy can't hold: once-per-turn uses,
 // counters, declared names, the turn number; moves that depend on them may not be found in the copy (null).
 import {
+  OcgLocation,
   OcgMessageType,
+  OcgPosition,
   OcgResponseType,
   SelectIdleCMDAction,
   type OcgCoreSync,
@@ -24,7 +26,7 @@ import { formatTrace } from "../trace.ts";
 import { replayResponses, situationOf, type ResponseOutcome, type Situation } from "./replay.ts";
 import { findSame, idleList, type CardOption } from "./options.ts";
 import { playSequence, type PlanStep, type SequenceOptions, type SequenceResult } from "./sequence.ts";
-import { copyScripts, layoutFrom, withBlanks, type SimLayout } from "./world.ts";
+import { BLANK, copyScripts, layoutFrom, withBlanks, type SimLayout } from "./world.ts";
 
 /** The rules engine (not a duel): what the simulator needs to build copies. Holds no hidden information. */
 export interface SimEngine {
@@ -59,6 +61,7 @@ export class Simulator {
   private readonly readScript: (name: string) => string | null;
   private readonly cache = new Map<number, SimOutcome | null>();
   private readonly responseCache = new Map<number, ResponseOutcome[] | null>();
+  private readonly attackCache = new Map<number, boolean | null>();
   /** Everything about a copy except its cards and LP. */
   private readonly copyConfig: Omit<DuelConfig, "decks">;
   private readonly pool: PreparedDuel[] = [];
@@ -158,6 +161,42 @@ export class Simulator {
    */
   sequence(view: AiView, steps: readonly PlanStep[], opts?: SequenceOptions): SequenceResult | null {
     return playSequence(this, view, steps, opts);
+  }
+
+  /**
+   * Whether a monster of ours put on the field now could attack this turn (no Swords of Revealing Light or the like):
+   * a stand-in attacker in a free Monster Zone of a copy, offered an attack in its battle phase or not. Null if the copy
+   * can't tell (no free zone, the copy fails).
+   */
+  canAttackThisTurn(view: AiView): boolean | null {
+    const layout = layoutFrom(view);
+    const zone = view.board.players[view.seat].monsters.findIndex((c) => !c);
+    if (zone < 0) return null;
+    layout.decks[0].start = [...(layout.decks[0].start ?? []),
+      { code: BLANK.ATTACKER, location: OcgLocation.MZONE, sequence: zone, position: OcgPosition.FACEUP_ATTACK }];
+    const key = fnv1a(JSON.stringify(["attack", layout]));
+    if (this.attackCache.has(key)) return this.attackCache.get(key)!;
+    if (this.attackCache.size > 200) this.attackCache.clear();
+    const duel = this.build(layout);
+    let result: boolean | null = null;
+    try {
+      for (let n = 0, s = duel.advance(); !s.ended && n < 30; n++, s = duel.advance()) {
+        const p = s.prompt as OcgMessage & { player: number };
+        if (p.player === 0 && p.type === OcgMessageType.SELECT_IDLECMD) {
+          if (!p.to_bp) { result = false; break; }
+          duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_BP, index: null });
+        } else if (p.player === 0 && p.type === OcgMessageType.SELECT_BATTLECMD) {
+          result = p.attacks.some((a) => a.controller === 0 && a.location === OcgLocation.MZONE && a.sequence === zone);
+          break;
+        } else duel.respond(this.passive(p));
+      }
+    } catch {
+      result = null;
+    } finally {
+      duel.destroy();
+    }
+    this.attackCache.set(key, result);
+    return result;
   }
 
   /** The cards the copies use (the game's plus the stand-ins). */

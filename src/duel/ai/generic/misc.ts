@@ -10,14 +10,16 @@ type Msg<T extends OcgMessageType> = Extract<OcgMessage, { type: T }>;
 /**
  * Attack position when the monster beats their best face-up monster, or when it can destroy one of theirs in battle
  * this turn (ATK against a Defense Position monster's DEF) and their best one attacking it next turn wouldn't cost all
- * our LP; else defense (face-down for flip effects).
+ * our LP; else defense (face-down for flip effects). `canAttack` false (the simulator saw attacks locked this turn, e.g.
+ * Swords of Revealing Light) rules out destroying one of theirs.
  */
-export function decidePosition(m: Msg<OcgMessageType.SELECT_POSITION>, view: AiView): Decision {
+export function decidePosition(m: Msg<OcgMessageType.SELECT_POSITION>, view: AiView, canAttack?: () => boolean | null): Decision {
   const r = view.cards.records.get(m.code);
   const opp = theirs(view);
   const theirBest = bestAtk(opp);
   const canBattle = view.memory.phase === OcgPhase.MAIN1 && view.memory.turn > 1 && view.memory.turnPlayer === view.seat;
-  const destroys = (atk: number) => canBattle && opp.monsters.some((c) => c && !c.faceDown && atk > (c.position & DEFENSE ? c.defense : c.attack));
+  const destroys = (atk: number) => canBattle && opp.monsters.some((c) => c && !c.faceDown && atk > (c.position & DEFENSE ? c.defense : c.attack))
+    && canAttack?.() !== false;
   const wants: OcgPosition[] = [];
   const survives = (atk: number) => theirBest - atk < mine(view).lp;
   if (r && r.atk >= r.def && (r.atk > theirBest || (destroys(r.atk) && survives(r.atk)))) wants.push(OcgPosition.FACEUP_ATTACK);

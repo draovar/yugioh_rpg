@@ -23,7 +23,8 @@ export function formatBoard(board: FieldSnapshot, cards: CardDb, labels: [string
   const equip = (c: CardView) => {
     const t = c.equipTarget;
     const target = t && board.players[t.controller].monsters[t.sequence];
-    return target ? ` -> equipped to ${name(target)}` : "";
+    const targets = (c.cardTargets ?? []).map((x) => board.players[x.controller].monsters[x.sequence]).filter((m) => m);
+    return target ? ` -> equipped to ${name(target)}` : targets.length ? ` -> targets ${targets.map((m) => name(m!)).join(", ")}` : "";
   };
   const monster = (c: CardView | null) => {
     if (!c) return "-";

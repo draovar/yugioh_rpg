@@ -88,7 +88,7 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
     case OcgMessageType.SELECT_YESNO:
       return { response: { type: OcgResponseType.SELECT_YESNO, yes: true }, reason: "default yes" };
     case OcgMessageType.SELECT_POSITION:
-      return decidePosition(m, view);
+      return decidePosition(m, view, state.simulator ? () => state.simulator!.canAttackThisTurn(view) : undefined);
     case OcgMessageType.ANNOUNCE_CARD:
       return decideAnnounceCard(m, view);
     case OcgMessageType.ANNOUNCE_ATTRIB:

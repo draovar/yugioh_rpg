@@ -66,13 +66,18 @@ export function layoutFrom(view: AiView): SimLayout {
 const place = (c: CardView, code = c.code, position = c.position): StartCard =>
   ({ code, location: c.location, sequence: c.sequence, position });
 
-/** `p`'s field, GY and banished cards (hidden ones through `hidden`); equip links kept (`seat` = the AI's real seat). */
+/**
+ * `p`'s field, GY and banished cards (hidden ones through `hidden`); equip links and card targets (a persistent Trap's
+ * lock on a monster) kept (`seat` = the AI's real seat).
+ */
 function piles(p: PlayerView, seat: number, hidden: (c: CardView) => StartCard | null): StartCard[] {
   const out: StartCard[] = [];
   for (const c of [...p.monsters, ...p.spells]) if (c) {
     const s = c.code ? place(c) : hidden(c);
     const t = c.equipTarget;
     if (s && t?.location === OcgLocation.MZONE) s.equipTo = { team: t.controller === seat ? 0 : 1, sequence: t.sequence };
+    const targets = (c.cardTargets ?? []).filter((x) => x.location === OcgLocation.MZONE);
+    if (s && targets.length) s.cardTargets = targets.map((x) => ({ team: x.controller === seat ? 0 : 1, sequence: x.sequence }));
     if (s) out.push(s);
   }
   for (const c of [...p.grave, ...p.banished]) if (c.code) out.push(place(c));

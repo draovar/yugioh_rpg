@@ -86,9 +86,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     `board.ts`: card values in "cards" (all constants in `Weights` / `DEFAULT_WEIGHTS`; a brain's own weights ride on
     `AiView.weights` into its simulations), `evaluate()`, finding cards in the snapshot. `generic/` = the M1 brain from card
     data alone: `idle` scores every main-phase action (summon vs set by survival, tribute cost, sets wait for Main 2 when
-    attacking), `battle` (best killable target, weakest attacker that kills it, target remembered for the 549 prompt),
+    attacking), `battle` (lethal first: `lethalAttacks` tries every way to clear known monsters, even trades included, and go direct;
+    else best killable target, weakest attacker that kills it, target remembered for the 549 prompt),
     `chain` (responds only to the opponent and only when `spe_count` > 0, never to its own link), `select` (the
-    HINT_SELECTMSG purpose: bad for the owner → their best / our worst, good → best), `misc` (position, declarations).
+    HINT_SELECTMSG purpose: bad for the owner → their best / our worst, good → best, equip → our best, or their best when only theirs fit), `misc` (position: attack when it beats or can destroy one of theirs, unless that costs all our LP or, with the
+    simulator, a copy shows attacks locked this turn (`Simulator.canAttackThisTurn`); declarations).
     Two brains play (`brains.ts`): `generic` (card data alone, fast) and `planner` (the default: generic + a
     `Simulator`, which makes it plan turns and replay chains). `sim/` holds the simulator: `world.ts` lays the AiView out
     as a fresh duel (AI = team 0; the opponent's hidden cards and Decks become blank stand-ins, codes 1-4 with empty
@@ -100,7 +102,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     (Sampled opponent worlds, rework phase 2, measured no better and were removed; they're in git history at 1095a52.)
     Brains are built with a
     `BrainContext` holding the rules engine (`core`, `cards`, `readScript`), never the duel. The copy loses
-    once-per-turn uses, counters and the turn number (equip links are kept: `StartCard.equipTo`); such moves fall back to the M1 score.
+    once-per-turn uses, counters and the turn number (equip links and persistent Traps' card targets, e.g. Shadow Spell's lock, are kept: `StartCard.equipTo` / `cardTargets`); such moves fall back to the M1 score.
     Copies are fast: `copyScripts` skips the rule files GOAT never uses (Synchro, Xyz, Pendulum, Link, Skill, Rush;
     not Maximum, Polymerization's helpers need it), and the `Simulator` keeps a pool of up to 24 prepared copies
     (`prepareOne`), filled while the human thinks (`Brain.idle` ← `AiSeat.idle` ← `DuelController`, one copy per 40 ms

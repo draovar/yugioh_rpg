@@ -1,6 +1,7 @@
 // Battle phase. Each SELECT_BATTLECMD picks one attack: the most valuable opposing monster some attacker can destroy,
 // taken by the weakest attacker that still does it (the stronger ones stay free for bigger targets). Direct attacks
-// when their field is empty. Never an attack that loses. The chosen target is remembered for the target prompt.
+// when their field is empty. Never an attack that loses, unless the attacks left this turn are lethal (an even trade
+// that opens the way for a direct attack). The chosen target is remembered for the target prompt.
 import {
   OcgMessageType,
   OcgResponseType,
@@ -33,6 +34,43 @@ export function attackValue(view: AiView, attacker: CardView, target: CardView):
   return t.known ? -0.5 : -0.3; // bounces off: damage to us, maybe a flip effect
 }
 
+/** One attacker of this battle phase and where it goes: an opposing monster, or direct (null). */
+interface Assignment { attacker: number; target: CardView | null }
+
+/**
+ * Attacks that win the duel this battle phase, the ones clearing the field first, or null. Every opposing monster
+ * must be known; each is destroyed in battle (ATK at least its ATK in Attack Position, an even trade included, or
+ * above its DEF in Defense Position), unless every direct attack can go over it (`can_direct`); damage = direct
+ * attacks + what Attack Position kills go through by. Set Spells/Traps don't stop it (they might, but we try).
+ */
+export function lethalAttacks(view: AiView, attackers: { card: CardView; direct: boolean }[], targets: CardView[]): Assignment[] | null {
+  if (targets.some((t) => !monsterStats(t).known)) return null;
+  const lp = theirs(view).lp;
+  const plan: Assignment[] = [];
+  // Each attacker (at most 5) to a standing target, direct, or not attacking.
+  const search = (i: number, standing: CardView[], damage: number): Assignment[] | null => {
+    if (i === attackers.length) {
+      const direct = plan.filter((p) => !p.target);
+      const ok = damage >= lp && (standing.length === 0 || direct.every((p) => attackers[p.attacker].direct));
+      return ok ? [...plan.filter((p) => p.target), ...direct] : null;
+    }
+    const atk = attackers[i].card.attack;
+    for (const t of standing) {
+      const st = monsterStats(t);
+      if (st.attackPos ? atk < st.atk : atk <= st.def) continue;
+      plan.push({ attacker: i, target: t });
+      const r = search(i + 1, standing.filter((x) => x !== t), damage + (st.attackPos ? atk - st.atk : 0));
+      plan.pop();
+      if (r) return r;
+    }
+    plan.push({ attacker: i, target: null });
+    const r = search(i + 1, standing, damage + atk);
+    plan.pop();
+    return r ?? search(i + 1, standing, damage);
+  };
+  return search(0, targets, 0);
+}
+
 export function decideBattle(m: BattleMessage, view: AiView, state: BrainState): Decision {
   const opp = theirs(view);
   const name = (code: number) => view.cards.name(code);
@@ -49,6 +87,15 @@ export function decideBattle(m: BattleMessage, view: AiView, state: BrainState):
     .map((a, index) => ({ a, index, card: cardAt(view, a) }))
     .filter((x): x is { a: (typeof m.attacks)[number]; index: number; card: CardView } => x.card !== null);
   const attack = (index: number) => ({ type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.SELECT_BATTLE, index }) as const;
+
+  const lethal = lethalAttacks(view, attackers.map((x) => ({ card: x.card, direct: !!x.a.can_direct })), targets);
+  if (lethal?.length) {
+    const { attacker, target } = lethal[0];
+    const x = attackers[attacker];
+    state.attackTarget = target ? { controller: target.controller, location: target.location, sequence: target.sequence } : null;
+    const label = `${name(x.a.code)} attacks ${target ? name(target.code) : "directly"} (lethal)`;
+    return best([...options, { label, score: 1000, response: attack(x.index) }], () => "the attacks left are lethal");
+  }
 
   if (!targets.length) {
     // Empty field: everything goes direct, strongest first.

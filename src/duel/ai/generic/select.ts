@@ -13,10 +13,9 @@ export const SELECT_HINT = {
   YOUR_CARD: 529, OPPONENT_CARD: 530, TRIBUTE_SUMMON: 531, ATTACK_TARGET: 549, TARGET: 551,
 } as const;
 
-/** Hints whose cards come out ahead (taken, summoned, equipped...). */
+/** Hints whose cards come out ahead (taken, summoned...). Equipping is a boost (see purposeIn). */
 const GOOD = new Set<number>([
-  SELECT_HINT.ADD_TO_HAND, SELECT_HINT.NORMAL_SUMMON, SELECT_HINT.SPECIAL_SUMMON, SELECT_HINT.SET, SELECT_HINT.EQUIP,
-  SELECT_HINT.YOUR_CARD,
+  SELECT_HINT.ADD_TO_HAND, SELECT_HINT.NORMAL_SUMMON, SELECT_HINT.SPECIAL_SUMMON, SELECT_HINT.SET, SELECT_HINT.YOUR_CARD,
 ]);
 /** Hints where it doesn't matter much which (pay the least). */
 const NEUTRAL = new Set<number>([SELECT_HINT.REVEAL, SELECT_HINT.FUSION_MATERIAL]);
@@ -26,7 +25,7 @@ export type Purpose = "good" | "bad" | "neutral" | "boost";
 
 export function purposeOf(hint: bigint | null): Purpose {
   const h = hint === null ? -1 : Number(hint);
-  return GOOD.has(h) ? "good" : NEUTRAL.has(h) ? "neutral" : "bad";
+  return GOOD.has(h) ? "good" : NEUTRAL.has(h) ? "neutral" : h === SELECT_HINT.EQUIP ? "boost" : "bad";
 }
 
 /** How much we like picking this card for this purpose (higher = pick it first). */
@@ -40,9 +39,12 @@ export function pickUtility(view: AiView, c: OcgCardLoc, purpose: Purpose): numb
 
 /**
  * Indices of the cards to pick from `candidates`, between `min` and `max` of them. Takes every card worth picking
- * (positive utility: good ones, or the opponent's for bad purposes) up to `max`, and at least `min`.
+ * (positive utility: good ones, or the opponent's for bad purposes) up to `max`, and at least `min`. An equip with
+ * only the opponent's monsters to pick counts as good (their best).
  */
 export function chooseCards(view: AiView, candidates: OcgCardLoc[], min: number, max: number, purpose: Purpose): number[] {
+  // An equip that only fits their monsters is aimed at them (Snatch Steal takes one): their best.
+  if (purpose === "boost" && view.hint !== null && Number(view.hint) === SELECT_HINT.EQUIP && !candidates.some((c) => c.controller === view.seat)) purpose = "good";
   const ranked = candidates.map((c, i) => ({ i, u: pickUtility(view, c, purpose) })).sort((a, b) => b.u - a.u);
   const wanted = ranked.filter((r) => r.u > 0).length;
   const count = Math.max(min, Math.min(max, wanted));
@@ -55,15 +57,17 @@ const BOOST = /\b(increase|gains?)\b[^.]*\b(ATK|DEF)\b/i;
 const DROP = /\b(decrease|loses?|reduce)\b/i;
 
 /**
- * The purpose of the pick at hand. A vague hint ("select a face-up card", "select the target") while our own card is
- * the newest chain link (its target being chosen) is a boost if that card's text only raises ATK/DEF:
- * Rush Recklessly goes on our monster, not theirs.
+ * The purpose of the pick at hand, from the hint and our own card being activated (the newest chain link, its target
+ * being chosen). A vague hint ("select a face-up card", "select the target") is a boost if that card's text only
+ * raises ATK/DEF: Rush Recklessly goes on our monster, not theirs. Equipping is a boost (Axe of Despair, Fairy Meteor
+ * Crush go on our monsters) unless the card's text only lowers ATK/DEF: then it's bad for the monster's owner.
  */
 export function purposeIn(view: AiView): Purpose {
   const purpose = purposeOf(view.hint);
   const h = view.hint === null ? -1 : Number(view.hint);
-  if (purpose !== "bad" || (KNOWN_HINTS.has(h) && h !== SELECT_HINT.TARGET)) return purpose;
   const top = view.memory.chain[view.memory.chain.length - 1];
   const desc = top && top.controller === view.seat ? view.cards.records.get(top.code)?.desc ?? "" : "";
+  if (h === SELECT_HINT.EQUIP) return DROP.test(desc) && !BOOST.test(desc) ? "bad" : "boost";
+  if (purpose !== "bad" || (KNOWN_HINTS.has(h) && h !== SELECT_HINT.TARGET)) return purpose;
   return BOOST.test(desc) && !DROP.test(desc) ? "boost" : purpose;
 }
