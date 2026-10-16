@@ -22,6 +22,9 @@ const C = {
   zombyra: 88472456, royalMagicalLibrary: 70791313, vampireGenesis: 22056710, masterKyonshee: 24530661,
   vampireLord: 53839837, darkDustSpirit: 89111398, pyramidTurtle: 77044671, despairFromTheDark: 71200730,
   ryuKokki: 57281778, boneTower: 63012333, vampireLady: 26495087, doubleCoston: 44436472, regeneratingMummy: 70821187,
+  redEyes: 74677422, redEyesDarkness: 96561011, lusterDragon: 11091375, twinHeadedBehemoth: 43586926,
+  armedDragonLv3: 980973, armedDragonLv5: 46384672, redEyesChick: 36262024, elementDragon: 30314994,
+  maskedDragon: 39191307, mirageDragon: 15960641,
   // rituals
   paladinOfWhiteDragon: 73398797, blackLusterSoldier: 5405694,
   // fusions (Extra Deck)
@@ -37,7 +40,7 @@ const C = {
   blackLusterRitual: 55761792, dianKeto: 84257639, lastWill: 85602018, cardDestruction: 72892473, removeTrap: 51482758,
   reliableGuardian: 16430187, axeOfDespair: 40619825, malevolentNuzzler: 99597615, mysticPlasmaZone: 18161786,
   creatureSwap: 31036355, giantTrunade: 42703248, cardOfSafeReturn: 57953380, bookOfLife: 2204140,
-  callOfTheMummy: 4861205, reload: 22589918,
+  callOfTheMummy: 4861205, reload: 22589918, stampingDestruction: 81385346,
   // traps
   mirrorForce: 44095762, sakuretsu: 56120475, trapHole: 4206964, callOfTheHaunted: 97077563, ringOfDestruction: 83555666,
   torrential: 53582587, bottomless: 29401950, magicCylinder: 62279055, waboku: 12607053, dustTornado: 60082869,
@@ -45,7 +48,8 @@ const C = {
   mindCrush: 15800838, prohibition: 43711255, dnaSurgery: 74701381, shadowSpell: 29267084, justDesserts: 24068492,
   lightOfIntervention: 62867251, jarOfGreed: 83968380, riryokuField: 70344351, burstBreath: 80163754,
   magicJammer: 77414722, sevenTools: 3819470, spellbindingCircle: 18807108, backupSoldier: 36280194, shift: 59560625,
-  disappear: 24623598, raigekiBreak: 4178474,
+  disappear: 24623598, raigekiBreak: 4178474, ceasefire: 36468556, dragonsBead: 92408984, dragonsRage: 54178050,
+  trapJammer: 19252988, curseOfAnubis: 66742250, coveringFire: 74458486,
 } as const;
 
 type Name = keyof typeof C;
@@ -151,6 +155,21 @@ export const DECKS = {
         snatchSteal: 1, mst: 1, giantTrunade: 1, nobleman: 1, potOfGreed: 1, cardOfSafeReturn: 1, heavyStorm: 1,
         creatureSwap: 2, bookOfLife: 2, callOfTheMummy: 3, reload: 2,
         dustTornado: 1, torrential: 1, magicJammer: 1, recklessGreed: 1, compulsory: 3,
+      }),
+    },
+  },
+  /** Structure Deck: Dragon's Roar (2005), with Interdimensional Matter Transporter x2 swapped for Covering Fire x2
+   *  and The Graveyard in the Fourth Dimension for Mirage Dragon. Red-Eyes Darkness Dragon is its ace. */
+  dragonsRoar: {
+    label: "Dragon's Roar",
+    deck: {
+      main: list({
+        redEyesDarkness: 1, redEyes: 1, lusterDragon: 2, twinHeadedBehemoth: 1, armedDragonLv3: 2, armedDragonLv5: 2,
+        redEyesChick: 1, elementDragon: 1, maskedDragon: 3, mirageDragon: 1,
+        snatchSteal: 1, mst: 1, nobleman: 2, prematureBurial: 1, swords: 1, potOfGreed: 1, heavyStorm: 1,
+        stampingDestruction: 3, creatureSwap: 2, reload: 2,
+        callOfTheHaunted: 1, ceasefire: 1, dragonsBead: 1, dragonsRage: 2, recklessGreed: 1, coveringFire: 2,
+        trapJammer: 1, curseOfAnubis: 1,
       }),
     },
   },

@@ -44,7 +44,7 @@ Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations
 `&dialogs` adds one that opens every prompt UI with sample cards (`src/scenes/dialogPreview.ts`; answers are only
 logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`);
 `/?duel` starts straight in a duel, `&lp=500` sets starting LP, `&seed=N` replays the same duel,
-`&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`, `kaibaEvolution`, `yugiEvolution`, `zombieMadness`; default Yugi vs Kaiba),
+`&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`, `kaibaEvolution`, `yugiEvolution`, `zombieMadness`, `dragonsRoar`; default Yugi vs Kaiba),
 `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first),
 `&setup=NAME` starts from a test board (`src/scenes/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
 (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`, `ritual` (`&deck=kaibaEvolution`); cards placed in hand/on the field first),
@@ -131,8 +131,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
   - `hash.ts` — `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).
   - `decks.ts` — prebuilt decks until the deck editor exists (`yugi`, `kaiba`, `goat` + Extra Decks; starter decks like
-    `kaibaEvolution`, `yugiEvolution` = the Evolution starter decks with the owner's swaps; structure decks as printed:
-    `zombieMadness`), `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
+    `kaibaEvolution`, `yugiEvolution` = the Evolution starter decks with the owner's swaps; structure decks:
+    `zombieMadness` (as printed), `dragonsRoar` (owner's swaps)), `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
   - `rps.ts` — rock-paper-scissors before each duel (`rpsWinner`, `RpsOpponent`: the AI picks at random and goes
     first when it wins; peer-to-peer via `NetDuel.rps`). The winner picks first/second, which sets the seats (seat 0 goes first).
   - `loadEngine.ts` — browser only: fetches `public/data/*.json`, inits core once.
@@ -310,7 +310,7 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
    ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).
    Starter decks: ✅ Kaiba Evolution (first Ritual: Paladin of White Dragon), ✅ Yugi Evolution.
-   Structure decks: ✅ Zombie Madness.
+   Structure decks: ✅ Zombie Madness, ✅ Dragon's Roar.
    ✅ Rock-paper-scissors before each duel (cards on the board); the winner chooses to go first or second.
    ✅ Code cleanup: DuelScene split into InfoPanel / BoardPick / duelPrompts, dead code and duplicates removed, comments
    brought up to date.
