@@ -2,7 +2,9 @@
 // from the moves the real prompt offers, extend the best few plans by the moves their copy offers next, and score
 // every plan by playing it in a copy, ending the turn and letting the opponent play their next turn (stand-ins for
 // what we can't see), so set traps, blockers and attacks earn what they're worth there. Plans that reach the same
-// board are merged. Budgets cap the work: nodes (copies) and milliseconds.
+// board are merged. A move aimed at one of the opponent's cards (De-Spell, Hane-Hane's flip) is also tried on each
+// of their other cards it could hit, as separate plans: the generic pick rule rates cards, not what removing them
+// unlocks (De-Spell on Swords of Revealing Light frees our attacks). Budgets cap the work: nodes (copies) and milliseconds.
 //
 // What the copies can't know is enforced here, mostly by trusting the real prompt over the copy: no Normal Summon when
 // the real prompt offers none (already used, or forbidden this turn, e.g. after Scapegoat), no position change for a
@@ -19,7 +21,7 @@ import {
 import type { FieldSnapshot } from "../../DuelSession.ts";
 import { mulberry32 } from "../../rng.ts";
 import type { AiView } from "../AiSeat.ts";
-import { boardDigest, nextSteps, type PlanStep } from "./sequence.ts";
+import { boardDigest, nextSteps, type PickTarget, type PlanStep } from "./sequence.ts";
 import type { Simulator } from "./simulator.ts";
 
 type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
@@ -79,6 +81,8 @@ interface Node {
   checkpoints: number[];
   /** Damage the opponent took in our turn. */
   damage: number;
+  /** The last step's pick among the opponent's cards, and the others it could have taken. */
+  picks?: { chosen: PickTarget; others: PickTarget[] };
 }
 
 /** Plans scoring within this of the best count as tied: the one dealing more damage wins, then the one summoning more. */
@@ -145,7 +149,7 @@ export function planTurn(
     nodes++;
     const r = sim.sequence({ ...view, rng: mulberry32(deckSeed) }, [...prefix, ...steps], { opponentTurn: true, battleAfter: canBattle });
     if (!r || r.done < prefix.length + steps.length) return null;
-    return { steps, value: r.value, next: r.next, checkpoints: r.checkpoints.slice(prefix.length), damage: r.damageDealt };
+    return { steps, value: r.value, next: r.next, checkpoints: r.checkpoints.slice(prefix.length), damage: r.damageDealt, picks: r.picks };
   };
   const overBudget = () => nodes >= settings.maxNodes || performance.now() - started > settings.maxMs;
 
@@ -165,10 +169,16 @@ export function planTurn(
     for (const node of frontier) {
       const before = new Set(node.next.map(stepKey));
       const moves = node.next.filter((s) => allowed(s, node.steps)).sort((a, b) => priority(a) - priority(b)).slice(0, settings.children);
-      for (const move of moves) {
+      const queue = [...moves];
+      for (let move = queue.shift(); move; move = queue.shift()) {
         if (overBudget()) break;
         const child = evaluate([...node.steps, move]);
         if (!child) continue;
+        if (child.picks && move.kind === "idle" && !move.pick) {
+          // The move hit one of their cards: name that pick in the plan (the real duel follows it) and try the others.
+          child.steps[child.steps.length - 1] = { ...move, pick: child.picks.chosen };
+          queue.unshift(...child.picks.others.map((pick): PlanStep => ({ ...move, pick })));
+        }
         // The board reached after the move (before any further move): a plan that got here another way is the same plan.
         const reached = child.checkpoints[child.steps.length];
         if (reached !== undefined) {

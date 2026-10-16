@@ -7,7 +7,7 @@ import { autoRespond, pickSum, pickTributes } from "../../autoBot.ts";
 import type { AiView, Brain, Decision } from "../AiSeat.ts";
 import { pickAttackTarget, decideBattle } from "./battle.ts";
 import { decideChain } from "./chain.ts";
-import { BrainState } from "./common.ts";
+import { BrainState, sameLoc } from "./common.ts";
 import { decideIdle } from "./idle.ts";
 import { decideByPlan } from "./plan.ts";
 import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
@@ -48,6 +48,10 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
     case OcgMessageType.SELECT_CARD: {
       if (view.hint !== null && Number(view.hint) === SELECT_HINT.ATTACK_TARGET)
         return { response: { type: OcgResponseType.SELECT_CARD, indicies: [pickAttackTarget(m.selects, view, state)] }, reason: "planned attack target" };
+      const planned = state.pickTarget;
+      state.pickTarget = null;
+      const p = planned && m.min <= 1 ? m.selects.findIndex((c) => sameLoc(c, planned)) : -1;
+      if (p >= 0) return { response: { type: OcgResponseType.SELECT_CARD, indicies: [p] }, reason: "the plan's target" };
       const purpose = purposeIn(view);
       // Something bad that could only hit our own cards (e.g. Breaker with no opposing Spell/Trap): back out.
       if (purpose === "bad" && m.can_cancel && !m.selects.some((c) => pickUtility(view, c, purpose) > 0)) {

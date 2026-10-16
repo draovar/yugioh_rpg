@@ -2,7 +2,7 @@
 // it stays fixed. Each position is a board (cards placed before the duel starts, the AI going first) and a check on
 // the AI's first main-phase choice (its trace text, e.g. "summon Zaborg the Thunder Monarch"), its plan, a chain
 // answer, or its whole turn (every main-phase and battle choice in order, e.g. "summon Celtic Guardian → to battle
-// phase → attack with Celtic Guardian → ...").
+// phase → attack with Celtic Guardian → ..."), or its chain answers in the opponent's next turn.
 // Usage: npm run ai-bench [-- --brain NAME (default: the game's)] [-- --show] [-- --only NAME-PART]
 //        [-- --weights W.json (any of board.ts's Weights; the rest stay default)]
 import { readFileSync } from "node:fs";
@@ -32,6 +32,7 @@ const C = {
   zombyra: 88472456, malevolentNuzzler: 99597615, sevenTools: 3819470, trapMaster: 46461247, paladinOfWhiteDragon: 73398797,
   noblemanOfCrossout: 71044499, removeTrap: 51482758, witchOfTheBlackForest: 78010363, mysteriousPuppeteer: 54098121,
   shadowSpell: 29267084, spellbindingCircle: 18807108, rushRecklessly: 70046172, hyozanryu: 62397231, snatchSteal: 45986603, swords: 72302403, sonicBird: 57617178,
+  uraby: 1784619, deSpell: 19159413, beaverWarrior: 32452818, jarOfGreed: 83968380, monsterReborn: 83764718,
 } as const;
 
 interface Position {
@@ -68,6 +69,14 @@ interface Position {
   opponentActivates?: number;
   /** ...and the check is on the AI's next chain answer after that (with something to chain), not a main-phase choice. */
   checkChain?: boolean;
+  /** With opponentActivates: the card it targets, by the AI's zone (location, sequence); default its first choice. */
+  opponentTargets?: { location: OcgLocation; sequence: number };
+  /**
+   * The AI goes first; in the opponent's turn after it they Set the first monster they can (their Normal Summon), go to
+   * the Battle Phase and end the turn. The check is on the AI's chain answers in that turn (with something to chain),
+   * joined by " → ".
+   */
+  opponentSetsThenBattles?: boolean;
 }
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
@@ -357,7 +366,7 @@ const POSITIONS: Position[] = [
     aiDeck: DECKS.kaibaEvolution.deck.main,
     lp: [4050, 8000],
     plan: true,
-    expect: /plan: activate Soul Exchange → summon Luster Dragon #2/,
+    expect: /plan: activate Soul Exchange (on [^→]* )?→ summon Luster Dragon #2/,
   },
   {
     name: "summon-to-attack-defenders",
@@ -514,6 +523,51 @@ const POSITIONS: Position[] = [
     picks: true,
     forbid: /position face-up attack/,
   },
+  {
+    name: "de-spell-the-swords",
+    why: "review 2026-10-16 (seed 109 T12-T16): under Swords of Revealing Light Kaiba held De-Spell for three turns; in every copy the pick rule aimed it at the set card (Seven Tools, a Trap: nothing happens), never at Swords, so it never freed Luster Dragon #2 (2400) to destroy Zombyra (2100)",
+    ai: [monster(C.lusterDragon2, 0), hand(C.deSpell)],
+    opponent: [
+      monster(C.zombyra, 0), monster(C.beaverWarrior, 1),
+      { code: C.swords, location: OcgLocation.SZONE, sequence: 0, position: OcgPosition.FACEUP_ATTACK }, setCard(C.sevenTools, 1),
+      hand(C.mysticalElf),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.kaibaEvolution.deck.main,
+    turn: true,
+    picks: true,
+    expect: /activate De-Spell → pick Swords of Revealing Light.*attack with Luster Dragon #2/,
+  },
+  {
+    name: "jar-answers-mst",
+    why: "review 2026-10-16 (seed 109 T6-T13, Jar of Greed held 7 turns): user question, does a set Jar at least answer a Mystical Space Typhoon on it?",
+    ai: [monster(C.uraby, 0), setCard(C.jarOfGreed, 0)],
+    opponent: [setCard(C.mst, 0), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiDeck: DECKS.kaibaEvolution.deck.main,
+    opponentActivates: C.mst,
+    checkChain: true,
+    expect: /^chain Jar of Greed/,
+  },
+  {
+    name: "jar-answers-mst-next-to-another-set-card",
+    why: "as jar-answers-mst, with a set Monster Reborn in the zone before it: the replay copy must aim MST at the card the opponent really targeted (the Jar), not its own guess",
+    ai: [monster(C.uraby, 0), setCard(C.monsterReborn, 0), setCard(C.jarOfGreed, 1)],
+    opponent: [setCard(C.mst, 0), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiDeck: DECKS.kaibaEvolution.deck.main,
+    opponentActivates: C.mst,
+    opponentTargets: { location: OcgLocation.SZONE, sequence: 1 },
+    checkChain: true,
+    expect: /^chain Jar of Greed/,
+  },
+  {
+    name: "no-boost-when-nothing-attacks",
+    why: "review 2026-10-16 (seed 109 T5): Rush Recklessly chained at the start of the opponent's Battle Phase with nothing able to attack; the replay copy gave them a second Normal Summon in Main 2 (summoned face-up vs Uraby 1500, set vs Uraby 2200), which made the boost look like a gain",
+    ai: [monster(C.uraby, 0), setCard(C.rushRecklessly, 0), hand(C.mysticalElf)],
+    opponent: [monster(C.giantSoldier, 0, OcgPosition.FACEUP_DEFENSE), hand(C.giantRat), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiDeck: DECKS.kaibaEvolution.deck.main,
+    opponentSetsThenBattles: true,
+    forbid: /chain Rush Recklessly/,
+  },
 ];
 
 const args = process.argv.slice(2);
@@ -552,15 +606,33 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
   /** The turn's main-phase and battle choices (turn checks). */
   const turnChoices: string[] = [];
   const aiTurn = p.aiSecond ? 2 : 1;
-  for (let steps = 0; steps < (p.turn ? 300 : 50) && !choice; steps++) {
+  /** opponentSetsThenBattles: what the opponent has done in their turn. */
+  let oppSet = false, oppBattled = false;
+  for (let steps = 0; steps < (p.turn || p.opponentSetsThenBattles ? 300 : 50) && !choice; steps++) {
     const s = duel.advance();
     ai.observe(s.messages);
     if (s.ended) break;
     if (p.turn && ai.memory.turn > aiTurn) break;
+    if (p.opponentSetsThenBattles && ai.memory.turn > aiTurn + 1) break;
     const prompt = s.prompt as typeof s.prompt & { player: number };
+    if (prompt.player !== aiSeat && p.opponentSetsThenBattles && ai.memory.turn === aiTurn + 1 && prompt.type === OcgMessageType.SELECT_IDLECMD) {
+      if (!oppSet && prompt.monster_sets.length) {
+        oppSet = true;
+        duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.SELECT_MONSTER_SET, index: 0 });
+      } else if (!oppBattled && prompt.to_bp) {
+        oppBattled = true;
+        duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_BP, index: null });
+      } else duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null });
+      continue;
+    }
     if (prompt.player !== aiSeat) {
       const j = prompt.type === OcgMessageType.SELECT_CHAIN && !activated && ai.memory.turnPlayer === aiSeat ? prompt.selects.findIndex((c) => c.code === p.opponentActivates) : -1;
       if (j >= 0) { activated = true; duel.respond({ type: OcgResponseType.SELECT_CHAIN, index: j }); continue; }
+      if (prompt.type === OcgMessageType.SELECT_CARD && activated && p.opponentTargets) {
+        const t = p.opponentTargets;
+        const k = prompt.selects.findIndex((c) => c.controller === aiSeat && c.location === t.location && c.sequence === t.sequence);
+        if (k >= 0) { duel.respond({ type: OcgResponseType.SELECT_CARD, indicies: [k] }); continue; }
+      }
       // Otherwise the opponent never does anything: passes chains, ends its turn, answers anything else with the first legal option.
       duel.respond(prompt.type === OcgMessageType.SELECT_CHAIN && !prompt.forced ? { type: OcgResponseType.SELECT_CHAIN, index: null }
         : prompt.type === OcgMessageType.SELECT_IDLECMD ? { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null }
@@ -569,6 +641,13 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
     }
     duel.respond(ai.decide(prompt));
     const last = traces[traces.length - 1];
+    if (p.opponentSetsThenBattles) {
+      if (ai.memory.turn === aiTurn + 1 && prompt.type === OcgMessageType.SELECT_CHAIN && prompt.selects.length > 0) {
+        turnChoices.push(last.choice);
+        firstTurnTrace ??= last;
+      }
+      continue;
+    }
     if (p.turn) {
       if (prompt.type === OcgMessageType.SELECT_IDLECMD || prompt.type === OcgMessageType.SELECT_BATTLECMD) {
         turnChoices.push(last.choice);
@@ -582,16 +661,16 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
     if (p.checkChain ? activated && prompt.type === OcgMessageType.SELECT_CHAIN && prompt.selects.length > 0 : prompt.type === OcgMessageType.SELECT_IDLECMD) choice = last;
   }
   duel.destroy();
-  if (p.turn) choice = firstTurnTrace;
+  if (p.turn || p.opponentSetsThenBattles) choice = firstTurnTrace;
   const planLine = choice && p.plan ? formatTrace(choice).split("\n").find((l) => l.includes("plan:"))?.trim() : undefined;
-  const text = p.turn ? turnChoices.join(" → ") || "(no main-phase decision)" : planLine ?? choice?.choice ?? "(no main-phase decision)";
+  const text = p.turn || p.opponentSetsThenBattles ? turnChoices.join(" → ") || "(no main-phase decision)" : planLine ?? choice?.choice ?? "(no main-phase decision)";
   const ok = !!choice && (!p.expect || p.expect.test(text)) && (!p.forbid || !p.forbid.test(text));
   if (!ok && p.known) known++;
   else if (!ok) failed++;
   const status = p.known ? (ok ? "now passes (drop `known`)" : `known (${p.known})`) : ok ? "ok  " : "FAIL";
   console.log(`${status} ${p.name}${p.seeds ? ` #${run}` : ""}: ${text}${ok ? "" : `   (${p.expect ? `expected ${p.expect}` : ""}${p.forbid ? ` forbidden ${p.forbid}` : ""}; ${p.why})`}`);
   if (show || (!ok && !p.known)) if (choice) console.log(formatTrace(choice).split("\n").slice(1).join("\n"));
-  if (p.turn && (show || (!ok && !p.known)))
+  if ((p.turn || p.opponentSetsThenBattles) && (show || (!ok && !p.known)))
     for (const t of traces) console.log(`    ${formatTrace(t).split("\n")[0]}`);
 }
 const knownNote = known ? `, ${known} known misplay${known > 1 ? "s" : ""}` : "";

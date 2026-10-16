@@ -79,7 +79,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   - `ai/` — the opponent AI (plan and milestones: `docs/ai-plan.md`). `AiSeat` is the only AI code touching the engine:
     `observe()` gets every step's raw messages and runs them through `redact()` (the one gate: hidden codes → 0, other
     players' prompts and private hints dropped, like ygopro's server) into `AiMemory` (turn/phase, open chain + targets,
-    attacks this turn, `seen` codes per owner, the pending select hint); `decide()` builds an `AiView` (`snapshot(seat)`,
+    attacks and Normal Summons this turn, `seen` codes per owner, the pending select hint); `decide()` builds an `AiView` (`snapshot(seat)`,
     memory, hint, seeded rng) for a `Brain`, which returns a `Decision` (response + reason + scored options). Brains never
     get the session or raw messages. `trace.ts` turns decisions into lines (`&aitrace`, `arena --trace`). Brains by name
     in `brains.ts`. A boss that peeks at your hand would be an explicit `AiSeat` option, never a brain reading the session.
@@ -113,7 +113,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     the opponent's next turn if asked) and the next possible steps. `sim/options.ts`: finding an option again in a
     copy's prompt (`idleList`, `findSame`).
     `sim/planner.ts` = the turn planner: `planTurn` beam-searches move sequences (root moves from the
-    real prompt, deeper ones from each copy's `next`), scoring each plan by playing it, then a battle phase with the
+    real prompt, deeper ones from each copy's `next`; a move whose first pick hit one of the opponent's cards is also tried on each other card of theirs it could pick, `PlanStep.pick`, followed in the real duel via `BrainState.pickTarget`), scoring each plan by playing it, then a battle phase with the
     generic battle logic (`battleAfter`), then the opponent's turn; plans reaching the same board merge; all copies of one search share one order
     for the AI's unknown Deck (else a luckier Pot of Greed draw, not the better move, wins a comparison); budgets
     `DEFAULT_PLAN_SETTINGS` (beam 3, depth 6, 8 children, 60 copies, 2 s; plus up to 2 plans whose last move unlocked a new
@@ -128,8 +128,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     sees the same messages and answers if the worker can't start or fails. `DuelController` takes any `AiPlayer` and
     awaits its decision (started at once, answered after `aiDelayMs` at the earliest).
     `sim/replay.ts` = M3 (the planner's chain answers): a chain prompt in the opponent's turn (or their chain link in the AI's turn, `replayLink`) is answered by replaying what they did
-    (`situationOf`: their chain link, attack, summon, or the phase) in a copy where they move first, trying each
-    candidate during that action, playing on to the end of their turn, and comparing; timing margins per situation in
+    (`situationOf`: their chain link with its real targets, attack, summon, or the phase) in a copy where they move first, trying each
+    candidate during that action, playing on to the end of their turn (no more Normal Summons than they have left), and comparing; timing margins per situation in
     `generic/chain.ts`.
   - `rng.ts` — `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.

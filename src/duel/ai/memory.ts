@@ -43,6 +43,8 @@ export class AiMemory {
   chain: ChainLink[] = [];
   /** Attacks declared this turn, in order. */
   attacks: Attack[] = [];
+  /** Normal Summons and monster Sets each player made this turn (the copies don't know; replays need the opponent's). */
+  normalSummons: [number, number] = [0, 0];
   /** The latest summon, attack or activation (cleared at each new phase, and once an attack is over). */
   lastAction: LastAction | null = null;
   /**
@@ -75,6 +77,7 @@ export class AiMemory {
         this.turn++;
         this.turnPlayer = (m.player & 1) as 0 | 1;
         this.attacks = [];
+        this.normalSummons = [0, 0];
         break;
       case OcgMessageType.NEW_PHASE:
         this.phase = m.phase;
@@ -116,6 +119,8 @@ export class AiMemory {
         if (this.lastAction?.kind === "attack") this.lastAction = null;
         break;
       case OcgMessageType.SUMMONING:
+        this.normalSummons[m.controller & 1]++;
+      // falls through
       case OcgMessageType.SPSUMMONING:
       case OcgMessageType.FLIPSUMMONING: {
         this.see(m.controller, m.code);
@@ -137,6 +142,9 @@ export class AiMemory {
         break;
       }
       case OcgMessageType.SET:
+        if (m.location === OcgLocation.MZONE) this.normalSummons[m.controller & 1]++;
+        this.see(m.controller, m.code);
+        break;
       case OcgMessageType.POS_CHANGE:
         this.see(m.controller, m.code);
         break;

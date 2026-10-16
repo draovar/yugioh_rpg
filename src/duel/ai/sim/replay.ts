@@ -35,9 +35,15 @@ import { BLANK, layoutFrom, type SimLayout } from "./world.ts";
 export type Situation =
   | { kind: "attack"; attacker: number; target: number | null }
   | { kind: "summon"; how: "summon" | "flip summon" | "special summon"; code: number; zone: number }
-  /** ourTurn: their chain link in our turn (e.g. Just Desserts answering our Axe): scored once their chain is over. */
-  | { kind: "activate"; code: number; location: number; sequence: number; ourTurn?: boolean }
+  /**
+   * ourTurn: their chain link in our turn (e.g. Just Desserts answering our Axe): scored once their chain is over.
+   * targets: the cards it targets (mine = the AI's), aimed at again in the copy.
+   */
+  | { kind: "activate"; code: number; location: number; sequence: number; ourTurn?: boolean; targets?: Target[] }
   | { kind: "phase"; phase: number };
+
+/** A card a replayed activation targets: the AI's (mine) or the opponent's, by place. */
+interface Target { mine: boolean; location: number; sequence: number }
 
 export interface ResponseOutcome {
   /** Index into the real prompt's `selects`; null = pass. */
@@ -61,11 +67,11 @@ export function situationOf(view: AiView): Situation | null {
     // In our turn only a chain link of theirs on top of our own: what's below it isn't in the copy, so this works
     // for links that don't depend on it (free-chain cards); others aren't offered in the copy and fall back.
     if (!top || top.controller !== opp) return null;
-    return { kind: "activate", code: top.code, location: top.place.location, sequence: top.place.sequence, ourTurn: true };
+    return { kind: "activate", code: top.code, location: top.place.location, sequence: top.place.sequence, ourTurn: true, targets: targetsOf(top) };
   }
   if (top) {
     if (top.controller !== opp) return null;
-    return { kind: "activate", code: top.code, location: top.place.location, sequence: top.place.sequence };
+    return { kind: "activate", code: top.code, location: top.place.location, sequence: top.place.sequence, targets: targetsOf(top) };
   }
   const last = memory.lastAction;
   if (last?.player === opp && last.kind === "attack" && memory.attacks.length) {
@@ -75,6 +81,23 @@ export function situationOf(view: AiView): Situation | null {
   if (last?.player === opp && last.kind !== "activate" && last.kind !== "attack" && last.place?.location === OcgLocation.MZONE)
     return { kind: "summon", how: last.kind, code: last.code, zone: last.place.sequence };
   return { kind: "phase", phase: memory.phase };
+}
+
+/**
+ * The targets of their chain link, as seen from our seat. Without them the copy's opponent picks its own (MST on our
+ * set Monster Reborn instead of the Jar of Greed it really hit), and the answer is judged against the wrong attack.
+ */
+function targetsOf(link: AiView["memory"]["chain"][number]): Target[] {
+  return link.targets.map((t) => ({ mine: t.controller !== link.controller, location: t.location, sequence: t.sequence }));
+}
+
+/** The opponent's card choice in a copy that repeats their targets (their seat there: `oppSeat`); null if it can't. */
+function targetResponse(p: Prompt, situation: Situation, oppSeat: 0 | 1): OcgResponse | null {
+  if (p.type !== OcgMessageType.SELECT_CARD || situation.kind !== "activate" || !situation.targets?.length) return null;
+  const want = situation.targets.map((t) => p.selects.findIndex((c) =>
+    (c.controller !== oppSeat) === t.mine && c.location === t.location && c.sequence === t.sequence));
+  if (want.some((i) => i < 0) || want.length < p.min || want.length > p.max) return null;
+  return { type: OcgResponseType.SELECT_CARD, indicies: want };
 }
 
 /** The outcome of passing and of each candidate the copy could play; null if the copy can't replay the situation. */
@@ -114,7 +137,7 @@ function replayLink(sim: Simulator, layout: SimLayout, situation: Situation & { 
   try {
     const debug = sim.debugSink;
     const ai = new AiSeat({ seat: 0, brain: createGenericBrain({ weights: sim.weights }), duel, onTrace: debug ? (e) => debug(`      (replay) ${formatTrace(e)}`) : undefined });
-    let done = false, used = false;
+    let done = false, used = false, aimed = false;
     for (let steps = 0; steps < MAX_STEPS; steps++) {
       const s = duel.advance();
       ai.observe(s.messages);
@@ -133,7 +156,12 @@ function replayLink(sim: Simulator, layout: SimLayout, situation: Situation & { 
         if (p.type === OcgMessageType.SELECT_CHAIN && !p.forced) {
           const j = done ? -1 : p.selects.findIndex((c) => c.code === situation.code);
           duel.respond({ type: OcgResponseType.SELECT_CHAIN, index: j >= 0 ? j : null });
-        } else duel.respond(autoRespond(p, () => 0, sim.cardDb));
+        } else {
+          // Its targets are picked right after the activation is announced: the real ones, once.
+          const target = aimed ? null : targetResponse(p, situation, 1);
+          if (target) aimed = true;
+          duel.respond(target ?? autoRespond(p, () => 0, sim.cardDb));
+        }
         continue;
       }
       if (p.type === OcgMessageType.SELECT_IDLECMD || p.type === OcgMessageType.SELECT_BATTLECMD) return null; // no window came
@@ -211,14 +239,22 @@ function replayOne(sim: Simulator, view: AiView, layout: SimLayout, situation: S
     const realPhase = view.memory.phase;
     // done: the opponent has started the action; over: it has finished (their next main/battle prompt, or the phase
     // has moved on). The candidate may only be used in between.
-    let done = false, over = false, used = false;
+    let done = false, over = false, used = false, aimed = false;
+    // The copy starts a fresh turn: they may Normal Summon (or Set) only as often as they still could for real, plus
+    // the summon being replayed.
+    const replayed = situation.kind === "summon" && situation.how === "summon" ? 1 : 0;
+    let summonsLeft = Math.max(0, 1 - view.memory.normalSummons[1 - view.seat]) + replayed;
 
     for (let steps = 0; ; steps++) {
       if (steps > MAX_STEPS) return null;
       const s = duel.advance();
       opp.observe(s.messages);
       ai.observe(s.messages);
-      for (const m of s.messages) if (!done) done = actionHappened(m, situation, opp.memory.phase, opp.memory.turnPlayer);
+      for (const m of s.messages) {
+        if (!done) done = actionHappened(m, situation, opp.memory.phase, opp.memory.turnPlayer);
+        if (m.type === OcgMessageType.SUMMONING && m.controller === 0) summonsLeft--;
+        else if (m.type === OcgMessageType.SET && m.controller === 0 && m.location === OcgLocation.MZONE) summonsLeft--;
+      }
       if (s.ended) return s.winner === 1 ? 1000 : s.winner === 0 ? -1000 : 0;
       if (ai.memory.turn > 1) break; // the opponent's turn is over
       const p = s.prompt as Prompt;
@@ -226,10 +262,14 @@ function replayOne(sim: Simulator, view: AiView, layout: SimLayout, situation: S
       if (p.player === 0) {
         if (done && !over && (p.type === OcgMessageType.SELECT_IDLECMD || p.type === OcgMessageType.SELECT_BATTLECMD)) over = true;
         if (over && candidate && !used) return null; // never offered during the action
-        // Scripted until the action has started; then they play on with the generic brain.
-        const scripted = done ? null : opponentMove(p, situation, opp);
+        // Scripted until the action has started (its targets: the real ones, picked right after it's announced);
+        // then they play on with the generic brain.
+        const target = aimed ? null : targetResponse(p, situation, 0);
+        if (target) aimed = true;
+        const scripted = target ?? (done ? null : opponentMove(p, situation, opp));
         if (scripted === "abort") return null;
-        duel.respond(scripted ?? opp.decide(p));
+        const offered = summonsLeft <= 0 && p.type === OcgMessageType.SELECT_IDLECMD ? { ...p, summons: [], monster_sets: [] } : p;
+        duel.respond(scripted ?? opp.decide(offered));
       } else {
         if (p.type === OcgMessageType.SELECT_IDLECMD || p.type === OcgMessageType.SELECT_BATTLECMD) break;
         if (p.type !== OcgMessageType.SELECT_CHAIN || p.forced) { duel.respond(ai.decide(p)); continue; }

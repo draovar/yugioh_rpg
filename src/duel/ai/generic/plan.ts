@@ -72,6 +72,9 @@ export function decideByPlan(m: IdleMessage | BattleMessage, view: AiView, state
     return null; // in the battle phase: the usual battle logic finishes it
   }
   if (state.plan) current.at++;
+  state.pickTarget = step?.kind === "idle" && step.pick
+    ? { controller: (step.pick.theirs ? 1 - view.seat : view.seat) as 0 | 1, location: step.pick.location, sequence: step.pick.sequence }
+    : null;
   if (step?.kind === "attack")
     state.attackTarget = step.target === null ? null : { controller: (1 - view.seat) as 0 | 1, location: OcgLocation.MZONE, sequence: step.target };
   if (step?.kind === "idle" && (step.action === SelectIdleCMDAction.SELECT_SUMMON || step.action === SelectIdleCMDAction.SELECT_MONSTER_SET))

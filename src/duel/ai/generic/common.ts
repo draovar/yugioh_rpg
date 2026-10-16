@@ -41,6 +41,8 @@ export class BrainState {
   lastActivation: string | null = null;
   /** The monster the battle plan wants the current attack to hit. */
   attackTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
+  /** The card the plan's current move picks first (e.g. De-Spell's target), when the plan names one. */
+  pickTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
 
   constructor(simulator: Simulator | null = null) {
     this.simulator = simulator;
@@ -56,6 +58,7 @@ export class BrainState {
     this.plan = null;
     this.normalSummonUsed = false;
     this.attackTarget = null;
+    this.pickTarget = null;
   }
 }
 

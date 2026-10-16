@@ -1,14 +1,17 @@
 // A sequence of the AI's own moves played in one copy: the turn planner's building block. The steps are main-phase
 // and battle commands ("activate Dark Hole", "summon Jinzo", "attack with Jinzo", "end turn"); everything they lead
-// to (zones, targets, tributes, costs) is answered by the generic brain as the AI would, and the opponent's stand-ins
+// to (zones, targets, tributes, costs) is answered by the generic brain as the AI would, except a target the step
+// names itself (`pick`: the planner tries each of the opponent's cards a move could hit), and the opponent's stand-ins
 // never respond. Optionally the copy then plays the opponent's whole next turn (generic brain, stand-ins), so a plan
 // is judged by what happens after it too. One copy per sequence: ocgcore can't fork a duel, so a planner extends plans
 // by playing them again from the start (cheap with the prepared pool).
 import {
+  OcgLocation,
   OcgMessageType,
   OcgResponseType,
   SelectBattleCMDAction,
   SelectIdleCMDAction,
+  type OcgCardLoc,
   type OcgMessage,
   type OcgResponse,
 } from "ocgcore-wasm";
@@ -23,12 +26,22 @@ import { SELECT_HINT } from "../generic/select.ts";
 import { formatTrace } from "../trace.ts";
 import { findSame, idleList, type CardOption } from "./options.ts";
 import type { Simulator } from "./simulator.ts";
-import { layoutFrom } from "./world.ts";
+import { BLANK, layoutFrom } from "./world.ts";
+
+const BLANK_CODES = new Set<number>(Object.values(BLANK));
+
+/** A card a move picks (its first card choice): theirs or ours, by place. Code for traces (0 = unknown). */
+export interface PickTarget {
+  theirs: boolean;
+  location: OcgLocation;
+  sequence: number;
+  code: number;
+}
 
 /** One move at a main-phase or battle prompt. Zones are the copy's (the same as the real board's). */
 export type PlanStep =
-  /** A main-phase action with a card, or going to the battle / end phase (no card). */
-  | { kind: "idle"; action: SelectIdleCMDAction; card?: CardOption }
+  /** A main-phase action with a card, or going to the battle / end phase (no card); `pick`: its first card choice. */
+  | { kind: "idle"; action: SelectIdleCMDAction; card?: CardOption; pick?: PickTarget }
   /** An attack: `target` is the zone of the opponent's monster, null = a direct attack. */
   | { kind: "attack"; attacker: CardOption; target: number | null }
   /** Leaving the battle phase. */
@@ -59,6 +72,11 @@ export interface SequenceResult {
   checkpoints: number[];
   /** Damage the opponent took in our turn (the planner's tie-breaker). */
   damageDealt: number;
+  /**
+   * The last step's first card choice, when the generic brain aimed it at one of the opponent's cards (a single pick)
+   * and others could have been picked instead: the card it took, and the other cards of theirs it could have.
+   */
+  picks?: { chosen: PickTarget; others: PickTarget[] };
 }
 
 /**
@@ -97,7 +115,10 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
     let done = 0;
     let next: PlanStep[] = [];
     const checkpoints: number[] = [];
-    const result = (value: number): SequenceResult => ({ done, value, next, checkpoints, damageDealt });
+    const result = (value: number): SequenceResult => ({ done, value, next, checkpoints, damageDealt, picks });
+    let picks: SequenceResult["picks"];
+    /** The idle step just taken, until its first card choice (or the next command prompt). */
+    let picking: { step: PlanStep & { kind: "idle" }; last: boolean } | null = null;
     /** Our turn is over (all steps done, opponentTurn): from here on both sides play on their own. */
     let finishing = false;
     /** The attack the last step declared waits for its target prompt. */
@@ -140,6 +161,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
         continue;
       }
       if (p.type === OcgMessageType.SELECT_IDLECMD || p.type === OcgMessageType.SELECT_BATTLECMD) {
+        picking = null;
         if (finishing) { duel.respond(ai.decide(p)); continue; } // only reached if our turn didn't end (shouldn't)
         if (checkpoints.length === done) checkpoints.push(boardDigest(duel.snapshot(0), 0));
         if (done < steps.length) {
@@ -147,6 +169,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
           if (!r) { next = nextSteps(p, duel.snapshot(0)); return result(score()); }
           const step = steps[done++];
           target = step.kind === "attack" ? step.target : undefined;
+          picking = step.kind === "idle" && step.card ? { step, last: done === steps.length } : null;
           duel.respond(r);
           continue;
         }
@@ -176,6 +199,26 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
         const i = p.selects.findIndex((c) => c.controller === 1 && c.sequence === target);
         target = undefined;
         if (i >= 0) { ai.memory.hint = null; duel.respond({ type: OcgResponseType.SELECT_CARD, indicies: [i] }); continue; }
+      }
+      if (p.type === OcgMessageType.SELECT_CARD && picking && !finishing) {
+        const { step, last } = picking;
+        picking = null;
+        const at = (t: PickTarget) => p.selects.findIndex((c) => (c.controller === 1) === t.theirs && c.location === t.location && c.sequence === t.sequence);
+        if (step.pick) {
+          const i = p.min <= 1 ? at(step.pick) : -1;
+          if (i >= 0) { duel.respond({ type: OcgResponseType.SELECT_CARD, indicies: [i] }); continue; }
+        } else {
+          const r = ai.decide(p);
+          const chosen = r.type === OcgResponseType.SELECT_CARD && r.indicies?.length === 1 ? p.selects[r.indicies[0]] : null;
+          const toTarget = (c: OcgCardLoc): PickTarget =>
+            ({ theirs: c.controller === 1, location: c.location, sequence: c.sequence, code: BLANK_CODES.has(c.code) ? 0 : c.code });
+          if (last && chosen && chosen.controller === 1) {
+            const others = p.selects.filter((c) => c.controller === 1 && c !== chosen);
+            if (others.length) picks = { chosen: toTarget(chosen), others: others.map(toTarget) };
+          }
+          duel.respond(r);
+          continue;
+        }
       }
       // Our own chain windows: the plan has no responses in it; in their turn, our usual chain rule.
       if (p.type === OcgMessageType.SELECT_CHAIN && !p.forced && !finishing) { duel.respond(pass); continue; }
@@ -240,7 +283,8 @@ export function describeStep(step: PlanStep, cards: CardDb): string {
       switch (step.action) {
         case SelectIdleCMDAction.TO_BP: return "battle phase";
         case SelectIdleCMDAction.TO_EP: return "end turn";
-        case SelectIdleCMDAction.SELECT_ACTIVATE: return `activate ${name(step.card)}`;
+        case SelectIdleCMDAction.SELECT_ACTIVATE:
+          return `activate ${name(step.card)}${step.pick ? ` on ${step.pick.code ? cards.name(step.pick.code) : step.pick.location === OcgLocation.MZONE ? "a face-down monster" : "a face-down card"}` : ""}`;
         case SelectIdleCMDAction.SELECT_SUMMON: return `summon ${name(step.card)}`;
         case SelectIdleCMDAction.SELECT_SPECIAL_SUMMON: return `special summon ${name(step.card)}`;
         case SelectIdleCMDAction.SELECT_POS_CHANGE: return `change position of ${name(step.card)}`;
