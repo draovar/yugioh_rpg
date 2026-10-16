@@ -4,6 +4,9 @@ import { OcgLocation, OcgPosition, type OcgCardLoc } from "ocgcore-wasm";
 import { TYPE } from "../cardData.ts";
 import type { CardView, PlayerView } from "../DuelSession.ts";
 import type { AiView } from "./AiSeat.ts";
+import { BLANK } from "./sim/world.ts";
+
+const BLANK_CODES = new Set<number>(Object.values(BLANK));
 
 export const FACEDOWN = OcgPosition.FACEDOWN_ATTACK | OcgPosition.FACEDOWN_DEFENSE;
 export const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
@@ -88,6 +91,12 @@ export interface Weights {
    * can't be beaten in battle, worth more than its ATK alone says (one 3000 beats two 1900s).
    */
   beatsTheirBest: number;
+  /**
+   * How sure the copies are of their stand-in monsters (the opponent's guessed 1600 ATK attacker from their hidden
+   * hand), 0-1, in beatsTheirBest: a stand-in gets that share of the bonus, and a monster of ours that beats everything
+   * but stand-ins keeps the rest of its own. 1 = a guess counts like a real monster.
+   */
+  guessDominance: number;
   /** Spells/Traps on the field: our own set ones, the opponent's we can't see, face-up continuous/field, equips, others. */
   setCard: number;
   /**
@@ -130,7 +139,7 @@ export interface Weights {
 
 export const DEFAULT_WEIGHTS: Readonly<Weights> = {
   lpScale: 12, lpHalf: 10000,
-  monsterBase: 0.4, atkDivisor: 1200, defFactor: 0.8, hiddenMonster: 1.3, token: 0.4, beatsTheirBest: 1.2,
+  monsterBase: 0.4, atkDivisor: 1200, defFactor: 0.8, hiddenMonster: 1.3, token: 0.4, beatsTheirBest: 1.2, guessDominance: 0.5,
   setCard: 1, setTrap: 1.3, setTrapStep: 0.15, hiddenSetCard: 1.2, continuous: 1.2, equip: 0.6, faceUpSpell: 0.5,
   handUnknown: 1, handSpell: 1, handTrap: 1.1, handMonsterBase: 0.5, handMonsterFactor: 0.4, stuckMonster: 0.75, stuckMonster2: 0.5, openField: 0.5,
   deckLowPenalty: 0.5,
@@ -192,9 +201,9 @@ export function damageCost(lp: number, damage: number, w: Readonly<Weights> = DE
   return lpValue(lp, w) - lpValue(lp - damage, w);
 }
 
-/** The highest ATK among a player's face-up monsters (0 if none). */
-export function bestAtk(p: PlayerView): number {
-  return Math.max(0, ...p.monsters.filter((c): c is CardView => !!c && !c.faceDown).map((c) => c.attack));
+/** The highest ATK among a player's face-up monsters (0 if none); `real`: leaving out the copies' stand-ins. */
+export function bestAtk(p: PlayerView, real = false): number {
+  return Math.max(0, ...p.monsters.filter((c): c is CardView => !!c && !c.faceDown && !(real && BLANK_CODES.has(c.code))).map((c) => c.attack));
 }
 
 /**
@@ -204,9 +213,18 @@ export function bestAtk(p: PlayerView): number {
 function sideValue(view: AiView, p: PlayerView, other: PlayerView): number {
   const w = weightsOf(view);
   let v = lpValue(p.lp, w);
-  // Face-up monsters stronger than anything the other side shows: nothing of theirs wins a fight against them.
+  // Face-up monsters stronger than anything the other side shows: nothing of theirs wins a fight against them. A
+  // stand-in (a guess) only counts for guessDominance of it, on either side of the comparison.
   const theirBest = bestAtk(other);
-  for (const c of p.monsters) if (c) v += monsterValue(view, c) + (!c.faceDown && c.attack > theirBest ? w.beatsTheirBest : 0);
+  const theirBestReal = bestAtk(other, true);
+  for (const c of p.monsters) {
+    if (!c) continue;
+    v += monsterValue(view, c);
+    if (c.faceDown) continue;
+    const sure = BLANK_CODES.has(c.code) ? w.guessDominance : 1;
+    if (c.attack > theirBest) v += w.beatsTheirBest * sure;
+    else if (c.attack > theirBestReal) v += w.beatsTheirBest * sure * (1 - w.guessDominance);
+  }
   // A Ritual Monster and its Ritual Spell (in hand, or our own set one) are one card's worth together (the monster's),
   // each stuck without the other.
   const ritualSpells = [...p.hand, ...p.spells.filter((c): c is CardView => !!c && c.faceDown)]

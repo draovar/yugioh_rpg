@@ -94,7 +94,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     Two brains play (`brains.ts`): `generic` (card data alone, fast) and `planner` (the default: generic + a
     `Simulator`, which makes it plan turns and replay chains). `sim/` holds the simulator: `world.ts` lays the AiView out
     as a fresh duel (AI = team 0; the opponent's hidden cards and Decks become blank stand-ins, codes 1-4 with empty
-    scripts, one of them an average 1600 ATK monster in their hand; the AI's Deck = its decklist minus the cards it can
+    scripts, one of them an average 1600 ATK monster in their hand, a guess that gets only `guessDominance` (0.5) of the beats-their-best bonus; the AI's Deck = its decklist minus the cards it can
     see), `simulator.ts` plays one main-phase action there (`idleAction`: activations, summons, special/flip summons;
     follow-up prompts by the generic brain, the opponent passes) and returns `evaluate(after) − evaluate(before)`; when
     no plan can be made, the planner scores activations by it and adds to its summon scores the "surprise": what the

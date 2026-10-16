@@ -32,7 +32,7 @@ const C = {
   zombyra: 88472456, malevolentNuzzler: 99597615, sevenTools: 3819470, trapMaster: 46461247, paladinOfWhiteDragon: 73398797,
   noblemanOfCrossout: 71044499, removeTrap: 51482758, witchOfTheBlackForest: 78010363, mysteriousPuppeteer: 54098121,
   shadowSpell: 29267084, spellbindingCircle: 18807108, rushRecklessly: 70046172, hyozanryu: 62397231, snatchSteal: 45986603, swords: 72302403, sonicBird: 57617178,
-  uraby: 1784619, deSpell: 19159413, beaverWarrior: 32452818, jarOfGreed: 83968380, monsterReborn: 83764718,
+  uraby: 1784619, deSpell: 19159413, beaverWarrior: 32452818, jarOfGreed: 83968380, monsterReborn: 83764718, manEaterBug: 54652250,
 } as const;
 
 interface Position {
@@ -558,6 +558,17 @@ const POSITIONS: Position[] = [
     opponentTargets: { location: OcgLocation.SZONE, sequence: 1 },
     checkChain: true,
     expect: /^chain Jar of Greed/,
+  },
+  {
+    name: "attack-the-open-field",
+    why: "review 2026-10-16 (seed 109 T3): facing an empty field (only a set card), Yugi turned Giant Soldier of Stone to defense and set Man-Eater Bug: no attack, though Giant Soldier (1300) and a summoned Giant Rat (1400) could hit for 2700. The copies' one guessed 1600 attacker walked into Man-Eater Bug in the defensive line and dominated the board in the attack line; fixed by `guessDominance` 0.5",
+    ai: [monster(C.giantSoldier, 0), hand(C.manEaterBug), hand(C.mysticalElf), hand(C.beaverWarrior), hand(C.giantRat)],
+    opponent: [setCard(C.rushRecklessly, 0), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf), hand(C.mysticalElf)],
+    aiSecond: true,
+    aiDeck: DECKS.yugiEvolution.deck.main,
+    lp: [7850, 8000],
+    turn: true,
+    expect: /attack with/,
   },
   {
     name: "no-boost-when-nothing-attacks",
