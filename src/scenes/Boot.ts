@@ -5,6 +5,7 @@ import { loadEngine } from "../duel/loadEngine.ts";
 import { ART_ATLAS, ATTRIBUTE_SHEET, CARD_BACK, CHAIN_MARK, FRAMES, SPELL_SHEET, frameKey } from "../ui/duel/CardSprite.ts";
 import { COIN_SHEET, DICE_SHEET } from "../ui/duel/DuelAnimator.ts";
 import { RPS_SHEET } from "../ui/duel/RpsIntro.ts";
+import { loadOverworld } from "./Overworld.ts";
 import { FONT_CARD, FONT_UI, WHITE, text } from "../ui/pixel.ts";
 import { loadThemeSprites } from "../ui/theme.ts";
 
@@ -25,6 +26,7 @@ export class Boot extends Phaser.Scene {
     this.load.image(CHAIN_MARK, "assets/duel/chain.png");
     this.load.spritesheet(RPS_SHEET, "assets/duel/rps.png", { frameWidth: 32, frameHeight: 32 });
     loadThemeSprites(this.load);
+    loadOverworld(this.load);
     // Built by `npm run build-art`; cards without art fall back to a grey box.
     this.load.atlas(ART_ATLAS, "cards/art32.png", "cards/art32.json");
   }

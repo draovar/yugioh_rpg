@@ -1,5 +1,6 @@
 # Builds the game from a fresh clone (same steps as CLAUDE.md "Fresh clone") and publishes dist/ to GitHub Pages.
-# Gitignored inputs (vendor/, public/data/, public/cards/) are regenerated here; paid packs never reach the build.
+# Gitignored inputs (vendor/, public/data/, public/cards/, public/maps/) are regenerated here. Paid art packs live in the
+# private Draovar/yugioh_rpg-assets repo (read with the ASSETS_DEPLOY_KEY deploy key); only the tiles the maps use reach the build.
 name: Deploy to GitHub Pages
 
 on:
@@ -36,10 +37,18 @@ jobs:
           key: art-${{ hashFiles('data/pool.json') }}
           restore-keys: art-
 
+      # Paid tilesets → vendor/paid, packed into public/maps/ by build-tiles. Fails here if the deploy key is missing.
+      - uses: actions/checkout@v4
+        with:
+          repository: Draovar/yugioh_rpg-assets
+          ssh-key: ${{ secrets.ASSETS_DEPLOY_KEY }}
+          path: vendor/paid
+
       - run: npm run fetch-data
       - run: npm run build-data
       - run: npm run fetch-art
       - run: npm run build-art
+      - run: npm run build-tiles
       - run: npm run smoke -- 3
       - run: npm run smoke-p2p -- 3
       - run: npm run test-ai

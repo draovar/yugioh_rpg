@@ -10,6 +10,8 @@ _launcher_backup/
 .DS_Store
 # Paid art pack (LimeZu) – not redistributable
 public/assets/tilesets/Modern_Exteriors_*
+# Overworld maps packed from the paid tileset — rebuild with `npm run build-tiles` (needs vendor/paid)
+public/maps/
 # Card images from YGOPRODeck — re-fetch with `npm run fetch-art`
 public/cards/
 # Third-party asset packs (sources for tools/import-ui.mjs); only the sprites we use are copied to public/

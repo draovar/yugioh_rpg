@@ -19,6 +19,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run check-cards` | list pool cards using mechanics the UI doesn't fully support yet (declare, counters, equips, tokens, fusions...) |
 | `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` (gitignored) |
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
+| `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled) + the paid tileset in `vendor/paid/` → `public/maps/<name>.png` (only the tiles the map uses) + `<name>.json` (tile ids remapped) |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
@@ -30,12 +31,15 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run ai-bench [-- --brain NAME] [-- --weights W.json] [-- --show] [-- --only NAME-PART]` | fixed positions with a known right/wrong main-phase choice, plan, chain answer or whole turn (`turn: true`: every main-phase and battle choice in order) (`tools/ai-bench.ts`); every reported misplay becomes one, logged in `docs/ai-reports.md`; `known: "<phase>"` positions are misplays waiting for a planned fix (`docs/ai-rework-plan.md`) and don't fail the run; positions can place Graveyard cards (`grave()`) and script the opponent's turn (`opponentSetsThenBattles`, `opponentAttacks`) |
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
-Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`.
+Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`, then
+`git clone https://github.com/Draovar/yugioh_rpg-assets.git vendor/paid && npm run build-tiles` (private repo with the
+paid art packs; without it the overworld shows a "no map" message, duels still work).
 After changing `data/pool.json`, rerun `build-data`, `check-cards`, `fetch-art`, `build-art`, then `smoke` (it validates
 the decks in `src/duel/decks.ts` and plays every deck pairing). `fetch-art`/`build-art` read `public/data/cards.json`, so
 tokens get art too.
 
-Deploy: every push to `main` runs `.github/workflows/deploy.yml` (the fresh-clone pipeline + `smoke -- 3` + `smoke-p2p -- 3` + `test-ai` + `build`)
+Deploy: every push to `main` runs `.github/workflows/deploy.yml` (the fresh-clone pipeline, the private assets repo checked out
+with the `ASSETS_DEPLOY_KEY` deploy key (read-only; secret in the game repo, public half on the assets repo), + `smoke -- 3` + `smoke-p2p -- 3` + `test-ai` + `build`)
 and publishes `dist/` to GitHub Pages: https://draovar.github.io/yugioh_rpg/ . Never upload a local `dist/`: Vite
 copies all of `public/`, including the gitignored paid tilesets.
 
@@ -149,11 +153,16 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   data and scripts), each side sends its deck as a passcode list (checked with `deckProblems`), the host sends the
   seed; then rock-paper-scissors packets (`rps` hands, the winner's `order`) decide the seats. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
-- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (placeholder grid map; bottom bar: deck choice (drop-up lists, `makeDropUp` in
-  `src/ui/widgets.ts`) saved in localStorage via `src/ui/prefs.ts`, used vs the Rival and in multiplayer; THEME buttons (switch in place);
-  MULTIPLAYER button / M key; second row (testing aids): AI DECK = the Rival's deck, AI CARDS = show the AI's hand and
+- `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (the Tiled map from `build-tiles`, Arcade physics (scene-local
+  config), arrow keys; wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`);
+  32px character frames drawn at 2x; NPCs (`NPCS`: name, text, their own deck) talk with X / Enter / Space in a
+  `DialogBox` (`src/ui/DialogBox.ts`, tiny5 at 2x, clickable options); YES starts a duel, and the player comes back to the
+  same spot (`savePosition`) with the NPC's line about the result) + `WorldMenu` (overlay scene launched by Overworld, so
+  it doesn't scroll: MENU (M) button top right opens the settings panel: your deck (drop-down lists, `makeDropDown` in
+  `src/ui/widgets.ts`, saved in localStorage via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place),
+  MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and
   set cards in duels (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards
-  drawn face-up at 60% alpha)) → `Duel` (`DuelScene`,
+  drawn face-up at 60% alpha), QUICK DUEL) → `Duel` (`DuelScene`,
   takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   Before the engine starts, `DuelScene.decideFirst` plays rock-paper-scissors on the board (`src/ui/duel/RpsIntro.ts`:
@@ -299,8 +308,9 @@ See `CREDITS.md` — keep it up to date when adding third-party assets. The Crus
 (attribution required in the game's credits).
 
 ocgcore and CardScripts are **AGPL-3.0**, so a distributed build of this game must be AGPL-3.0 with source available.
-Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e.g. LimeZu Modern Exteriors in
-`public/assets/tilesets/`) must not go into a public repo. They're gitignored for that reason.
+Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e.g. LimeZu Modern Exteriors) must not
+go into a public repo: they live in the private `Draovar/yugioh_rpg-assets` repo (cloned to `vendor/paid/`), and only the
+tiles a map uses reach the build (`build-tiles`, output in gitignored `public/maps/`).
 
 ## Roadmap
 
@@ -339,7 +349,8 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    cover battle (probes, lethal search, refused targets), copies (equip links, card-target locks, stolen monsters), chain replays,
    positions in the opponent's turn, draw plans averaged over Deck orders; open findings stay in `docs/ai-reports.md`. No arena
    run yet on df34ec9 / b795a67.
-4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
+4. **Overworld**: ✅ first Tiled map (ported from the owner's Phaser 3 prototype), collisions, y-sorted walls, NPCs with
+   dialogue who duel with their own decks, settings menu (M). Next: touch controls, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.
 7. **Multiplayer**: ✅ peer-to-peer v1 (lockstep over PeerJS, room codes / invite links, each player's chosen deck, leave

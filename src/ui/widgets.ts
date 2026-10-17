@@ -42,19 +42,22 @@ export function makeButton(
   return c;
 }
 
-/** One choice in a `makeDropUp` list. */
-export interface DropUpOption<T> {
+/** Rows of an open drop-down list: darker than buttons, so the list doesn't blend into the ones under it. */
+const DROP_LIST_COLOR = 0x1b2638;
+
+/** One choice in a `makeDropDown` list. */
+export interface DropDownOption<T> {
   value: T;
   label: string;
 }
 
 /**
- * A flat button showing the current choice (left-aligned label, ▲ on the right). Clicking it opens the list of
- * choices above it, the current one in `pickedColor`; picking one, clicking elsewhere or Esc closes it.
+ * A flat button showing the current choice (left-aligned label, ▼ on the right). Clicking it opens the list of
+ * choices below it, the current one in `pickedColor`; picking one, clicking elsewhere or Esc closes it.
  * (x, y) is the button's centre, like `makeButton`.
  */
-export function makeDropUp<T>(
-  scene: Phaser.Scene, x: number, y: number, w: number, h: number, options: DropUpOption<T>[], current: T,
+export function makeDropDown<T>(
+  scene: Phaser.Scene, x: number, y: number, w: number, h: number, options: DropDownOption<T>[], current: T,
   onPick: (value: T) => void, color = 0x2d4a7a, pickedColor = 0x3f7a3a,
 ): Button {
   const labelOf = (v: T) => (options.find((o) => o.value === v)?.label ?? "").toUpperCase();
@@ -67,29 +70,33 @@ export function makeDropUp<T>(
   };
   const open = () => {
     if (list) return close();
-    const pitch = h + 1, left = Math.round(x - w / 2), bottom = Math.round(y - h / 2) - 2;
+    const pitch = h + 1, left = Math.round(x - w / 2), top = Math.round(y + h / 2) + 2;
     // Invisible full-screen catcher under the rows: a click anywhere else just closes the list.
     const catcher = scene.add.zone(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setInteractive();
     catcher.on("pointerup", close);
     const rows = options.map((o, i) => {
-      const rowY = bottom - (options.length - i) * pitch + Math.floor(h / 2);
+      const rowY = top + i * pitch + Math.floor(h / 2);
       return makeButton(scene, left + Math.floor(w / 2), rowY, w, h, o.label.toUpperCase(), () => {
         close();
         if (o.value === value) return;
         value = o.value;
         button.setLabel(labelOf(value));
         onPick(value);
-      }, o.value === value ? pickedColor : color);
+      }, o.value === value ? pickedColor : DROP_LIST_COLOR);
     });
-    list = scene.add.container(0, 0, [catcher, ...rows]).setDepth(1000);
+    // Solid plate behind the rows (and their 1px gaps) with a light outline, so the list stands out from the buttons it covers.
+    const plateH = options.length * pitch + 3;
+    const plate = scene.add.graphics().fillStyle(INK).fillRect(left - 2, top - 2, w + 4, plateH);
+    border(plate, left - 2, top - 2, w + 4, plateH, WHITE);
+    list = scene.add.container(0, 0, [catcher, plate, ...rows]).setDepth(1000);
     scene.input.keyboard?.on("keydown-ESC", close);
   };
   const button = makeButton(scene, x, y, w, h, "", open, color);
   const t = button.list[1] as Phaser.GameObjects.BitmapText;
   const arrow = scene.add.graphics().fillStyle(0xffffff);
-  // 5x3 up-pointing triangle, 4px from the right edge.
+  // 5x3 down-pointing triangle, 4px from the right edge.
   const ax = Math.floor(w / 2) - 9, ay = -1;
-  arrow.fillRect(ax + 2, ay, 1, 1).fillRect(ax + 1, ay + 1, 3, 1).fillRect(ax, ay + 2, 5, 1);
+  arrow.fillRect(ax, ay, 5, 1).fillRect(ax + 1, ay + 1, 3, 1).fillRect(ax + 2, ay + 2, 1, 1);
   button.add(arrow);
   button.setLabel = (s: string) => {
     t.setText(s);

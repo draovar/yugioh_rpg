@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { Boot } from "./scenes/Boot.ts";
 import { Overworld } from "./scenes/Overworld.ts";
+import { WorldMenu } from "./scenes/WorldMenu.ts";
 import { DuelScene } from "./scenes/DuelScene.ts";
 import { Lobby } from "./scenes/Lobby.ts";
 
@@ -24,7 +25,7 @@ const game = new Phaser.Game({
   backgroundColor: "#000000",
   pixelArt: true,
   roundPixels: true,
-  scene: [Boot, Overworld, Lobby, DuelScene],
+  scene: [Boot, Overworld, WorldMenu, Lobby, DuelScene],
   scale: { mode: Phaser.Scale.NONE, zoom: integerZoom(), autoCenter: Phaser.Scale.CENTER_BOTH },
   // Dev: `&timeout` keeps the game loop running in a hidden/background tab (rAF pauses there),
   // which automated browser testing needs.
