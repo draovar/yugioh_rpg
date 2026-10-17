@@ -335,6 +335,10 @@ Card names/text/art are Konami's (non-commercial fan project). Paid art packs (e
    opponent worlds built, measured no better and removed (git 1095a52); the passivity was the evaluation: LP and hand-card weights
    fitted to who won (`tools/fit-eval.ts`), ~30% fewer skipped summons / unused Spells/Traps, even win rate, all bench
    positions pass. Next: phase 3 (more fitting, then retune). User reports go into the log; only clear bugs are fixed right away.
+   ✅ Trace reviews 101-114 (2026-10-16/17: Claude plays traced planner-vs-planner duels and reads them for misplays): fixes so far
+   cover battle (probes, lethal search, refused targets), copies (equip links, card-target locks, stolen monsters), chain replays,
+   positions in the opponent's turn, draw plans averaged over Deck orders; open findings stay in `docs/ai-reports.md`. No arena
+   run yet on df34ec9 / b795a67.
 4. **Overworld**: Tiled maps, collisions, NPCs with dialogue, trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.
