@@ -3,6 +3,8 @@ import { DECKS, type DeckName } from "../duel/decks.ts";
 import { DialogBox } from "../ui/DialogBox.ts";
 import { WHITE, text } from "../ui/pixel.ts";
 import { chosenDeck } from "../ui/prefs.ts";
+import { DPAD, TouchPad, X_BUTTON } from "../ui/TouchPad.ts";
+import { TOUCH } from "../ui/touch.ts";
 import type { DuelSceneData } from "./DuelScene.ts";
 import type { WorldMenu } from "./WorldMenu.ts";
 
@@ -51,6 +53,8 @@ export class Overworld extends Phaser.Scene {
   private npcs!: Phaser.Physics.Arcade.StaticGroup;
   private walls!: Phaser.Tilemaps.TilemapLayer;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  /** On-screen D-pad and X on touch devices. */
+  private pad: TouchPad | null = null;
   private dialog!: DialogBox;
   private talkHint!: Phaser.GameObjects.BitmapText;
   private facing: Facing = "down";
@@ -118,17 +122,13 @@ export class Overworld extends Phaser.Scene {
 
     text(this, 8, 8, `CHIPS: ${this.chips}`, { color: WHITE, scale: 2 }).setScrollFactor(0).setDepth(100);
     this.talkHint = text(this, 0, 0, "X", { color: 0xffd75e, scale: 2 }).setDepth(150).setVisible(false);
-    this.dialog = new DialogBox(this, this.cameras.main);
+    // On touch devices the dialog sits between the D-pad and the X button.
+    this.pad = TOUCH ? new TouchPad(this, (code) => this.handleKey(code)) : null;
+    this.dialog = new DialogBox(this, this.cameras.main, TOUCH
+      ? { left: DPAD.x + DPAD.r + 8, right: 640 - (X_BUTTON.x - X_BUTTON.r) + 8 } : undefined);
 
     // Key events rather than JustDown polling, so quick taps are never missed.
-    this.input.keyboard!.on("keydown", (event: KeyboardEvent) => {
-      if (this.menuOpen()) return;
-      if (this.dialog.isOpen) this.dialog.handleKey(event);
-      else if (event.code === "KeyX" || event.code === "Enter" || event.code === "Space") {
-        const npc = this.nearestNpc();
-        if (npc) this.talkTo(npc);
-      }
-    });
+    this.input.keyboard!.on("keydown", (event: KeyboardEvent) => this.handleKey(event.code));
 
     this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels).startFollow(this.player);
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
@@ -149,6 +149,16 @@ export class Overworld extends Phaser.Scene {
   }
 
   /** Remembers where the player stands, so coming back from a duel or the lobby puts them on the same spot. */
+  /** A key press, or the touch pad's: answers the open dialog, else X / Enter / Space talks to the nearest NPC. */
+  private handleKey(code: string) {
+    if (this.menuOpen()) return;
+    if (this.dialog.isOpen) this.dialog.handleKey(code);
+    else if (code === "KeyX" || code === "Enter" || code === "Space") {
+      const npc = this.nearestNpc();
+      if (npc) this.talkTo(npc);
+    }
+  }
+
   savePosition(opponent?: string) {
     if (!this.player) return;
     saved = { x: Math.round(this.player.x), y: Math.round(this.player.y), facing: this.facing, flipX: this.player.flipX, opponent };
@@ -282,10 +292,10 @@ export class Overworld extends Phaser.Scene {
     if (npc) this.talkHint.setPosition(Math.round(npc.x - this.talkHint.width / 2), Math.round(npc.getBounds().top - 2 - this.talkHint.height));
 
     let vx = 0, vy = 0;
-    if (this.cursors.left.isDown) vx = -SPEED;
-    if (this.cursors.right.isDown) vx = SPEED;
-    if (this.cursors.up.isDown) vy = -SPEED;
-    if (this.cursors.down.isDown) vy = SPEED;
+    if (this.cursors.left.isDown || this.pad?.x === -1) vx = -SPEED;
+    if (this.cursors.right.isDown || this.pad?.x === 1) vx = SPEED;
+    if (this.cursors.up.isDown || this.pad?.y === -1) vy = -SPEED;
+    if (this.cursors.down.isDown || this.pad?.y === 1) vy = SPEED;
     this.player.setVelocity(vx, vy);
     this.player.body.velocity.normalize().scale(SPEED); // same speed on diagonals
 

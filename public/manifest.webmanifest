@@ -1,0 +1,10 @@
+{
+  "name": "Yu-Gi-Oh RPG",
+  "short_name": "Yu-Gi-Oh RPG",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#040218",
+  "theme_color": "#040218"
+}

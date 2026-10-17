@@ -7,7 +7,8 @@ const MARGIN = 8, PAD = 10, H = 76, SCALE = 2;
 /**
  * Overworld dialog box: speaker name, text and options (Yes / No, or just OK). It sits at the bottom of the camera's
  * view, or at the top when it would cover `avoid` (the player). Left/Right picks an option, X / Enter / Space
- * confirms, or click one. The scene forwards keydown events to `handleKey()` while the box is open.
+ * confirms, or click one. The scene forwards key codes to `handleKey()` while the box is open (also the touch pad's).
+ * `insets` keeps it clear of on-screen controls at the bottom corners (the touch pad).
  */
 export class DialogBox {
   isOpen = false;
@@ -21,17 +22,19 @@ export class DialogBox {
 
   private readonly scene: Phaser.Scene;
   private readonly camera: Phaser.Cameras.Scene2D.Camera;
+  private readonly insets: { left: number; right: number };
 
-  constructor(scene: Phaser.Scene, camera: Phaser.Cameras.Scene2D.Camera) {
+  constructor(scene: Phaser.Scene, camera: Phaser.Cameras.Scene2D.Camera, insets = { left: MARGIN, right: MARGIN }) {
     this.scene = scene;
     this.camera = camera;
+    this.insets = insets;
     this.container = scene.add.container(0, 0).setScrollFactor(0).setDepth(200).setVisible(false);
   }
 
   /** `onChoice(option)` runs after the box closes. */
   open(name: string, body: string, options: string[], onChoice: (option: string) => void, avoid?: Phaser.GameObjects.Sprite) {
     for (const o of this.items) o.destroy();
-    const w = this.camera.width - MARGIN * 2;
+    const w = this.camera.width - this.insets.left - this.insets.right;
     const bg = this.scene.add.graphics().fillStyle(BG, 0.92).fillRect(0, 0, w, H);
     border(bg, 0, 0, w, H, WHITE, 2);
     const nameText = text(this.scene, PAD, PAD, name.toUpperCase(), { color: NAME, scale: SCALE });
@@ -56,7 +59,7 @@ export class DialogBox {
     this.updateCursor();
     const bottom = this.camera.height - H - MARGIN;
     const avoidBottom = avoid ? avoid.getBounds().bottom - this.camera.worldView.y : 0;
-    this.container.setPosition(this.camera.x + MARGIN, this.camera.y + (avoidBottom > bottom ? MARGIN : bottom)).setVisible(true);
+    this.container.setPosition(this.camera.x + this.insets.left, this.camera.y + (avoidBottom > bottom ? MARGIN : bottom)).setVisible(true);
     this.isOpen = true;
   }
 
@@ -65,8 +68,8 @@ export class DialogBox {
     this.isOpen = false;
   }
 
-  handleKey(event: KeyboardEvent) {
-    switch (event.code) {
+  handleKey(code: string) {
+    switch (code) {
       case "ArrowLeft":
         this.selected = Math.max(0, this.selected - 1);
         this.updateCursor();

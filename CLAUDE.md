@@ -58,6 +58,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 to the console (also in the deployed game, for misplay reports), after a first line with the duel seed, who went first,
 the decks and brain and a `?duel&seed=…&first=…` URL that replays the same duel (duels vs the AI always use a seed that fits `&seed=N`); with it, the L key logs the whole board, both hands and set
 cards included (`src/duel/boardText.ts`),
+`&touch` shows the overworld's touch controls on a desktop (phones get them automatically: `TOUCH` in `src/ui/touch.ts` = coarse pointer),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
 choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.controller.waitingForHuman`,
@@ -157,12 +158,13 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   config), arrow keys; wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`);
   32px character frames drawn at 2x; NPCs (`NPCS`: name, text, their own deck) talk with X / Enter / Space in a
   `DialogBox` (`src/ui/DialogBox.ts`, tiny5 at 2x, clickable options); YES starts a duel, and the player comes back to the
-  same spot (`savePosition`) with the NPC's line about the result) + `WorldMenu` (overlay scene launched by Overworld, so
+  same spot (`savePosition`) with the NPC's line about the result; on touch devices a semi-transparent D-pad (diagonals,
+  keeps steering when the finger slides off) and X button (`src/ui/TouchPad.ts`), and the dialog sits between them) + `WorldMenu` (overlay scene launched by Overworld, so
   it doesn't scroll: MENU (M) button top right opens the settings panel: your deck (drop-down lists, `makeDropDown` in
   `src/ui/widgets.ts`, saved in localStorage via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place),
   MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and
   set cards in duels (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards
-  drawn face-up at 60% alpha), QUICK DUEL) → `Duel` (`DuelScene`,
+  drawn face-up at 60% alpha), QUICK DUEL, FULL SCREEN where the browser supports it) → `Duel` (`DuelScene`,
   takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   Before the engine starts, `DuelScene.decideFirst` plays rock-paper-scissors on the board (`src/ui/duel/RpsIntro.ts`:
@@ -183,6 +185,10 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   click, badges count down). Ordering cards (`SORT_CARD`, Big Eye) = `Modal.sortCards`: click the cards in order, number
   badges, RESET / CONFIRM; ocgcore-wasm's encoder adds a length byte the core doesn't expect, worked around in
   `DuelSession.respond` (`rawSortOrder`). Rare prompts (`SORT_CHAIN`, RPS) are still auto-answered by `autoBot`.
+- Phones: the page is `100dvh` tall (100vh = the height without the browser bar, which pushed the canvas under it) and
+  the zoom may go below 1x so the whole screen fits; the first tap goes full screen (`fullscreenOnFirstTap`, Android /
+  desktop; iPhones have no Fullscreen API: there `manifest.webmanifest` + the apple-mobile-web-app meta tags make the
+  home-screen app open without the browser bar).
 - `src/ui/` — `pixel.ts` (bitmap text, crisp 1px borders), `widgets.ts` (buttons), `duel/` (CardSprite, Modal,
   InfoPanel, BoardPick, layout geometry, log text, DuelAnimator).
   Animation timings live in the `T` table at the top of `DuelAnimator.ts` (pixel-art style: direct moves, no
@@ -350,7 +356,7 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
    positions in the opponent's turn, draw plans averaged over Deck orders; open findings stay in `docs/ai-reports.md`. No arena
    run yet on df34ec9 / b795a67.
 4. **Overworld**: ✅ first Tiled map (ported from the owner's Phaser 3 prototype), collisions, y-sorted walls, NPCs with
-   dialogue who duel with their own decks, settings menu (M). Next: touch controls, trainer line-of-sight challenges, map transitions.
+   dialogue who duel with their own decks, settings menu (M). ✅ touch controls + full screen on phones. Next: trainer line-of-sight challenges, map transitions.
 5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.
 7. **Multiplayer**: ✅ peer-to-peer v1 (lockstep over PeerJS, room codes / invite links, each player's chosen deck, leave

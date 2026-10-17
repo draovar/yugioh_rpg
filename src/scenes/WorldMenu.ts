@@ -3,6 +3,7 @@ import { DECKS, type DeckName } from "../duel/decks.ts";
 import { WHITE, border, text } from "../ui/pixel.ts";
 import { aiDeck, chosenDeck, revealAiCards, setAiDeck, setChosenDeck, setRevealAiCards } from "../ui/prefs.ts";
 import { THEME, THEMES, setTheme } from "../ui/theme.ts";
+import { enterFullscreen } from "../ui/touch.ts";
 import { makeButton, makeDropDown, type Button } from "../ui/widgets.ts";
 import type { Overworld } from "./Overworld.ts";
 
@@ -21,7 +22,7 @@ const deckOptions = () => (Object.keys(DECKS) as DeckName[]).map((name) => ({ va
 /**
  * Overlay on the Overworld (its own scene, so it doesn't scroll with the map camera): a MENU button at the top right
  * that opens the settings panel (also M): your deck, the quick duel's AI deck (NPCs bring their own decks), whether
- * the AI's hand and set cards are shown, the duel UI theme; then MULTIPLAYER and QUICK DUEL.
+ * the AI's hand and set cards are shown, the duel UI theme; then MULTIPLAYER, QUICK DUEL and FULL SCREEN.
  */
 export class WorldMenu extends Phaser.Scene {
   isOpen = false;
@@ -53,11 +54,14 @@ export class WorldMenu extends Phaser.Scene {
 
   private open() {
     this.isOpen = true;
-    const left = Math.round((640 - PANEL.w) / 2), top = Math.round((360 - PANEL.h) / 2);
+    // FULL SCREEN only where the browser can do it (not on iPhones: there the home-screen app has no browser bar).
+    const fullscreen = this.scale.fullscreen.available;
+    const h = PANEL.h + (fullscreen ? PANEL.row : 0);
+    const left = Math.round((640 - PANEL.w) / 2), top = Math.round((360 - h) / 2);
     // Full-screen shade that also swallows clicks meant for the map.
     const shade = this.add.rectangle(0, 0, 640, 360, 0x000000, 0.45).setOrigin(0).setInteractive();
-    const bg = this.add.graphics().fillStyle(0x000000, 0.85).fillRect(left, top, PANEL.w, PANEL.h);
-    border(bg, left, top, PANEL.w, PANEL.h, WHITE);
+    const bg = this.add.graphics().fillStyle(0x000000, 0.85).fillRect(left, top, PANEL.w, h);
+    border(bg, left, top, PANEL.w, h, WHITE);
     const panel = this.add.container(0, 0, [shade, bg]).setDepth(500);
     this.panel = panel;
     const add = <T extends Phaser.GameObjects.GameObject>(o: T) => { panel.add(o); return o; };
@@ -98,6 +102,15 @@ export class WorldMenu extends Phaser.Scene {
     add(makeButton(this, mid, row(""), PANEL.controlW, 14, "QUICK DUEL (AI DECK)", () => this.leave("Duel", {
       opponentName: "Rival", playerDeck: DECKS[chosenDeck()].deck, opponentDeck: DECKS[aiDeck()].deck,
     }), ACTION_COLOR));
+
+    if (fullscreen) {
+      const on = this.scale.isFullscreen;
+      add(makeButton(this, mid, row(""), PANEL.controlW, 14, on ? "EXIT FULL SCREEN" : "FULL SCREEN", () => {
+        if (on) this.scale.stopFullscreen();
+        else enterFullscreen(this.game);
+        this.close();
+      }, ACTION_COLOR));
+    }
 
     y += 4;
     add(makeButton(this, mid, row(""), PANEL.controlW, 14, "CLOSE (M)", () => this.close()));
