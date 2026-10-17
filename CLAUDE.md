@@ -41,7 +41,7 @@ tokens get art too.
 Deploy: every push to `main` runs `.github/workflows/deploy.yml` (the fresh-clone pipeline, the private assets repo checked out
 with the `ASSETS_DEPLOY_KEY` deploy key (read-only; secret in the game repo, public half on the assets repo), + `smoke -- 3` + `smoke-p2p -- 3` + `test-ai` + `build`)
 and publishes `dist/` to GitHub Pages: https://draovar.github.io/yugioh_rpg/ . Never upload a local `dist/`: Vite
-copies all of `public/`, including the gitignored paid tilesets.
+copies all of `public/`, including whatever gitignored files sit there locally.
 
 Multiplayer URLs (work in the deployed game too): `?mp` opens the multiplayer lobby, `?join=CODE` joins a room.
 Dev URL options: `&anims` adds a dropdown (top-left) to replay single animations (`src/scenes/animPreview.ts`);
