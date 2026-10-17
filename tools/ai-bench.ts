@@ -34,7 +34,7 @@ const C = {
   shadowSpell: 29267084, spellbindingCircle: 18807108, rushRecklessly: 70046172, hyozanryu: 62397231, snatchSteal: 45986603, swords: 72302403, sonicBird: 57617178,
   twinHeadedBehemoth: 43586926, regeneratingMummy: 70821187, boneTower: 63012333, stampingDestruction: 81385346,
   dragonsBead: 92408984, dragonsRage: 54178050, masterKyonshee: 24530661, ryuKokki: 57281778, reload: 22589918,
-  vampireLady: 26495087, vampireGenesis: 22056710, armedDragonLv3: 980973, pyramidTurtle: 77044671, vampireLord: 53839837,
+  armedDragonLv5: 46384672, blackDragonsChick: 36262024, maskedDragon: 39191307, callOfTheMummy: 4861205, vampireLady: 26495087, vampireGenesis: 22056710, armedDragonLv3: 980973, pyramidTurtle: 77044671, vampireLord: 53839837,
   coveringFire: 74458486, darkDustSpirit: 89111398, bookOfLife: 2204140, doubleCoston: 44436472, curseOfAnubis: 66742250,
   lusterDragon: 11091375, redEyes: 74677422, recklessGreed: 37576645, elementDragon: 30314994,
   uraby: 1784619, deSpell: 19159413, beaverWarrior: 32452818, jarOfGreed: 83968380, monsterReborn: 83764718, manEaterBug: 54652250,
@@ -85,7 +85,7 @@ interface Position {
   /**
    * The AI goes first; in the opponent's turn after it they go to the Battle Phase and attack with the monsters in these
    * zones, in this order (each at the first target offered, or directly), then end the turn. The check is on the AI's
-   * chain answers in that turn, as with opponentSetsThenBattles.
+   * chain answers (and positions, "position <pos>") in that turn, as with opponentSetsThenBattles.
    */
   opponentAttacks?: number[];
 }
@@ -685,6 +685,82 @@ const POSITIONS: Position[] = [
     picks: true,
     expect: /summon Element Dragon.*activate Stamping Destruction → pick Snatch Steal.*attack with Luster Dragon/,
   },
+  {
+    name: "ryu-kokki-blocks-in-attack",
+    why: "review 2026-10-16 (seed 111 T6): Twin-Headed Behemoth destroyed Pyramid Turtle, whose Ryu Kokki (2400/2000) came out in Defense ('can't win fights': 2400 doesn't beat Armed Dragon LV5's 2400); LV5 destroyed it with Dragon's Rage piercing for 400 and LV3 went direct for 1200. In Attack Position LV5 only trades and LV3 can't attack",
+    ai: [monster(C.pyramidTurtle, 0, OcgPosition.FACEUP_DEFENSE)],
+    opponent: [
+      monster(C.armedDragonLv5, 0), monster(C.twinHeadedBehemoth, 1), monster(C.armedDragonLv3, 2),
+      { code: C.dragonsRage, location: OcgLocation.SZONE, sequence: 1, position: OcgPosition.FACEUP_ATTACK },
+      hand(C.armedDragonLv3),
+    ],
+    aiDeck: DECKS.zombieMadness.deck.main,
+    lp: [6500, 6000],
+    opponentAttacks: [1, 0, 2],
+    expect: /position face-up attack/,
+  },
+  {
+    name: "ryu-kokki-defends-against-blue-eyes",
+    why: "control for ryu-kokki-blocks-in-attack: the attacker left is Blue-Eyes (3000) and nothing pierces, so Ryu Kokki dies either way and Defense saves the 600 damage",
+    ai: [monster(C.pyramidTurtle, 0, OcgPosition.FACEUP_DEFENSE)],
+    opponent: [monster(C.blueEyes, 0), monster(C.twinHeadedBehemoth, 1), hand(C.armedDragonLv3)],
+    aiDeck: DECKS.zombieMadness.deck.main,
+    lp: [6500, 6000],
+    opponentAttacks: [1, 0],
+    expect: /position face-up defense/,
+  },
+  {
+    name: "attack-with-the-stolen-masked-dragon",
+    why: "review 2026-10-16 (seed 111 T3): Snatch Steal on Masked Dragon (1400) with their field empty, then turned it to Defense instead of attacking directly (1400 more damage); Armed Dragon LV3 (1200) destroyed it next turn, in Attack Position it would have survived",
+    ai: [
+      monster(C.pyramidTurtle, 0, OcgPosition.FACEUP_DEFENSE), setCard(C.magicJammer, 0),
+      hand(C.snatchSteal), hand(C.regeneratingMummy), hand(C.masterKyonshee), hand(C.vampireLord), hand(C.callOfTheMummy),
+    ],
+    opponent: [
+      monster(C.maskedDragon, 0), setCard(C.recklessGreed, 0), setCard(C.dragonsRage, 1), setCard(C.coveringFire, 2),
+      hand(C.armedDragonLv3), hand(C.armedDragonLv3),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.zombieMadness.deck.main,
+    turn: true,
+    picks: true,
+    expect: /activate Snatch Steal → pick Masked Dragon.*attack with Masked Dragon/,
+    known: "opponent model: in the copies their stand-in attacks Pyramid Turtle when Masked Dragon is in Defense, which hands us Ryu Kokki",
+  },
+  {
+    name: "no-reload-on-a-guessed-draw",
+    why: "review 2026-10-16 (seed 113 T4): with Masked Dragon, Element Dragon and Armed Dragon LV5 in hand (Curse of Anubis set) facing Ryu Kokki and Vampire Lady, Dragon played its second Reload because the copy's guessed draw had Luster Dragon (-5.42 vs -7.86 for setting Masked Dragon); it drew LV5, Creature Swap and Stamping Destruction and ended with an empty field. Fixed by scoring plans that draw over 4 orders of our Deck, each played on by the generic brain",
+    ai: [
+      setCard(C.curseOfAnubis, 0),
+      hand(C.reload), hand(C.maskedDragon), hand(C.elementDragon), hand(C.armedDragonLv5),
+      grave(C.recklessGreed), grave(C.snatchSteal), grave(C.blackDragonsChick), grave(C.reload),
+    ],
+    opponent: [
+      monster(C.ryuKokki, 0), monster(C.vampireLady, 1), setCard(C.compulsory, 0),
+      { code: C.callOfTheMummy, location: OcgLocation.SZONE, sequence: 1, position: OcgPosition.FACEUP_ATTACK },
+      hand(C.reload), hand(C.vampireGenesis), grave(C.masterKyonshee),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.dragonsRoar.deck.main,
+    lp: [5800, 7250],
+    seeds: 8,
+    turn: true,
+    // The misplay was shuffling away the only monster we could put on the field; a Reload after Masked Dragon is out
+    // (swapping Element Dragon and a stuck LV5) is a fair gamble.
+    expect: /^(?:(?!activate Reload).)*(summon|set) Masked Dragon/,
+  },
+  {
+    name: "reload-a-stuck-hand",
+    why: "control for no-reload-on-a-guessed-draw: with only Red-Eyes Black Dragon twice and Armed Dragon LV5 (no monster to tribute), Reload's average draw is worth more than the hand",
+    ai: [hand(C.reload), hand(C.redEyes), hand(C.redEyes), hand(C.armedDragonLv5)],
+    opponent: [monster(C.ryuKokki, 0), monster(C.vampireLady, 1), hand(C.reload), hand(C.vampireGenesis)],
+    aiSecond: true,
+    aiDeck: DECKS.dragonsRoar.deck.main,
+    lp: [5800, 7250],
+    seeds: 4,
+    turn: true,
+    expect: /activate Reload/,
+  },
 ];
 
 const args = process.argv.slice(2);
@@ -781,6 +857,10 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
     if (theirTurn) {
       if (ai.memory.turn === aiTurn + 1 && prompt.type === OcgMessageType.SELECT_CHAIN && prompt.selects.length > 0) {
         turnChoices.push(last.choice);
+        firstTurnTrace ??= last;
+      }
+      if (ai.memory.turn === aiTurn + 1 && prompt.type === OcgMessageType.SELECT_POSITION) {
+        turnChoices.push(`position ${last.choice}`);
         firstTurnTrace ??= last;
       }
       continue;

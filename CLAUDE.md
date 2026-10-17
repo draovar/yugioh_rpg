@@ -90,7 +90,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     else best killable target, weakest attacker that kills it, target remembered for the 549 prompt),
     `chain` (responds only to the opponent and only when `spe_count` > 0, never to its own link), `select` (the
     HINT_SELECTMSG purpose: bad for the owner → their best / our worst, good → best, equip → our best, or their best when only theirs fit), `misc` (position: attack when it beats or can destroy one of theirs, unless that costs all our LP or, with the
-    simulator, a copy shows attacks locked this turn (`Simulator.canAttackThisTurn`); declarations).
+    simulator, a copy shows attacks locked this turn (`Simulator.canAttackThisTurn`); a monster of ours summoned in the opponent's turn
+    instead gets the position that comes out best when the rest of their turn is replayed, `decidePositionInTheirTurn` /
+    `replayPositions`; declarations).
     Two brains play (`brains.ts`): `generic` (card data alone, fast) and `planner` (the default: generic + a
     `Simulator`, which makes it plan turns and replay chains). `sim/` holds the simulator: `world.ts` lays the AiView out
     as a fresh duel (AI = team 0; the opponent's hidden cards and Decks become blank stand-ins, codes 1-4 with empty
@@ -115,7 +117,9 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     `sim/planner.ts` = the turn planner: `planTurn` beam-searches move sequences (root moves from the
     real prompt, deeper ones from each copy's `next`; a move whose first pick hit one of the opponent's cards is also tried on each other card of theirs it could pick, `PlanStep.pick`, followed in the real duel via `BrainState.pickTarget`), scoring each plan by playing it, then a battle phase with the
     generic battle logic (`battleAfter`), then the opponent's turn; plans reaching the same board merge; all copies of one search share one order
-    for the AI's unknown Deck (else a luckier Pot of Greed draw, not the better move, wins a comparison); budgets
+    for the AI's unknown Deck (else a luckier Pot of Greed draw, not the better move, wins a comparison); a plan that draws from that Deck
+    (Pot of Greed, Reload; the copy reports it, `SequenceResult.drewAt`) ends with the draw and scores the average over `drawSamples` (4) Deck
+    orders, each played on with the drawn cards (summons and sets only, `SequenceOptions.playOn`), so Reload isn't judged on one guessed draw; budgets
     `DEFAULT_PLAN_SETTINGS` (beam 3, depth 6, 8 children, 60 copies, 2 s; plus up to 2 plans whose last move unlocked a new
     summon or activation, e.g. Soul Exchange → a Tribute Summon, kept however bad they look so far). Plans within 0.05 of
     the best count as tied: the one dealing more damage in our turn wins, then the one with more summons. It enforces what copies don't know (Normal
@@ -129,8 +133,8 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
     awaits its decision (started at once, answered after `aiDelayMs` at the earliest).
     `sim/replay.ts` = M3 (the planner's chain answers): a chain prompt in the opponent's turn (or their chain link in the AI's turn, `replayLink`) is answered by replaying what they did
     (`situationOf`: their chain link with its real targets, attack, summon, or the phase) in a copy where they move first, trying each
-    candidate during that action, playing on to the end of their turn (no more Normal Summons than they have left), and comparing; timing margins per situation in
-    `generic/chain.ts`.
+    candidate during that action, playing on to the end of their turn (no more Normal Summons than they have left, no second attack for monsters
+    that already attacked), and comparing; timing margins per situation in `generic/chain.ts`. `replayPositions` plays positions the same way.
   - `rng.ts` — `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
   - `hash.ts` — `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).

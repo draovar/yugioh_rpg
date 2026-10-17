@@ -10,7 +10,7 @@ import { decideChain } from "./chain.ts";
 import { BrainState, sameLoc } from "./common.ts";
 import { decideIdle } from "./idle.ts";
 import { decideByPlan } from "./plan.ts";
-import { decideAnnounceBits, decideAnnounceCard, decidePosition } from "./misc.ts";
+import { decideAnnounceBits, decideAnnounceCard, decidePosition, decidePositionInTheirTurn } from "./misc.ts";
 import { SELECT_HINT, chooseCards, pickUtility, purposeIn } from "./select.ts";
 import type { Simulator } from "../sim/simulator.ts";
 import { valueAt, type Weights } from "../board.ts";
@@ -102,6 +102,8 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
     case OcgMessageType.SELECT_YESNO:
       return { response: { type: OcgResponseType.SELECT_YESNO, yes: true }, reason: "default yes" };
     case OcgMessageType.SELECT_POSITION:
+      if (state.simulator && view.memory.turnPlayer !== view.seat)
+        return decidePositionInTheirTurn(m, view, (positions) => state.simulator!.positions(view, m.code, positions));
       return decidePosition(m, view, state.simulator ? () => state.simulator!.canAttackThisTurn(view) : undefined);
     case OcgMessageType.ANNOUNCE_CARD:
       return decideAnnounceCard(m, view);

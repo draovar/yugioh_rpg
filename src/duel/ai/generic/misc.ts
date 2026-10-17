@@ -30,6 +30,34 @@ export function decidePosition(m: Msg<OcgMessageType.SELECT_POSITION>, view: AiV
   return { response: { type: OcgResponseType.SELECT_POSITION, position }, reason };
 }
 
+const POSITION_NAMES: [OcgPosition, string][] = [
+  [OcgPosition.FACEUP_ATTACK, "face-up attack"], [OcgPosition.FACEUP_DEFENSE, "face-up defense"], [OcgPosition.FACEDOWN_DEFENSE, "face-down defense"],
+];
+
+/**
+ * A monster of ours summoned in the opponent's turn (e.g. Pyramid Turtle's search in their Battle Phase): the rule of
+ * thumb above is made for our own summons, so each position is played on to the end of their turn in a copy (`replay`,
+ * the simulator's) and the best one goes, unless none beats the rule's choice by a margin. Without a replay, the rule.
+ */
+export function decidePositionInTheirTurn(
+  m: Msg<OcgMessageType.SELECT_POSITION>, view: AiView, replay: (positions: OcgPosition[]) => { position: OcgPosition; value: number }[] | null,
+): Decision {
+  const rule = decidePosition(m, view);
+  const offered = POSITION_NAMES.filter(([p]) => m.positions & p);
+  const results = offered.length > 1 ? replay(offered.map(([p]) => p)) : null;
+  if (!results) return rule;
+  const options = results.map((r) => ({ label: POSITION_NAMES.find(([p]) => p === r.position)![1], score: r.value }));
+  const ruleChoice = rule.response.type === OcgResponseType.SELECT_POSITION ? rule.response.position : null;
+  const ruleValue = results.find((r) => r.position === ruleChoice)?.value ?? -Infinity;
+  const top = results.reduce((a, b) => (b.value > a.value ? b : a));
+  if (top.value > ruleValue + POSITION_MARGIN)
+    return { response: { type: OcgResponseType.SELECT_POSITION, position: top.position }, reason: "replayed the rest of their turn", options };
+  return { ...rule, reason: `${rule.reason}; the replay agrees`, options };
+}
+
+/** How much better (in cards) a replayed position must come out to overrule the rule of thumb. */
+const POSITION_MARGIN = 0.05;
+
 /** Declare a card: the most valuable one the opponent has shown this duel (likely more copies), else any legal one. */
 export function decideAnnounceCard(m: Msg<OcgMessageType.ANNOUNCE_CARD>, view: AiView): Decision {
   const legal = declarableCards(view.cards, m.opcodes);

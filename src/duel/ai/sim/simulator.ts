@@ -23,7 +23,7 @@ import { AiSeat, type AiView } from "../AiSeat.ts";
 import { evaluate, type Weights } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
 import { formatTrace } from "../trace.ts";
-import { replayResponses, situationOf, type ResponseOutcome, type Situation } from "./replay.ts";
+import { replayPositions, replayResponses, situationOf, type ResponseOutcome, type Situation } from "./replay.ts";
 import { findSame, idleList, type CardOption } from "./options.ts";
 import { playSequence, type PlanStep, type SequenceOptions, type SequenceResult } from "./sequence.ts";
 import { BLANK, copyScripts, layoutFrom, withBlanks, type SimLayout } from "./world.ts";
@@ -148,6 +148,14 @@ export class Simulator {
     }
     const outcomes = this.responseCache.get(key)!;
     return outcomes ? { situation, outcomes } : null;
+  }
+
+  /**
+   * A monster of ours being summoned in the opponent's turn: the board at the end of their turn for each position
+   * (replay.ts `replayPositions`). Null if a copy can't tell.
+   */
+  positions(view: AiView, code: number, positions: OcgPosition[]): { position: OcgPosition; value: number }[] | null {
+    return replayPositions(this, view, code, positions);
   }
 
   /** Where copies report what happens inside them (`Simulator.debug`), for code that only holds an instance. */

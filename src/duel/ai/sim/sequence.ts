@@ -56,6 +56,12 @@ export interface SequenceOptions {
    * generic brain would, then end the turn. So a plan is scored with its attacks, not only its main-phase moves.
    */
   battleAfter?: boolean;
+  /**
+   * After the steps, the generic brain plays on in this main phase with the cards a draw brought (summons and sets only:
+   * summon a drawn monster, set a drawn Trap) until it would do anything else, then as usual. For plans ending in a draw, whose next moves the planner
+   * can't plan (the draw is a guess).
+   */
+  playOn?: boolean;
 }
 
 export interface SequenceResult {
@@ -73,6 +79,11 @@ export interface SequenceResult {
   checkpoints: number[];
   /** Damage the opponent took in our turn (the planner's tie-breaker). */
   damageDealt: number;
+  /**
+   * The step during which we first drew from our Deck (Pot of Greed, Reload), or null. Our Deck's order in a copy is a
+   * guess, so what was drawn is one sample: the planner averages such plans over several orders.
+   */
+  drewAt: number | null;
   /**
    * The last step's first card choice, when the generic brain aimed it at one of the opponent's cards (a single pick)
    * and others could have been picked instead: the card it took, and the other cards of theirs it could have.
@@ -100,6 +111,10 @@ type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
 type BattleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_BATTLECMD }>;
 
 const MAX_PROMPTS = 1000;
+/** The moves playOn makes with drawn cards. */
+const PLAY_ON: ReadonlySet<SelectIdleCMDAction> = new Set([
+  SelectIdleCMDAction.SELECT_SUMMON, SelectIdleCMDAction.SELECT_MONSTER_SET, SelectIdleCMDAction.SELECT_SPELL_SET,
+]);
 /** How far a win or loss in our own turn scores beyond ±1000 (more than any end-of-turn board is worth). */
 const DECIDED_NOW = 100;
 const pass: OcgResponse = { type: OcgResponseType.SELECT_CHAIN, index: null };
@@ -118,7 +133,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
     let done = 0;
     let next: PlanStep[] = [];
     const checkpoints: number[] = [];
-    const result = (value: number): SequenceResult => ({ done, value, next, checkpoints, damageDealt, picks });
+    const result = (value: number): SequenceResult => ({ done, value, next, checkpoints, damageDealt, picks, drewAt });
     let picks: SequenceResult["picks"];
     /** The idle step just taken, until its first card choice (or the next command prompt). */
     let picking: { step: PlanStep & { kind: "idle" }; last: boolean } | null = null;
@@ -139,6 +154,10 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
     let lpAtEnd = 0;
     let damageTaken = 0;
     let damageDealt = 0;
+    let drewAt: number | null = null;
+    /** playOn: the generic brain has made a move of its own after the steps; the cards our draws brought. */
+    let playingOn = false;
+    const drawn: number[] = [];
     /**
      * A loss in their turn: minus how far past lethal they got (damage beyond our LP, valued like LP). Facing the same
      * attackers, a set blocker loses by less than one in Attack Position, and is that much closer to surviving if the
@@ -157,9 +176,14 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
       const s = duel.advance();
       ai.observe(s.messages);
       opp?.observe(s.messages);
-      for (const m of s.messages) if (m.type === OcgMessageType.DAMAGE) {
-        if (finishing && m.player === 0) damageTaken += m.amount;
-        if (!finishing && m.player === 1) damageDealt += m.amount;
+      for (const m of s.messages) {
+        if (m.type === OcgMessageType.DAMAGE) {
+          if (finishing && m.player === 0) damageTaken += m.amount;
+          if (!finishing && m.player === 1) damageDealt += m.amount;
+        } else if (m.type === OcgMessageType.DRAW && m.player === 0 && m.drawn.length && !finishing && !battling && done > 0) {
+          drewAt ??= done - 1;
+          drawn.push(...m.drawn.map((d) => d.code));
+        }
       }
       if (s.ended) return result(decided(s.winner));
       if (ai.memory.turn > 2) return result(score() - openField); // the opponent's turn is over
@@ -183,8 +207,20 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
           duel.respond(r);
           continue;
         }
-        if (!battling) next = nextSteps(p, duel.snapshot(0));
+        if (!battling && !playingOn) next = nextSteps(p, duel.snapshot(0));
         if (!opts.opponentTurn) return result(score());
+        if (opts.playOn && !battling && p.type === OcgMessageType.SELECT_IDLECMD) {
+          // Only summons and sets of a card the draw brought, still in hand: the plan chose what to do with the others,
+          // and the generic brain's unsimulated activations can be costly (a drawn Dark Hole on our own monsters).
+          const r = ai.decide(p);
+          const option = r.type === OcgResponseType.SELECT_IDLECMD && r.index !== null && PLAY_ON.has(r.action) ? idleList(p, r.action)?.[r.index] : undefined;
+          if (option && option.location === OcgLocation.HAND && drawn.includes(option.code)) {
+            drawn.splice(drawn.indexOf(option.code), 1);
+            playingOn = true;
+            duel.respond(r);
+            continue;
+          }
+        }
         if (opts.battleAfter && p.type === OcgMessageType.SELECT_IDLECMD && p.to_bp && !battling) {
           battling = true;
           duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_BP, index: null });

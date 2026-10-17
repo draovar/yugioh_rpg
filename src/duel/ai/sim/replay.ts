@@ -182,8 +182,7 @@ function replayLink(sim: Simulator, layout: SimLayout, situation: Situation & { 
 }
 
 /** The board with the opponent as team 0, set up so they can repeat the action. Null if it can't be. */
-function opponentFirst(view: AiView, situation: Situation): SimLayout | null {
-  const base = layoutFrom(view);
+function opponentFirst(view: AiView, situation: Situation, base: SimLayout = layoutFrom(view)): SimLayout | null {
   const theirs: Deck = { ...base.decks[1], start: [...(base.decks[1].start ?? [])] };
   const start = theirs.start!;
   const at = (location: number, sequence: number) => start.findIndex((s) => s.location === location && s.sequence === sequence);
@@ -308,6 +307,31 @@ function replayOne(sim: Simulator, view: AiView, layout: SimLayout, situation: S
 }
 
 const pass = (): OcgResponse => ({ type: OcgResponseType.SELECT_CHAIN, index: null });
+
+/**
+ * A monster of ours summoned in their turn (Pyramid Turtle's Ryu Kokki in their Battle Phase): each position played on
+ * in a copy, the monster on our side in it and the opponent moving on from the current phase (their attacks left, the
+ * Normal Summon they have left) to the end of their turn. The board value for each, or null if a copy can't tell.
+ */
+export function replayPositions(sim: Simulator, view: AiView, code: number, positions: OcgPosition[]): { position: OcgPosition; value: number }[] | null {
+  const situation: Situation = { kind: "phase", phase: view.memory.phase };
+  const out: { position: OcgPosition; value: number }[] = [];
+  for (const position of positions) {
+    const base = layoutFrom(view);
+    const taken = new Set([
+      ...(base.decks[0].start ?? []).filter((s) => s.location === OcgLocation.MZONE).map((s) => s.sequence ?? 0),
+      ...(base.decks[1].start ?? []).filter((s) => s.control?.team === 0).map((s) => s.control!.sequence),
+    ]);
+    const zone = [0, 1, 2, 3, 4].find((z) => !taken.has(z));
+    if (zone === undefined) return null;
+    base.decks[0].start = [...(base.decks[0].start ?? []), { code, location: OcgLocation.MZONE, sequence: zone, position }];
+    const layout = opponentFirst(view, situation, base);
+    const value = layout ? replayOne(sim, view, layout, situation, null) : null;
+    if (value === null) return null;
+    out.push({ position, value });
+  }
+  return out;
+}
 
 /** Whether `m` is the opponent (seat 0 in the copy) carrying out the replayed action. */
 function actionHappened(m: OcgMessage, situation: Situation, phase: number, turnPlayer: number): boolean {

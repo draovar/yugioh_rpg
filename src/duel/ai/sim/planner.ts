@@ -43,9 +43,14 @@ export interface PlanSettings {
    * they enable is tried.
    */
   unlockKeep: number;
+  /**
+   * Deck orders a plan that draws from our Deck is played with (its value: their average). The copies' order of our
+   * Deck is a guess, so one order judges Reload on a single lucky or unlucky draw.
+   */
+  drawSamples: number;
 }
 
-export const DEFAULT_PLAN_SETTINGS: Readonly<PlanSettings> = { beam: 3, depth: 6, children: 8, maxNodes: 60, maxMs: 2000, unlockKeep: 2 };
+export const DEFAULT_PLAN_SETTINGS: Readonly<PlanSettings> = { beam: 3, depth: 6, children: 8, maxNodes: 60, maxMs: 2000, unlockKeep: 2, drawSamples: 4 };
 
 const UNLOCKS: ReadonlySet<SelectIdleCMDAction> = new Set([
   SelectIdleCMDAction.SELECT_SUMMON, SelectIdleCMDAction.SELECT_SPECIAL_SUMMON, SelectIdleCMDAction.SELECT_ACTIVATE,
@@ -145,11 +150,26 @@ export function planTurn(
   // the luckiest draw, not the best move, wins the comparison.
   const deckSeed = Math.floor(view.rng() * 2 ** 32);
   let nodes = 0;
-  const evaluate = (steps: PlanStep[]): Node | null => {
+  const play = (steps: PlanStep[], seed: number, playOn = false) => {
     nodes++;
-    const r = sim.sequence({ ...view, rng: mulberry32(deckSeed) }, [...prefix, ...steps], { opponentTurn: true, battleAfter: canBattle });
-    if (!r || r.done < prefix.length + steps.length) return null;
-    return { steps, value: r.value, next: r.next, checkpoints: r.checkpoints.slice(prefix.length), damage: r.damageDealt, picks: r.picks };
+    const r = sim.sequence({ ...view, rng: mulberry32(seed) }, [...prefix, ...steps], { opponentTurn: true, battleAfter: canBattle, playOn });
+    return r && r.done >= prefix.length + steps.length ? r : null;
+  };
+  const evaluate = (steps: PlanStep[]): Node | null => {
+    const r = play(steps, deckSeed);
+    if (!r) return null;
+    const node: Node = { steps, value: r.value, next: r.next, checkpoints: r.checkpoints.slice(prefix.length), damage: r.damageDealt, picks: r.picks };
+    if (r.drewAt === null || r.drewAt < prefix.length) return node;
+    // A draw from our Deck ends the plan: moves after it would play the guessed cards (the real duel plans again once
+    // they're drawn). Its value: the average over several orders of our Deck, not one guessed draw, each played on by
+    // the generic brain (what the drawn cards are good for this turn).
+    if (r.drewAt - prefix.length < steps.length - 1) return null;
+    let total = 0, n = 0;
+    for (let k = 0; k < settings.drawSamples; k++) {
+      const o = play(steps, (deckSeed + k * 0x9e3779b9) >>> 0, true);
+      if (o) { total += o.value; n++; }
+    }
+    return n ? { ...node, value: total / n, next: [] } : null;
   };
   const overBudget = () => nodes >= settings.maxNodes || performance.now() - started > settings.maxMs;
 
