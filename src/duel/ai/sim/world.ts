@@ -60,7 +60,55 @@ export interface SimLayout {
 export function layoutFrom(view: AiView): SimLayout {
   const me = view.board.players[view.seat];
   const opp = view.board.players[1 - view.seat];
-  return { decks: [ownSide(view, me), opponentSide(opp, view.seat)], lp: [me.lp, opp.lp] };
+  const decks: [Deck, Deck] = [ownSide(view, me), opponentSide(opp, view.seat)];
+  returnStolen(decks);
+  return { decks, lp: [me.lp, opp.lp] };
+}
+
+type Place = { team: 0 | 1; sequence: number };
+
+/**
+ * Monsters one side controls but the other owns (`StartCard.control`, set by `piles`) go back to their owner's side,
+ * in a Monster Zone free there (not one a monster of that side really stands in), and are handed over again as the copy
+ * starts. Else the copy would make them the controller's own cards: destroying Snatch Steal would give nothing back.
+ * Equip links and card targets aimed at them follow. One without a free zone stays where it is.
+ */
+function returnStolen(decks: [Deck, Deck]): void {
+  const zones = (t: 0 | 1) => new Set((decks[t].start ?? []).filter((s) => s.location === OcgLocation.MZONE).map((s) => s.sequence ?? 0));
+  const taken = [zones(0), zones(1)];
+  const moved: { from: Place; to: Place }[] = [];
+  for (const team of [0, 1] as const) {
+    const owner = (1 - team) as 0 | 1;
+    for (const s of [...(decks[team].start ?? [])]) {
+      if (!s.control) continue;
+      const free = [0, 1, 2, 3, 4].find((z) => !taken[owner].has(z));
+      if (free === undefined) { delete s.control; continue; }
+      taken[owner].add(free);
+      moved.push({ from: { team, sequence: s.sequence ?? 0 }, to: { team: owner, sequence: free } });
+      decks[team].start = decks[team].start!.filter((x) => x !== s);
+      decks[owner].start!.push({ ...s, sequence: free });
+    }
+  }
+  const follow = (p: Place): Place => moved.find((m) => m.from.team === p.team && m.from.sequence === p.sequence)?.to ?? p;
+  for (const d of decks) for (const s of d.start ?? []) {
+    if (s.equipTo) s.equipTo = follow(s.equipTo);
+    if (s.cardTargets) s.cardTargets = s.cardTargets.map(follow);
+  }
+}
+
+/** The same layout with the two sides' places swapped (team 0 becomes the opponent): decks, LP and every team reference. */
+export function swapSides(layout: SimLayout): SimLayout {
+  const flip = (p: Place): Place => ({ team: (1 - p.team) as 0 | 1, sequence: p.sequence });
+  const side = (d: Deck): Deck => ({
+    ...d,
+    start: (d.start ?? []).map((s) => ({
+      ...s,
+      ...(s.equipTo ? { equipTo: flip(s.equipTo) } : {}),
+      ...(s.cardTargets ? { cardTargets: s.cardTargets.map(flip) } : {}),
+      ...(s.control ? { control: flip(s.control) } : {}),
+    })),
+  });
+  return { decks: [side(layout.decks[1]), side(layout.decks[0])], lp: [layout.lp[1], layout.lp[0]] };
 }
 
 const place = (c: CardView, code = c.code, position = c.position): StartCard =>
@@ -78,6 +126,8 @@ function piles(p: PlayerView, seat: number, hidden: (c: CardView) => StartCard |
     if (s && t?.location === OcgLocation.MZONE) s.equipTo = { team: t.controller === seat ? 0 : 1, sequence: t.sequence };
     const targets = (c.cardTargets ?? []).filter((x) => x.location === OcgLocation.MZONE);
     if (s && targets.length) s.cardTargets = targets.map((x) => ({ team: x.controller === seat ? 0 : 1, sequence: x.sequence }));
+    // Owned by the other side: returnStolen moves it there and the copy hands it over again.
+    if (s && c.code && c.owner !== undefined && c.location === OcgLocation.MZONE) s.control = { team: c.controller === seat ? 0 : 1, sequence: c.sequence };
     if (s) out.push(s);
   }
   for (const c of [...p.grave, ...p.banished]) if (c.code) out.push(place(c));

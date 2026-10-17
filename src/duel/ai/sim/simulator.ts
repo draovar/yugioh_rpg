@@ -170,8 +170,14 @@ export class Simulator {
    */
   canAttackThisTurn(view: AiView): boolean | null {
     const layout = layoutFrom(view);
-    const zone = view.board.players[view.seat].monsters.findIndex((c) => !c);
-    if (zone < 0) return null;
+    // A zone free in the copy: no monster of ours, none of theirs parked there to be handed back (StartCard.control),
+    // none we took from them coming back to it.
+    const taken = new Set([
+      ...(layout.decks[0].start ?? []).filter((s) => s.location === OcgLocation.MZONE).map((s) => s.sequence ?? 0),
+      ...(layout.decks[1].start ?? []).filter((s) => s.control?.team === 0).map((s) => s.control!.sequence),
+    ]);
+    const zone = [0, 1, 2, 3, 4].find((z) => !taken.has(z));
+    if (zone === undefined) return null;
     layout.decks[0].start = [...(layout.decks[0].start ?? []),
       { code: BLANK.ATTACKER, location: OcgLocation.MZONE, sequence: zone, position: OcgPosition.FACEUP_ATTACK }];
     const key = fnv1a(JSON.stringify(["attack", layout]));

@@ -12,7 +12,7 @@ import {
 import type { CardView } from "../../DuelSession.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
 import { WALL_DEF, cardAt, damageCost, mine, monsterStats, monsterValue, theirs, weightsOf } from "../board.ts";
-import { best, sameLoc, type BrainState, type Option } from "./common.ts";
+import { attackKey, best, sameLoc, type BrainState, type Option } from "./common.ts";
 
 type BattleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_BATTLECMD }>;
 
@@ -43,7 +43,10 @@ interface Assignment { attacker: number; target: CardView | null }
  * above its DEF in Defense Position), unless every direct attack can go over it (`can_direct`); damage = direct
  * attacks + what Attack Position kills go through by. Set Spells/Traps don't stop it (they might, but we try).
  */
-export function lethalAttacks(view: AiView, attackers: { card: CardView; direct: boolean }[], targets: CardView[]): Assignment[] | null {
+export function lethalAttacks(
+  view: AiView, attackers: { card: CardView; direct: boolean }[], targets: CardView[],
+  blocked: (attacker: number, target: CardView) => boolean = () => false,
+): Assignment[] | null {
   if (targets.some((t) => !monsterStats(t).known)) return null;
   const lp = theirs(view).lp;
   const plan: Assignment[] = [];
@@ -57,7 +60,7 @@ export function lethalAttacks(view: AiView, attackers: { card: CardView; direct:
     const atk = attackers[i].card.attack;
     for (const t of standing) {
       const st = monsterStats(t);
-      if (st.attackPos ? atk < st.atk : atk <= st.def) continue;
+      if ((st.attackPos ? atk < st.atk : atk <= st.def) || blocked(i, t)) continue;
       plan.push({ attacker: i, target: t });
       const r = search(i + 1, standing.filter((x) => x !== t), damage + (st.attackPos ? atk - st.atk : 0));
       plan.pop();
@@ -88,7 +91,9 @@ export function decideBattle(m: BattleMessage, view: AiView, state: BrainState):
     .filter((x): x is { a: (typeof m.attacks)[number]; index: number; card: CardView } => x.card !== null);
   const attack = (index: number) => ({ type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.SELECT_BATTLE, index }) as const;
 
-  const lethal = lethalAttacks(view, attackers.map((x) => ({ card: x.card, direct: !!x.a.can_direct })), targets);
+  // Attacks the target prompt refused earlier this turn.
+  const blocked = (x: { a: { sequence: number } }, t: CardView) => state.blockedAttacks.has(attackKey(x.a.sequence, t.sequence));
+  const lethal = lethalAttacks(view, attackers.map((x) => ({ card: x.card, direct: !!x.a.can_direct })), targets, (i, t) => blocked(attackers[i], t));
   if (lethal?.length) {
     const { attacker, target } = lethal[0];
     const x = attackers[attacker];
@@ -106,7 +111,7 @@ export function decideBattle(m: BattleMessage, view: AiView, state: BrainState):
       if (!monsterStats(t).known) {
         // An unknown face-down monster, often a wall: probe it with the weakest attacker above WALL_DEF, else
         // the strongest one; not when bouncing off a wall would cost the duel.
-        const sorted = [...attackers].sort((p, q) => p.card.attack - q.card.attack);
+        const sorted = attackers.filter((s) => !blocked(s, t)).sort((p, q) => p.card.attack - q.card.attack);
         const x = sorted.find((s) => s.card.attack > WALL_DEF) ?? sorted[sorted.length - 1];
         const v = x ? attackValue(view, x.card, t) : 0;
         if (!x || v <= 0.05 || mine(view).lp <= WALL_DEF - x.card.attack) continue;
@@ -116,7 +121,7 @@ export function decideBattle(m: BattleMessage, view: AiView, state: BrainState):
         continue;
       }
       // The weakest attacker that destroys it (by value, then ATK) gets this target.
-      const scored = attackers.map((x) => ({ x, v: attackValue(view, x.card, t) })).filter((s) => s.v > 0.05);
+      const scored = attackers.filter((x) => !blocked(x, t)).map((x) => ({ x, v: attackValue(view, x.card, t) })).filter((s) => s.v > 0.05);
       if (!scored.length) continue;
       scored.sort((p, q) => p.x.card.attack - q.x.card.attack);
       const { x, v } = scored[0];
@@ -136,20 +141,26 @@ export function decideBattle(m: BattleMessage, view: AiView, state: BrainState):
   return best(options, (o) => (o.score > 0 ? "best attack" : "no attack worth making"));
 }
 
-/** The attack-target prompt: the planned target if it's offered, else the best one for whoever is attacking. */
-export function pickAttackTarget(selects: OcgCardLoc[], view: AiView, state: BrainState): number {
+/**
+ * The attack-target prompt: the planned target if it's offered. If not (an effect keeps it from being attacked, e.g.
+ * Soul-Absorbing Bone Tower next to another Zombie), the attack is remembered as blocked for this turn and the best
+ * offered target for this attacker is taken, if attacking it gains anything; else the attack is cancelled (null).
+ */
+export function pickAttackTarget(selects: OcgCardLoc[], canCancel: boolean, view: AiView, state: BrainState): number | null {
   const planned = state.attackTarget;
+  const attacker = state.attacker ? cardAt(view, state.attacker) : null;
   state.attackTarget = null;
   if (planned) {
     const i = selects.findIndex((s) => sameLoc(s, planned));
     if (i >= 0) return i;
+    if (state.attacker) state.blockedAttacks.add(attackKey(state.attacker.sequence, planned.sequence));
   }
-  // No plan (e.g. a replay after the target changed): the most valuable target we can see.
   let bestI = 0, bestV = -Infinity;
   selects.forEach((s, i) => {
     const c = cardAt(view, s);
-    const v = c ? monsterValue(view, c) - (c.code ? c.attack : 0) / 2000 : 0;
+    // Without a known attacker (e.g. a replay after the target changed): the most valuable target we can see.
+    const v = !c ? 0 : attacker ? attackValue(view, attacker, c) : monsterValue(view, c) - (c.code ? c.attack : 0) / 2000;
     if (v > bestV) { bestV = v; bestI = i; }
   });
-  return bestI;
+  return attacker && bestV <= 0.05 && canCancel ? null : bestI;
 }

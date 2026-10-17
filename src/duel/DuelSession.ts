@@ -44,6 +44,13 @@ export interface StartCard {
    * Call of the Haunted): the monsters in these Monster Zones, linked at the first draw phase like `equipTo`.
    */
   cardTargets?: { team: 0 | 1; sequence: number }[];
+  /**
+   * A monster that another team controls (taken with Snatch Steal, Change of Heart, Creature Swap...): placed in its
+   * owner's Monster Zone (this deck's), then handed to `team`'s Monster Zone `sequence` at the first draw phase. Equip
+   * links are made first, so an equip that holds control (Snatch Steal) takes it the way it does in a real duel, and
+   * destroying the equip gives the monster back; anything else gets control for good (Duel.GetControl).
+   */
+  control?: { team: 0 | 1; sequence: number };
 }
 
 export type DuelSeed = [bigint, bigint, bigint, bigint];
@@ -116,6 +123,8 @@ export interface CardView {
   equipTarget?: CardPlace;
   /** Cards this one targets for as long as it stays (Shadow Spell's monster, Call of the Haunted's); public. */
   cardTargets?: CardPlace[];
+  /** The owner, only when another player controls the card (a monster taken with Snatch Steal...); public. */
+  owner?: 0 | 1;
 }
 
 /** Counters of one kind on a card: `kind` is the counter type (COUNTER_SPELL = 0x1...), see `DuelText.counterName`. */
@@ -150,7 +159,7 @@ export interface FieldSnapshot {
   players: [PlayerView, PlayerView];
 }
 
-const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE | OcgQueryFlags.COUNTERS | OcgQueryFlags.EQUIP_CARD | OcgQueryFlags.TARGET_CARD) as OcgQueryFlags;
+const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE | OcgQueryFlags.COUNTERS | OcgQueryFlags.EQUIP_CARD | OcgQueryFlags.TARGET_CARD | OcgQueryFlags.OWNER) as OcgQueryFlags;
 
 /** A NEW_TURN message with the duel's turn number (1, 2, ...) added by DuelSession. */
 export type NewTurnMessage = Extract<OcgMessage, { type: OcgMessageType.NEW_TURN }> & { turn?: number };
@@ -209,16 +218,25 @@ export class DuelSession {
 
     this.core.startDuel(this.handle);
     // Equip links: Duel.Equip has to run inside the duel (it yields), so a one-off effect does it at the first draw phase.
-    // Card targets (persistent Traps) are linked there too, the way their activation does it (proc_persistent.lua).
+    // Card targets (persistent Traps) are linked there too, the way their activation does it (proc_persistent.lua), and
+    // monsters another team controls are handed over (StartCard.control).
     const links = (pick: (c: StartCard) => { team: 0 | 1; sequence: number }[]) => cfg.decks.flatMap((deck, team) =>
       (deck.start ?? []).flatMap((c) => c.location === OcgLocation.SZONE
         ? pick(c).map((t) => `{${team},${c.sequence ?? 0},${t.team},${t.sequence}}`) : []));
     const equips = links((c) => (c.equipTo ? [c.equipTo] : []));
     const targets = links((c) => c.cardTargets ?? []);
-    if (equips.length || targets.length) this.core.loadScript(this.handle, "start_links.lua", `local e=Effect.GlobalEffect()
+    // Monsters another team controls: {owner, owner's zone, controller, controller's zone}.
+    const controls = cfg.decks.flatMap((deck, team) => (deck.start ?? []).flatMap((c) =>
+      c.control && c.location === OcgLocation.MZONE ? [`{${team},${c.sequence ?? 0},${c.control.team},${c.control.sequence}}`] : []));
+    if (equips.length || targets.length || controls.length) this.core.loadScript(this.handle, "start_links.lua", `local e=Effect.GlobalEffect()
 e:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
 e:SetCode(EVENT_PHASE_START+PHASE_DRAW)
 e:SetOperation(function(e)
+  local moving={}
+  for _,q in ipairs({${controls.join(",")}}) do
+    local c=Duel.GetFieldCard(q[1],LOCATION_MZONE,q[2])
+    if c then table.insert(moving,{c,q[3],q[4]}) end
+  end
   for _,q in ipairs({${equips.join(",")}}) do
     local ec=Duel.GetFieldCard(q[1],LOCATION_SZONE,q[2])
     local tc=Duel.GetFieldCard(q[3],LOCATION_MZONE,q[4])
@@ -228,6 +246,12 @@ e:SetOperation(function(e)
     local c=Duel.GetFieldCard(q[1],LOCATION_SZONE,q[2])
     local tc=Duel.GetFieldCard(q[3],LOCATION_MZONE,q[4])
     if c and tc then c:SetCardTarget(tc) c:CreateRelation(tc,RESET_EVENT+RESETS_STANDARD) end
+  end
+  if #moving>0 then Duel.AdjustInstantly() end
+  for _,m in ipairs(moving) do
+    local c,p,seq=m[1],m[2],m[3]
+    if c:GetControler()~=p then Duel.GetControl(c,p,0,0,1<<seq)
+    elseif c:GetSequence()~=seq then Duel.MoveSequence(c,seq) end
   end
   e:Reset()
 end)
@@ -317,6 +341,7 @@ Duel.RegisterEffect(e,0)`);
       counters: counterList(q.counters),
       ...(q.equipCard ? { equipTarget: { controller: q.equipCard.controller, location: q.equipCard.location, sequence: q.equipCard.sequence } } : {}),
       ...(q.targetCards?.length && !hidden ? { cardTargets: q.targetCards.map((t) => ({ controller: t.controller, location: t.location, sequence: t.sequence })) } : {}),
+      ...(q.owner !== undefined && q.owner !== controller ? { owner: q.owner as 0 | 1 } : {}),
     };
   }
 

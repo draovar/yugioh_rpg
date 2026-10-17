@@ -8,6 +8,7 @@
 import {
   OcgLocation,
   OcgMessageType,
+  OcgPhase,
   OcgResponseType,
   SelectBattleCMDAction,
   SelectIdleCMDAction,
@@ -99,6 +100,8 @@ type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
 type BattleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_BATTLECMD }>;
 
 const MAX_PROMPTS = 1000;
+/** How far a win or loss in our own turn scores beyond ±1000 (more than any end-of-turn board is worth). */
+const DECIDED_NOW = 100;
 const pass: OcgResponse = { type: OcgResponseType.SELECT_CHAIN, index: null };
 
 /** Plays `steps` from the board in `view`; null if the copy failed. The AI is seat 0 in the copy. */
@@ -142,6 +145,13 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
      * guessed attacker isn't there.
      */
     const lost = () => -1000 + endOfTurn - lpValue(Math.max(0, damageTaken - lpAtEnd), sim.weights);
+    /**
+     * A duel decided in our own turn: there's no end-of-turn board yet, so it scores ±(1000 + DECIDED_NOW), beyond any
+     * result decided in their turn. Losing now is worse than any loss in their turn (their stand-ins are guesses, they
+     * may not get through), winning now better than any later win.
+     */
+    const decided = (winner: number | null | undefined) =>
+      finishing ? (winner === 0 ? 1000 + endOfTurn : winner === 1 ? lost() : 0) : winner === 0 ? 1000 + DECIDED_NOW : winner === 1 ? -1000 - DECIDED_NOW : 0;
 
     for (let n = 0; n < MAX_PROMPTS; n++) {
       const s = duel.advance();
@@ -151,7 +161,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
         if (finishing && m.player === 0) damageTaken += m.amount;
         if (!finishing && m.player === 1) damageDealt += m.amount;
       }
-      if (s.ended) return result(s.winner === 0 ? 1000 + endOfTurn : s.winner === 1 ? lost() : 0);
+      if (s.ended) return result(decided(s.winner));
       if (ai.memory.turn > 2) return result(score() - openField); // the opponent's turn is over
       const p = s.prompt as Prompt;
 
@@ -220,8 +230,10 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
           continue;
         }
       }
-      // Our own chain windows: the plan has no responses in it; in their turn, our usual chain rule.
-      if (p.type === OcgMessageType.SELECT_CHAIN && !p.forced && !finishing) { duel.respond(pass); continue; }
+      // Our own chain windows: the plan has no responses in it; in their turn, our usual chain rule, except in their End
+      // Phase: that's the horizon, where a card still held counts in the score at full value and the real duel decides
+      // by replaying (the rule would spend a set card on anything there, e.g. Compulsory Evacuation Device on a stand-in).
+      if (p.type === OcgMessageType.SELECT_CHAIN && !p.forced && (!finishing || ai.memory.phase === OcgPhase.END)) { duel.respond(pass); continue; }
       duel.respond(ai.decide(p));
     }
     return null;

@@ -14,7 +14,7 @@ import {
 import type { AiView, Decision } from "../AiSeat.ts";
 import { planTurn } from "../sim/planner.ts";
 import { boardDigest, describeStep, responseFor, type PlanStep } from "../sim/sequence.ts";
-import type { BrainState } from "./common.ts";
+import { attackKey, type BrainState } from "./common.ts";
 
 type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;
 type BattleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_BATTLECMD }>;
@@ -54,6 +54,11 @@ export function decideByPlan(m: IdleMessage | BattleMessage, view: AiView, state
     step = plan.steps[draw];
     state.plan = null;
     reason = "drawing first, then a new plan";
+  }
+  // An attack the target prompt refused earlier this turn: the usual battle logic takes over.
+  if (step?.kind === "attack" && step.target !== null && state.blockedAttacks.has(attackKey(step.attacker.sequence, step.target))) {
+    state.plan = null;
+    return null;
   }
   let response: OcgResponse | null;
   if (step) {

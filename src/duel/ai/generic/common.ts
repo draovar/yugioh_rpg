@@ -41,6 +41,13 @@ export class BrainState {
   lastActivation: string | null = null;
   /** The monster the battle plan wants the current attack to hit. */
   attackTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
+  /** The monster that declared the current attack (for the target prompt). */
+  attacker: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
+  /**
+   * Attacks the target prompt refused this turn, as `attacker zone>target zone` (e.g. Soul-Absorbing Bone Tower can't
+   * be attacked while another Zombie is out): the battle logic doesn't plan them again.
+   */
+  blockedAttacks = new Set<string>();
   /** The card the plan's current move picks first (e.g. De-Spell's target), when the plan names one. */
   pickTarget: Pick<OcgCardLoc, "controller" | "location" | "sequence"> | null = null;
 
@@ -58,9 +65,14 @@ export class BrainState {
     this.plan = null;
     this.normalSummonUsed = false;
     this.attackTarget = null;
+    this.attacker = null;
+    this.blockedAttacks.clear();
     this.pickTarget = null;
   }
 }
 
-export const sameLoc = (a: Pick<OcgCardLoc, "controller" | "location" | "sequence">, b: Pick<OcgCardLoc, "controller" | "location" | "sequence">) =>
+/** The `blockedAttacks` key of an attack by the monster in zone `attacker` on the one in zone `target`. */
+export const attackKey = (attacker: number, target: number) => `${attacker}>${target}`;
+
+export const sameLoc =(a: Pick<OcgCardLoc, "controller" | "location" | "sequence">, b: Pick<OcgCardLoc, "controller" | "location" | "sequence">) =>
   a.controller === b.controller && a.location === b.location && a.sequence === b.sequence;

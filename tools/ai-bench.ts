@@ -6,7 +6,7 @@
 // Usage: npm run ai-bench [-- --brain NAME (default: the game's)] [-- --show] [-- --only NAME-PART]
 //        [-- --weights W.json (any of board.ts's Weights; the rest stay default)]
 import { readFileSync } from "node:fs";
-import { OcgLocation, OcgMessageType, OcgPosition, OcgResponseType, SelectIdleCMDAction } from "ocgcore-wasm";
+import { OcgLocation, OcgMessageType, OcgPosition, OcgResponseType, SelectBattleCMDAction, SelectIdleCMDAction } from "ocgcore-wasm";
 import { autoRespond } from "../src/duel/autoBot.ts";
 import { AiSeat } from "../src/duel/ai/AiSeat.ts";
 import { DEFAULT_WEIGHTS, type Weights } from "../src/duel/ai/board.ts";
@@ -32,6 +32,11 @@ const C = {
   zombyra: 88472456, malevolentNuzzler: 99597615, sevenTools: 3819470, trapMaster: 46461247, paladinOfWhiteDragon: 73398797,
   noblemanOfCrossout: 71044499, removeTrap: 51482758, witchOfTheBlackForest: 78010363, mysteriousPuppeteer: 54098121,
   shadowSpell: 29267084, spellbindingCircle: 18807108, rushRecklessly: 70046172, hyozanryu: 62397231, snatchSteal: 45986603, swords: 72302403, sonicBird: 57617178,
+  twinHeadedBehemoth: 43586926, regeneratingMummy: 70821187, boneTower: 63012333, stampingDestruction: 81385346,
+  dragonsBead: 92408984, dragonsRage: 54178050, masterKyonshee: 24530661, ryuKokki: 57281778, reload: 22589918,
+  vampireLady: 26495087, vampireGenesis: 22056710, armedDragonLv3: 980973, pyramidTurtle: 77044671, vampireLord: 53839837,
+  coveringFire: 74458486, darkDustSpirit: 89111398, bookOfLife: 2204140, doubleCoston: 44436472, curseOfAnubis: 66742250,
+  lusterDragon: 11091375, redEyes: 74677422, recklessGreed: 37576645, elementDragon: 30314994,
   uraby: 1784619, deSpell: 19159413, beaverWarrior: 32452818, jarOfGreed: 83968380, monsterReborn: 83764718, manEaterBug: 54652250,
 } as const;
 
@@ -58,7 +63,7 @@ interface Position {
   plan?: boolean;
   /** Check the AI's whole turn instead: its main-phase and battle choices in order, joined by " → ". */
   turn?: boolean;
-  /** With `turn`: also list its card picks (SELECT_CARD answers other than attack targets) as "pick <cards>" and positions as "position <pos>". */
+  /** With `turn`: also list its card picks as "pick <cards>" (attack targets as "target <card>") and positions as "position <pos>". */
   picks?: boolean;
   /**
    * A known misplay waiting for a planned fix (docs/ai-rework-plan.md, e.g. "phase 2a"): reported as "known", not a
@@ -77,11 +82,19 @@ interface Position {
    * joined by " → ".
    */
   opponentSetsThenBattles?: boolean;
+  /**
+   * The AI goes first; in the opponent's turn after it they go to the Battle Phase and attack with the monsters in these
+   * zones, in this order (each at the first target offered, or directly), then end the turn. The check is on the AI's
+   * chain answers in that turn, as with opponentSetsThenBattles.
+   */
+  opponentAttacks?: number[];
 }
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
 const monster = (code: number, sequence = 0, position: OcgPosition = OcgPosition.FACEUP_ATTACK): StartCard =>
   ({ code, location: OcgLocation.MZONE, sequence, position });
+/** A card in the Graveyard; list them oldest first. */
+const grave = (code: number): StartCard => ({ code, location: OcgLocation.GRAVE, position: OcgPosition.FACEUP_ATTACK });
 const setCard = (code: number, sequence = 0): StartCard => ({ code, location: OcgLocation.SZONE, sequence, position: OcgPosition.FACEDOWN_DEFENSE });
 /** A face-up Equip Spell in zone `sequence`, equipped to the monster in zone `to` of duel team `team`. */
 const equip = (code: number, sequence: number, to: number, team: 0 | 1): StartCard =>
@@ -579,6 +592,99 @@ const POSITIONS: Position[] = [
     opponentSetsThenBattles: true,
     forbid: /chain Rush Recklessly/,
   },
+  {
+    name: "no-suicide-when-every-plan-loses",
+    why: "review 2026-10-16 (seed 112 T11): at 600 LP every plan lost; dying in our own turn scored -1000 flat, dying in theirs -1000 + a negative board, so the AI used Stamping Destruction on its own Dragon's Bead (500 damage to itself) and attacked; its battle logic aimed at Soul-Absorbing Bone Tower, which can't be attacked while another Zombie is out, and the target prompt fell back to Regenerating Mummy (1800). Behemoth in defense survives Mummy + Bone Tower at 200 LP",
+    ai: [
+      monster(C.twinHeadedBehemoth, 0, OcgPosition.FACEUP_DEFENSE), hand(C.stampingDestruction),
+      { code: C.dragonsBead, location: OcgLocation.SZONE, sequence: 0, position: OcgPosition.FACEUP_ATTACK }, { code: C.dragonsRage, location: OcgLocation.SZONE, sequence: 1, position: OcgPosition.FACEUP_ATTACK },
+    ],
+    opponent: [monster(C.regeneratingMummy, 0), monster(C.boneTower, 1), hand(C.mysticalElf)],
+    aiSecond: true,
+    aiDeck: DECKS.dragonsRoar.deck.main,
+    lp: [600, 8000],
+    turn: true,
+    picks: true,
+    forbid: /activate Stamping Destruction|target Regenerating Mummy/,
+  },
+  {
+    name: "set-compulsory-evacuation",
+    why: "review 2026-10-16 (seed 113 T1; also 111 T5, 112 T8 + T10, 114 T2): Compulsory Evacuation Device kept in hand, setting it scored 0.3-2.3 lower; here Master Kyonshee + set CED scored 3.35, Kyonshee alone 3.72",
+    ai: [hand(C.masterKyonshee), hand(C.compulsory), hand(C.ryuKokki), hand(C.reload), hand(C.vampireLady), hand(C.vampireGenesis)],
+    opponent: [hand(C.noblemanOfCrossout), hand(C.stampingDestruction), hand(C.armedDragonLv3), hand(C.stampingDestruction), hand(C.snatchSteal)],
+    aiDeck: DECKS.zombieMadness.deck.main,
+    turn: true,
+    expect: /set Compulsory Evacuation Device/,
+  },
+  {
+    name: "set-compulsory-before-the-level-up",
+    why: "review 2026-10-16 (seed 111 T5): Pyramid Turtle alone facing Armed Dragon LV3 (LV5, 2400, in their Standby Phase) and Twin-Headed Behemoth; Compulsory Evacuation Device kept in hand in Main 2 (set -0.07, hold 0.30); next turn LV5 and LV3 hit for 1600 more",
+    ai: [monster(C.pyramidTurtle, 0, OcgPosition.FACEUP_DEFENSE), hand(C.compulsory), hand(C.vampireLord)],
+    opponent: [
+      monster(C.armedDragonLv3, 0), monster(C.twinHeadedBehemoth, 1, OcgPosition.FACEUP_DEFENSE),
+      { code: C.dragonsRage, location: OcgLocation.SZONE, sequence: 1, position: OcgPosition.FACEUP_ATTACK }, setCard(C.coveringFire, 2),
+      hand(C.armedDragonLv3), hand(C.stampingDestruction), hand(C.snatchSteal),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.zombieMadness.deck.main,
+    lp: [6500, 6000],
+    turn: true,
+    expect: /set Compulsory Evacuation Device/,
+  },
+  {
+    name: "no-extra-moves-for-lethal",
+    why: "review 2026-10-16 (seed 112 T6): Luster Dragon (taken with Snatch Steal), Regenerating Mummy and Double Coston were lethal (5400 into 2800 LP); every winning plan tied and the tie-break (more damage: 4000 vs 3700) chose Dark Dust Spirit, which destroyed our own monsters, then Book of Life; the set Curse of Anubis stopped the attack and the board was gone",
+    ai: [
+      monster(C.regeneratingMummy, 1), monster(C.doubleCoston, 2), equip(C.snatchSteal, 0, 0, 0),
+      hand(C.darkDustSpirit), hand(C.vampireGenesis), hand(C.bookOfLife),
+      grave(C.recklessGreed), grave(C.mst),
+    ],
+    // Their Luster Dragon, taken by our Snatch Steal (which heals them 1000 in their Standby Phase: 1800 -> 2800).
+    opponent: [
+      monster(C.lusterDragon, 0), setCard(C.curseOfAnubis, 0),
+      { code: C.dragonsRage, location: OcgLocation.SZONE, sequence: 1, position: OcgPosition.FACEUP_ATTACK },
+      hand(C.redEyes), hand(C.stampingDestruction), hand(C.noblemanOfCrossout),
+      grave(C.dragonsRage), grave(C.elementDragon),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.zombieMadness.deck.main,
+    lp: [8000, 1800],
+    turn: true,
+    expect: /attack with/,
+    forbid: /summon Dark Dust Spirit|activate Book of Life/,
+  },
+  {
+    name: "curse-of-anubis-against-lethal",
+    why: "seed 112 replay T6 (2026-10-17): at 2800 LP Luster Dragon hit for 1900, then Regenerating Mummy's attack was lethal; Curse of Anubis (Effect Monsters to Defense) would have stopped it, but the chain replay restarted their turn and let Luster Dragon attack again, so every answer lost (+0.00)",
+    ai: [setCard(C.curseOfAnubis, 0), { code: C.dragonsRage, location: OcgLocation.SZONE, sequence: 1, position: OcgPosition.FACEUP_ATTACK }, hand(C.redEyes), hand(C.stampingDestruction), hand(C.noblemanOfCrossout)],
+    opponent: [monster(C.lusterDragon, 0), monster(C.regeneratingMummy, 1), monster(C.doubleCoston, 2), hand(C.darkDustSpirit), hand(C.vampireGenesis), hand(C.bookOfLife)],
+    aiDeck: DECKS.dragonsRoar.deck.main,
+    lp: [2800, 8000],
+    opponentAttacks: [0, 1, 2],
+    expect: /chain Curse of Anubis/,
+  },
+  {
+    name: "stamping-takes-back-the-luster",
+    why: "review 2026-10-16 (seed 112 T3): the opponent's Snatch Steal held our Luster Dragon next to Regenerating Mummy; summoning Element Dragon face-up allows Stamping Destruction on Snatch Steal (Luster back, 500 damage); the AI set Element Dragon (the copies rebuilt the stolen Luster Dragon as the opponent's own card, so destroying Snatch Steal gave nothing back)",
+    // Our Luster Dragon, taken by their Snatch Steal (which heals us 1000 in our Standby Phase: 4300 -> 5300).
+    ai: [
+      monster(C.lusterDragon, 0),
+      { code: C.dragonsRage, location: OcgLocation.SZONE, sequence: 0, position: OcgPosition.FACEUP_ATTACK },
+      { code: C.dragonsRage, location: OcgLocation.SZONE, sequence: 1, position: OcgPosition.FACEUP_ATTACK },
+      hand(C.elementDragon), hand(C.redEyes), hand(C.stampingDestruction), hand(C.noblemanOfCrossout),
+    ],
+    opponent: [
+      monster(C.regeneratingMummy, 1), equip(C.snatchSteal, 0, 0, 1),
+      hand(C.darkDustSpirit), hand(C.vampireGenesis), hand(C.doubleCoston), hand(C.mst), hand(C.bookOfLife),
+      grave(C.recklessGreed),
+    ],
+    aiSecond: true,
+    aiDeck: DECKS.dragonsRoar.deck.main,
+    lp: [4300, 8000],
+    turn: true,
+    picks: true,
+    expect: /summon Element Dragon.*activate Stamping Destruction → pick Snatch Steal.*attack with Luster Dragon/,
+  },
 ];
 
 const args = process.argv.slice(2);
@@ -619,13 +725,33 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
   const aiTurn = p.aiSecond ? 2 : 1;
   /** opponentSetsThenBattles: what the opponent has done in their turn. */
   let oppSet = false, oppBattled = false;
-  for (let steps = 0; steps < (p.turn || p.opponentSetsThenBattles ? 300 : 50) && !choice; steps++) {
+  /** Checks on the AI's chain answers in the opponent's turn. */
+  const theirTurn = !!p.opponentSetsThenBattles || !!p.opponentAttacks;
+  let attacksLeft = [...(p.opponentAttacks ?? [])];
+  for (let steps = 0; steps < (p.turn || theirTurn ? 300 : 50) && !choice; steps++) {
     const s = duel.advance();
     ai.observe(s.messages);
     if (s.ended) break;
     if (p.turn && ai.memory.turn > aiTurn) break;
-    if (p.opponentSetsThenBattles && ai.memory.turn > aiTurn + 1) break;
+    if (theirTurn && ai.memory.turn > aiTurn + 1) break;
     const prompt = s.prompt as typeof s.prompt & { player: number };
+    if (prompt.player !== aiSeat && p.opponentAttacks && ai.memory.turn === aiTurn + 1
+      && (prompt.type === OcgMessageType.SELECT_IDLECMD || prompt.type === OcgMessageType.SELECT_BATTLECMD)) {
+      if (prompt.type === OcgMessageType.SELECT_IDLECMD) {
+        const toBp: boolean = !oppBattled && prompt.to_bp;
+        oppBattled ||= toBp;
+        duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: toBp ? SelectIdleCMDAction.TO_BP : SelectIdleCMDAction.TO_EP, index: null });
+      } else {
+        let i = -1;
+        while (attacksLeft.length && i < 0) {
+          const zone = attacksLeft.shift();
+          i = prompt.attacks.findIndex((a) => a.sequence === zone);
+        }
+        duel.respond(i >= 0 ? { type: OcgResponseType.SELECT_BATTLECMD, action: SelectBattleCMDAction.SELECT_BATTLE, index: i }
+          : { type: OcgResponseType.SELECT_BATTLECMD, action: prompt.to_m2 ? SelectBattleCMDAction.TO_M2 : SelectBattleCMDAction.TO_EP, index: null });
+      }
+      continue;
+    }
     if (prompt.player !== aiSeat && p.opponentSetsThenBattles && ai.memory.turn === aiTurn + 1 && prompt.type === OcgMessageType.SELECT_IDLECMD) {
       if (!oppSet && prompt.monster_sets.length) {
         oppSet = true;
@@ -652,7 +778,7 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
     }
     duel.respond(ai.decide(prompt));
     const last = traces[traces.length - 1];
-    if (p.opponentSetsThenBattles) {
+    if (theirTurn) {
       if (ai.memory.turn === aiTurn + 1 && prompt.type === OcgMessageType.SELECT_CHAIN && prompt.selects.length > 0) {
         turnChoices.push(last.choice);
         firstTurnTrace ??= last;
@@ -664,24 +790,24 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
         turnChoices.push(last.choice);
         firstTurnTrace ??= last;
       }
-      if (p.picks && prompt.type === OcgMessageType.SELECT_CARD && ai.memory.turn === aiTurn && !/attack target/.test(last.reason))
-        turnChoices.push(`pick ${last.choice}`);
+      if (p.picks && prompt.type === OcgMessageType.SELECT_CARD && ai.memory.turn === aiTurn)
+        turnChoices.push(`${/attack|be attacked/.test(last.reason) ? "target" : "pick"} ${last.choice}`);
       if (p.picks && prompt.type === OcgMessageType.SELECT_POSITION && ai.memory.turn === aiTurn) turnChoices.push(`position ${last.choice}`);
       continue;
     }
     if (p.checkChain ? activated && prompt.type === OcgMessageType.SELECT_CHAIN && prompt.selects.length > 0 : prompt.type === OcgMessageType.SELECT_IDLECMD) choice = last;
   }
   duel.destroy();
-  if (p.turn || p.opponentSetsThenBattles) choice = firstTurnTrace;
+  if (p.turn || theirTurn) choice = firstTurnTrace;
   const planLine = choice && p.plan ? formatTrace(choice).split("\n").find((l) => l.includes("plan:"))?.trim() : undefined;
-  const text = p.turn || p.opponentSetsThenBattles ? turnChoices.join(" → ") || "(no main-phase decision)" : planLine ?? choice?.choice ?? "(no main-phase decision)";
+  const text = p.turn || theirTurn ? turnChoices.join(" → ") || "(no main-phase decision)" : planLine ?? choice?.choice ?? "(no main-phase decision)";
   const ok = !!choice && (!p.expect || p.expect.test(text)) && (!p.forbid || !p.forbid.test(text));
   if (!ok && p.known) known++;
   else if (!ok) failed++;
   const status = p.known ? (ok ? "now passes (drop `known`)" : `known (${p.known})`) : ok ? "ok  " : "FAIL";
   console.log(`${status} ${p.name}${p.seeds ? ` #${run}` : ""}: ${text}${ok ? "" : `   (${p.expect ? `expected ${p.expect}` : ""}${p.forbid ? ` forbidden ${p.forbid}` : ""}; ${p.why})`}`);
   if (show || (!ok && !p.known)) if (choice) console.log(formatTrace(choice).split("\n").slice(1).join("\n"));
-  if ((p.turn || p.opponentSetsThenBattles) && (show || (!ok && !p.known)))
+  if ((p.turn || theirTurn) && (show || (!ok && !p.known)))
     for (const t of traces) console.log(`    ${formatTrace(t).split("\n")[0]}`);
 }
 const knownNote = known ? `, ${known} known misplay${known > 1 ? "s" : ""}` : "";

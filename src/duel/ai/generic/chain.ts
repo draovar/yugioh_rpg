@@ -5,7 +5,7 @@
 import { OcgLocation, OcgMessageType, OcgPhase, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
 import { TYPE } from "../../cardData.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
-import { cardType, weightsOf } from "../board.ts";
+import { cardAt, cardType, mine, monsterStats, weightsOf } from "../board.ts";
 import { best, type BrainState, type Option } from "./common.ts";
 import type { Situation } from "../sim/replay.ts";
 
@@ -22,6 +22,17 @@ const TRIGGER_SELECTION = 0x7f;
 function responseMargin(situation: Situation): number {
   if (situation.kind !== "phase") return 0.15;
   return situation.phase === OcgPhase.END ? -0.15 : 1.5;
+}
+
+/** Whether the monster just summoned at `place` can destroy one of ours in battle, or we have none. */
+function threatens(view: AiView, place: Parameters<typeof cardAt>[1]): boolean {
+  const summoned = cardAt(view, place);
+  if (!summoned || summoned.faceDown || !summoned.code) return true;
+  const ours = mine(view).monsters.filter((c) => c !== null);
+  return !ours.length || ours.some((c) => {
+    const st = monsterStats(c);
+    return summoned.attack > (st.attackPos ? st.atk : st.def);
+  });
 }
 
 export function decideChain(m: ChainMessage, view: AiView, state: BrainState): Decision {
@@ -61,7 +72,10 @@ export function decideChain(m: ChainMessage, view: AiView, state: BrainState): D
   const last = memory.lastAction;
   const theirLink = memory.chain.length > 0 && memory.chain[memory.chain.length - 1].controller !== view.seat;
   // Their summon or attack; an activation of theirs only while it's on the chain (theirLink): once resolved, it's over.
-  const theirMove = last !== null && last.player !== view.seat && last.kind !== "activate";
+  // A summon only when the monster threatens ours: answering a harmless one spends a card for little (in the copies,
+  // a set Compulsory Evacuation Device went on the first stand-in summoned, so setting it looked worse than holding it).
+  const theirMove = last !== null && last.player !== view.seat && last.kind !== "activate"
+    && (last.kind === "attack" || !last.place || threatens(view, last.place));
   const theirEndPhase = memory.phase === OcgPhase.END && memory.turnPlayer !== view.seat;
   const responding = theirLink || theirMove || theirEndPhase;
 

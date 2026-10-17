@@ -200,8 +200,12 @@ export function planTurn(
 
   all.sort((a, b) => b.value - a.value);
   // A near-tie goes to the more active plan (damage, then summons): holding back is no safer when the scores agree.
-  const best = all.filter((n) => n.value >= all[0].value - TIE)
-    .reduce((a, b) => (b.damage > a.damage || (b.damage === a.damage && summons(b) > summons(a)) ? b : a));
+  // Not between wins: damage past 0 LP means nothing, and extra moves only over-extend (Dark Dust Spirit destroying
+  // our own monsters for 300 more damage; a set card stopped the attack). The win with the fewest moves goes.
+  const tied = all.filter((n) => n.value >= all[0].value - TIE);
+  const best = all[0].value >= 1000
+    ? tied.reduce((a, b) => (b.steps.length < a.steps.length ? b : a))
+    : tied.reduce((a, b) => (b.damage > a.damage || (b.damage === a.damage && summons(b) > summons(a)) ? b : a));
   return {
     steps: best.steps, battleAfter: !!canBattle, value: best.value, checkpoints: best.checkpoints,
     alternatives: all.filter((n) => n !== best).slice(0, 5).map((n) => ({ steps: n.steps, value: n.value })),

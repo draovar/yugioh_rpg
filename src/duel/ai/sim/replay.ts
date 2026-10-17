@@ -29,7 +29,7 @@ import { SELECT_HINT } from "../generic/select.ts";
 import { formatTrace } from "../trace.ts";
 import { findSame } from "./options.ts";
 import type { Simulator } from "./simulator.ts";
-import { BLANK, layoutFrom, type SimLayout } from "./world.ts";
+import { BLANK, layoutFrom, swapSides, type SimLayout } from "./world.ts";
 
 /** What the opponent did that the chain prompt answers. Zones are sequences on their side (targets: on ours). */
 export type Situation =
@@ -196,7 +196,9 @@ function opponentFirst(view: AiView, situation: Situation): SimLayout | null {
       // Back to the hand, with stand-in monsters to tribute for it.
       start.splice(i, 1);
       replaceBlankInHand(start, situation.code);
-      const used = new Set(start.filter((s) => s.location === OcgLocation.MZONE).map((s) => s.sequence));
+      // Taken: their monsters, and zones of theirs a monster they took from us is handed back to (StartCard.control).
+      const incoming = (base.decks[0].start ?? []).filter((s) => s.control?.team === 1).map((s) => s.control!.sequence);
+      const used = new Set([...start.filter((s) => s.location === OcgLocation.MZONE).map((s) => s.sequence), ...incoming]);
       let need = tributesFor(view, situation.code);
       for (let z = 0; z < 5 && need > 0; z++) {
         if (used.has(z)) continue;
@@ -215,7 +217,7 @@ function opponentFirst(view: AiView, situation: Situation): SimLayout | null {
       replaceBlankInHand(start, situation.code);
     }
   }
-  return { decks: [theirs, base.decks[0]], lp: [base.lp[1], base.lp[0]] };
+  return swapSides({ decks: [base.decks[0], theirs], lp: base.lp });
 }
 
 function replaceBlankInHand(start: StartCard[], code: number): void {
@@ -244,6 +246,11 @@ function replayOne(sim: Simulator, view: AiView, layout: SimLayout, situation: S
     // the summon being replayed.
     const replayed = situation.kind === "summon" && situation.how === "summon" ? 1 : 0;
     let summonsLeft = Math.max(0, 1 - view.memory.normalSummons[1 - view.seat]) + replayed;
+    // Likewise their monsters that already attacked this turn don't attack again (the one being replayed does, once):
+    // else a monster that attacked for real wins the copy a second time and every answer looks lost (Curse of Anubis
+    // against a lethal second attack).
+    const attacked = new Set(view.memory.attacks.filter((a) => a.attacker.controller !== view.seat).map((a) => a.attacker.sequence));
+    if (situation.kind === "attack") attacked.delete(situation.attacker);
 
     for (let steps = 0; ; steps++) {
       if (steps > MAX_STEPS) return null;
@@ -268,8 +275,16 @@ function replayOne(sim: Simulator, view: AiView, layout: SimLayout, situation: S
         if (target) aimed = true;
         const scripted = target ?? (done ? null : opponentMove(p, situation, opp));
         if (scripted === "abort") return null;
+        if (scripted) { duel.respond(scripted); continue; }
+        if (p.type === OcgMessageType.SELECT_BATTLECMD && p.attacks.some((a) => attacked.has(a.sequence))) {
+          const attacks = p.attacks.filter((a) => !attacked.has(a.sequence));
+          const r = opp.decide({ ...p, attacks });
+          duel.respond(r.type === OcgResponseType.SELECT_BATTLECMD && r.action === SelectBattleCMDAction.SELECT_BATTLE && r.index !== null
+            ? { ...r, index: p.attacks.indexOf(attacks[r.index]) } : r);
+          continue;
+        }
         const offered = summonsLeft <= 0 && p.type === OcgMessageType.SELECT_IDLECMD ? { ...p, summons: [], monster_sets: [] } : p;
-        duel.respond(scripted ?? opp.decide(offered));
+        duel.respond(opp.decide(offered));
       } else {
         if (p.type === OcgMessageType.SELECT_IDLECMD || p.type === OcgMessageType.SELECT_BATTLECMD) break;
         if (p.type !== OcgMessageType.SELECT_CHAIN || p.forced) { duel.respond(ai.decide(p)); continue; }

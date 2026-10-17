@@ -2,7 +2,7 @@
 // signals, and the selection hints (M1). With a Simulator (the planner) it plans whole turns on copies of the board,
 // answers the opponent's moves by replaying them there, and judges single main-phase activations there when no plan
 // can be made.
-import { OcgMessageType, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
+import { OcgMessageType, OcgResponseType, SelectBattleCMDAction, type OcgMessage } from "ocgcore-wasm";
 import { autoRespond, pickSum, pickTributes } from "../../autoBot.ts";
 import type { AiView, Brain, Decision } from "../AiSeat.ts";
 import { pickAttackTarget, decideBattle } from "./battle.ts";
@@ -41,13 +41,23 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
   switch (m.type) {
     case OcgMessageType.SELECT_IDLECMD:
       return decideByPlan(m, view, state) ?? decideIdle(m, view, state);
-    case OcgMessageType.SELECT_BATTLECMD:
-      return decideByPlan(m, view, state) ?? decideBattle(m, view, state);
+    case OcgMessageType.SELECT_BATTLECMD: {
+      const d = decideByPlan(m, view, state) ?? decideBattle(m, view, state);
+      // The attacker, for its target prompt.
+      const r = d.response;
+      const a = r.type === OcgResponseType.SELECT_BATTLECMD && r.action === SelectBattleCMDAction.SELECT_BATTLE && r.index !== null ? m.attacks[r.index] : null;
+      state.attacker = a ? { controller: a.controller, location: a.location, sequence: a.sequence } : null;
+      return d;
+    }
     case OcgMessageType.SELECT_CHAIN:
       return decideChain(m, view, state);
     case OcgMessageType.SELECT_CARD: {
-      if (view.hint !== null && Number(view.hint) === SELECT_HINT.ATTACK_TARGET)
-        return { response: { type: OcgResponseType.SELECT_CARD, indicies: [pickAttackTarget(m.selects, view, state)] }, reason: "planned attack target" };
+      if (view.hint !== null && Number(view.hint) === SELECT_HINT.ATTACK_TARGET) {
+        const i = pickAttackTarget(m.selects, m.can_cancel, view, state);
+        return i === null
+          ? { response: { type: OcgResponseType.SELECT_CARD, indicies: null }, reason: "the planned target can't be attacked, nothing else worth it: cancel" }
+          : { response: { type: OcgResponseType.SELECT_CARD, indicies: [i] }, reason: "planned attack target" };
+      }
       const planned = state.pickTarget;
       state.pickTarget = null;
       const p = planned && m.min <= 1 ? m.selects.findIndex((c) => sameLoc(c, planned)) : -1;
