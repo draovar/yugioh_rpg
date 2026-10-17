@@ -80,8 +80,7 @@ export class Overworld extends Phaser.Scene {
     const tileset = map.addTilesetImage("world", TILES)!;
 
     // Ground layers: no collision, always under everything.
-    map.createLayer("ground", tileset, 0, 0)!.setDepth(0);
-    map.createLayer("ground2", tileset, 0, 0)!.setDepth(0);
+    this.bake([map.createLayer("ground", tileset, 0, 0)!, map.createLayer("ground2", tileset, 0, 0)!]).setDepth(0);
 
     // The walls layer is only used for collision and is not drawn: its tiles are redrawn in y-sorted layers.
     this.walls = (map.createLayer("walls", tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false);
@@ -242,8 +241,20 @@ export class Overworld extends Phaser.Scene {
       const sorted = map.createBlankLayer(`walls_${baseY}`, tileset, 0, top * map.tileHeight, map.width, bottom - top + 1)!;
       for (const t of tiles) sorted.putTileAt(t.index, t.x, t.y - top);
       // -0.5 so a character standing exactly on the base is drawn in front.
-      sorted.setDepth(this.depthForY(baseY - 0.5));
+      this.bake([sorted]).setDepth(this.depthForY(baseY - 0.5));
     }
+  }
+
+  /**
+   * Static tile layers drawn once into a texture, which replaces them: a tilemap layer re-culls and re-submits every
+   * visible tile each frame, which kept phones busy (and hot) while nothing moved. All layers share the first's area.
+   */
+  private bake(layers: (Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer)[]): Phaser.GameObjects.RenderTexture {
+    const { x, y, width, height } = layers[0];
+    const rt = this.add.renderTexture(x, y, width, height).setOrigin(0);
+    rt.draw(layers, -x, -y).render();
+    for (const l of layers) l.destroy();
+    return rt;
   }
 
   /** Everything y-sorted lives in depth 2..3: lower on screen = drawn later. */

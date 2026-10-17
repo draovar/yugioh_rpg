@@ -19,15 +19,22 @@ const PILES: [Slot, string][] = [
 ];
 
 export function drawField(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
-  drawTable(scene, layer);
-  if (THEME.template === "open") drawOpenZones(scene, layer);
-  else drawMat(scene, layer);
+  const parts = scene.make.container({}, false);
+  drawTable(scene, parts);
+  if (THEME.template === "open") drawOpenZones(scene, parts);
+  else drawMat(scene, parts);
   for (const side of [0, 1] as const) {
     for (const [slot, str] of PILES) {
       const { x, y } = slotXY(side, slot);
-      layer.add(text(scene, x, y - 1, str, { font: FONT_CARD, color: THEME.field.label, originX: 0.5 }));
+      parts.add(text(scene, x, y - 1, str, { font: FONT_CARD, color: THEME.field.label, originX: 0.5 }));
     }
   }
+  // Baked into one texture: the field never changes, and redrawing its ~1500 Graphics commands every frame kept
+  // phones busy (and hot) even while nothing moved.
+  const baked = scene.add.renderTexture(0, 0, 640, 360).setOrigin(0);
+  baked.draw(parts).render();
+  parts.destroy();
+  layer.add(baked);
 }
 
 /** Every zone of one side: main monster and spell/trap zones, then the piles. */

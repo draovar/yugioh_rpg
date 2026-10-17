@@ -29,9 +29,11 @@ const game = new Phaser.Game({
   roundPixels: true,
   scene: [Boot, Overworld, WorldMenu, Lobby, DuelScene],
   scale: { mode: Phaser.Scale.NONE, zoom: integerZoom(), autoCenter: Phaser.Scale.CENTER_BOTH },
+  // About 60 frames a second at most: phones with 90/120 Hz screens would otherwise draw up to twice as often (heat).
+  // 65, not 60, so a 60 Hz screen's slightly early frames aren't skipped.
   // Dev: `&timeout` keeps the game loop running in a hidden/background tab (rAF pauses there),
   // which automated browser testing needs.
-  fps: { forceSetTimeOut: import.meta.env.DEV && new URLSearchParams(location.search).has("timeout") },
+  fps: { limit: 65, forceSetTimeOut: import.meta.env.DEV && new URLSearchParams(location.search).has("timeout") },
 });
 
 const fit = () => game.scale.setZoom(integerZoom());

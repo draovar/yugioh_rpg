@@ -155,7 +155,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   seed; then rock-paper-scissors packets (`rps` hands, the winner's `order`) decide the seats. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (the Tiled map from `build-tiles`, Arcade physics (scene-local
-  config), arrow keys; wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`);
+  config), arrow keys; wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`); ground and wall layers are baked into RenderTextures once (`bake`: live tilemap layers re-culled every tile each frame: 4.2 → 0.6 ms a frame on a desktop);
   32px character frames drawn at 2x; NPCs (`NPCS`: name, text, their own deck) talk with X / Enter / Space in a
   `DialogBox` (`src/ui/DialogBox.ts`, tiny5 at 2x, clickable options); YES starts a duel, and the player comes back to the
   same spot (`savePosition`) with the NPC's line about the result; on touch devices a semi-transparent D-pad (diagonals,
@@ -245,7 +245,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   info panel mode, chain mode AUTO/ALL/OFF (`ChainMode`). Info panel **card mode** (default) keeps
   the last hovered card (starts with the first card you draw); **log mode** shows the log and previews cards
   only while hovered. Long names scroll (marquee) after a short hover.
-- Field (`src/ui/duel/field.ts`): cream plank table (the info panel's paper colour) with a dark green felt
+- Field (`src/ui/duel/field.ts`, baked into one RenderTexture: it never changes): cream plank table (the info panel's paper colour) with a dark green felt
   playmat in a Frame01a rim around the four zone rows; zones outlined light green, monster zones tinted, empty
   piles labelled FIELD / EXTRA / GY / DECK. Dialogs shade the whole screen; the info panel is drawn above the
   shade (`INFO_DEPTH`) so it stays bright. Theme insets: `*Slice` = sprite border kept when stretching, `rim` /
