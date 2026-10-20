@@ -4,6 +4,7 @@ import { Overworld } from "./scenes/Overworld.ts";
 import { WorldMenu } from "./scenes/WorldMenu.ts";
 import { DuelScene } from "./scenes/DuelScene.ts";
 import { Lobby } from "./scenes/Lobby.ts";
+import { DeckEditor } from "./scenes/DeckEditor.ts";
 import { fullscreenOnFirstTap } from "./ui/touch.ts";
 
 /**
@@ -27,7 +28,7 @@ const game = new Phaser.Game({
   backgroundColor: "#000000",
   pixelArt: true,
   roundPixels: true,
-  scene: [Boot, Overworld, WorldMenu, Lobby, DuelScene],
+  scene: [Boot, Overworld, WorldMenu, Lobby, DuelScene, DeckEditor],
   scale: { mode: Phaser.Scale.NONE, zoom: integerZoom(), autoCenter: Phaser.Scale.CENTER_BOTH },
   // About 60 frames a second at most: phones with 90/120 Hz screens would otherwise draw up to twice as often (heat).
   // 65, not 60, so a 60 Hz screen's slightly early frames aren't skipped.

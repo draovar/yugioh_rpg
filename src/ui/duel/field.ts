@@ -75,20 +75,23 @@ function drawMat(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
   layer.add(m);
 }
 
-/** The table (whole screen; the info panel covers its left part): planks or a blueprint grid. */
-function drawTable(scene: Phaser.Scene, layer: Phaser.GameObjects.Container) {
+/**
+ * The table (whole screen; in the duel the info panel covers its left part): planks or a blueprint grid, the pattern
+ * from `from` (x) on.
+ */
+export function drawTable(scene: Phaser.Scene, layer: Phaser.GameObjects.Container, from = FIELD.left - 4) {
   const g = scene.add.graphics();
   g.fillStyle(THEME.field.table).fillRect(0, 0, 640, 360);
   g.fillStyle(THEME.field.seam);
   if (THEME.field.pattern === "grid") {
     // 1px lines every 8px, like the hologram frames' inner grid.
-    for (let x = FIELD.left - 4; x < 640; x += 8) g.fillRect(x, 0, 1, 360);
-    for (let y = 4; y < 360; y += 8) g.fillRect(FIELD.left - 4, y, 640, 1);
+    for (let x = from; x < 640; x += 8) g.fillRect(x, 0, 1, 360);
+    for (let y = 4; y < 360; y += 8) g.fillRect(from, y, 640, 1);
   } else {
     // Horizontal planks, seams staggered so it doesn't read as stripes.
     for (let y = 14, i = 0; y < 360; y += 29, i++) {
-      g.fillRect(FIELD.left - 4, y, 640, 1);
-      for (let x = FIELD.left + (i % 2 ? 60 : 130); x < 640; x += 150) g.fillRect(x, y - 28, 1, 28);
+      g.fillRect(from, y, 640, 1);
+      for (let x = from + 4 + (i % 2 ? 60 : 130); x < 640; x += 150) g.fillRect(x, y - 28, 1, 28);
     }
   }
   layer.add(g);

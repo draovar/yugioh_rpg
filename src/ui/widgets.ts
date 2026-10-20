@@ -184,3 +184,63 @@ export function makeListButton(
     },
   });
 }
+
+/**
+ * A list-row button that opens a list of choices below it (list-row buttons on a plate, the current one
+ * highlighted); picking one, clicking elsewhere or Esc closes it. The button reads `prefix` + the current choice
+ * with a down arrow on the right, or always `label` (an action menu: `current` null). Top-left at (x, y); returns
+ * its parts in a container.
+ */
+export function makeListDropDown<T>(
+  scene: Phaser.Scene, x: number, y: number, w: number, options: DropDownOption<T>[], current: T | null,
+  onPick: (value: T) => void, look: { prefix?: string; label?: string } = {},
+): Phaser.GameObjects.Container {
+  const labelOf = (v: T | null) => look.label ?? `${look.prefix ?? ""}${options.find((o) => o.value === v)?.label ?? ""}`;
+  let list: Phaser.GameObjects.Container | null = null;
+  let value = current;
+  const close = () => {
+    list?.destroy();
+    list = null;
+    scene.input.keyboard?.off("keydown-ESC", close);
+  };
+  const open = () => {
+    if (list) return close();
+    const pitch = LIST_BUTTON_H + 1, rim = THEME.plate.slice;
+    const top = y + LIST_BUTTON_H + 1 + rim, plateH = options.length * pitch - 1 + 2 * rim;
+    // Invisible full-screen catcher under the rows: a click anywhere else just closes the list.
+    const catcher = scene.add.zone(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setInteractive();
+    catcher.on("pointerup", close);
+    const plate = scene.add.nineslice(x - rim, top - rim, ui("menu-back"), undefined, w + 2 * rim, plateH, rim, rim, rim, rim).setOrigin(0);
+    const rows = options.flatMap((o, i) => {
+      const row = makeListButton(scene, x, top + i * pitch, w, o.label, () => {
+        close();
+        if (o.value === value && look.label === undefined) return;
+        value = o.value;
+        button.setLabel(labelOf(value));
+        onPick(o.value);
+      });
+      if (o.value === value) row.setHighlighted(true);
+      return row;
+    });
+    list = scene.add.container(0, 0, [catcher, plate, ...rows]).setDepth(2000);
+    scene.input.keyboard?.on("keydown-ESC", close);
+  };
+  const button = makeListButton(scene, x, y, w, "", open);
+  // 5x3 down-pointing triangle, 4px from the right edge, in the label's colour.
+  const arrow = scene.add.graphics();
+  const drawArrow = (color: number) => {
+    const ax = x + w - 9, ay = y + 4;
+    arrow.clear().fillStyle(color).fillRect(ax, ay, 5, 1).fillRect(ax + 1, ay + 1, 3, 1).fillRect(ax + 2, ay + 2, 1, 1);
+  };
+  drawArrow(THEME.listButton.ink);
+  button[2].on("pointerover", () => drawArrow(THEME.listButton.inkHover));
+  button[2].on("pointerout", () => drawArrow(THEME.listButton.ink));
+  // The label is centred left of the arrow.
+  const t = button[1] as Phaser.GameObjects.BitmapText;
+  button.setLabel = (s: string) => { t.setText(s.toUpperCase()).setX(Math.round(x + (w - 8) / 2 - t.width / 2)); };
+  button.setLabel(labelOf(value));
+  const c = scene.add.container(0, 0, [...button, arrow]);
+  c.once("destroy", close);
+  return c;
+}
+

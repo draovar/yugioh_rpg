@@ -54,9 +54,9 @@ export interface Theme {
   woodButton: { raised: { slice: Slice; textY: number }; pressed: { slice: Slice; textY: number }; ink: number };
   /**
    * Boards and paper: nine-slice insets of the info panel's frame ("info-frame"), the dialog / picker board
-   * ("panel-frame") and the paper inset ("panel-paper"); text colours.
+   * ("panel-frame") and the paper inset ("panel-paper"); text colours (`error`: refusals, limits reached, on board or paper).
    */
-  panel: { infoSlice: Slice; slice: number; paperSlice: number; ink: number; inkSoft: number; paperInk: number };
+  panel: { infoSlice: Slice; slice: number; paperSlice: number; ink: number; inkSoft: number; paperInk: number; error: number };
   /** Plates ("menu-back", also open-template zones): nine-slice inset; value / label text. */
   plate: { slice: number; ink: number; inkSoft: number };
   /** The card action menu's frame ("card-menu"): nine-slice inset. */
@@ -99,7 +99,7 @@ const RUNEWOOD: Theme = {
   },
   turnText: { mine: 0x9fdcff, theirs: 0xff9a84 },
   woodButton: { raised: { slice: [4, 4, 5, 7], textY: 5 }, pressed: { slice: [4, 4, 8, 4], textY: 8 }, ink: 0x3b2414 },
-  panel: { infoSlice: [9, 9, 9, 9], slice: 9, paperSlice: 4, ink: 0x2a1408, inkSoft: 0x5a3018, paperInk: 0x2a1408 },
+  panel: { infoSlice: [9, 9, 9, 9], slice: 9, paperSlice: 4, ink: 0x2a1408, inkSoft: 0x5a3018, paperInk: 0x2a1408, error: 0xc02818 },
   plate: { slice: 3, ink: 0xf2c096, inkSoft: 0xb08a68 },
   cardMenu: { slice: 3 },
   cardName: { ink: 0xfbe8c8, shadow: 0x2a1408 },
@@ -144,7 +144,7 @@ const HOLOGRAM: Theme = {
     // Info frame (Frame_Standard_02a): notched tabs along every edge, so it only stretches in plain runs of
     // edge (x 77-90, y 72-90 of the 96x96 sprite) and every notch keeps its size.
     infoSlice: [77, 6, 72, 6], slice: 2, paperSlice: 2,
-    ink: 0xb7ffff, inkSoft: 0x5a8ac0, paperInk: 0xd8f8ff,
+    ink: 0xb7ffff, inkSoft: 0x5a8ac0, paperInk: 0xd8f8ff, error: 0xff6070,
   },
   // Slot Available: 4px border (glow, cyan line, inner ring); content (inset 3) may overlap the inner ring.
   plate: { slice: 4, ink: 0xb7ffff, inkSoft: 0x5a8ac0 },

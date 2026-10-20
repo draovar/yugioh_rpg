@@ -143,9 +143,14 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   - `rng.ts` — `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
   - `cardData.ts` — `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
   - `hash.ts` — `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).
-  - `decks.ts` — prebuilt decks until the deck editor exists (`yugi`, `kaiba`, `goat` + Extra Decks; starter decks like
+  - `decks.ts` — prebuilt decks (NPCs, the AI, the deck editor's LOAD) (`yugi`, `kaiba`, `goat` + Extra Decks; starter decks like
     `kaibaEvolution`, `yugiEvolution` = the Evolution starter decks with the owner's swaps; structure decks:
     `zombieMadness` (as printed), `dragonsRoar` (owner's swaps)), `deckProblems()` legality check (40-60 main, ≤15 extra, ≤3 copies, no tokens, all in the pool).
+  - `deckEditor.ts` — the deck editor's rules and card list: `addProblem` (3 copies, 60 main, 15 extra; Fusions go to the
+    Extra Deck), `CardList.find` (every word in the name or, after the name matches, in the card text; filters; sort
+    TYPE / NAME / LEVEL / ATK / DEF), `filterGroups` (CARD, MONSTER, ATTRIBUTE, LEVEL, TYPE, SPELL/TRAP; only options
+    some pool card has; one-value groups (`single`: all but MONSTER) keep one pick (`toggleFilter`), MONSTER picks are
+    alternatives, groups combine), `sortDeck` (how the deck is laid out).
   - `rps.ts` — rock-paper-scissors before each duel (`rpsWinner`, `RpsOpponent`: the AI picks at random and goes
     first when it wins; peer-to-peer via `NetDuel.rps`). The winner picks first/second, which sets the seats (seat 0 goes first).
   - `loadEngine.ts` — browser only: fetches `public/data/*.json`, inits core once.
@@ -162,10 +167,22 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   keeps steering when the finger slides off) and X button (`src/ui/TouchPad.ts`), and the dialog sits between them) + `WorldMenu` (overlay scene launched by Overworld, so
   it doesn't scroll: MENU (M) button top right opens the settings panel: your deck (drop-down lists, `makeDropDown` in
   `src/ui/widgets.ts`, saved in localStorage via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place),
-  MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and
+  DECK EDITOR, MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and
   set cards in duels (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards
   drawn face-up at 60% alpha), QUICK DUEL, FULL SCREEN where the browser supports it) → `Duel` (`DuelScene`,
-  takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`. The duel screen
+  takes `DuelSceneData`); `Lobby` hosts/joins a peer-to-peer duel and passes the `NetDuel` to `Duel`.
+  `DeckEditor` (world menu → DECK EDITOR, themed like the duel, both templates: felt mat with outlined slots, or slot
+  plates on the table): the deck on the left (Main Deck 4 rows of 10,
+  squeezed together past 40; Extra Deck under it), the card list where the duel's info panel sits (search box = an
+  HTML input via `textInput.ts`, with an ALL / NAME toggle: card text too or names only; SORT drop-down, FILTERS (shown in the list's place: toggle buttons per group on a 5-column grid, long labels two cells, LEVEL
+  half cells in one row; `FILTER_COLUMNS = 0` = buttons as wide as their labels), 8 rows with art, scroll by wheel / drag / scrollbar).
+  Click a listed card = add, a deck card = remove. Hovering a listed card's art shows an eye over it; clicking the art
+  opens the card's details (`CardInfo`) over the list with ADD / CLOSE (Esc). Hovering a deck card (touch: holding it)
+  shows its details over the list while hovered (and closes an opened card: the list is back afterwards); nothing ever
+  covers the deck. Top bar: deck slot drop-down (+ NEW DECK), RENAME, SAVE, DELETE, LOAD (a prebuilt deck or empty), EXIT
+  (unsaved changes ask SAVE / DISCARD / CANCEL). Custom decks live in localStorage (`prefs.ts`: `customDecks`, up to
+  `MAX_CUSTOM_DECKS`); `deckEntries()` = prebuilt + custom decks with 40+ Main Deck cards, keyed `custom:<id>`, which
+  YOUR DECK / AI DECK, NPC duels and multiplayer use (`chosenDeck()` / `aiDeck()` return the deck itself). The duel screen
   draws the local seat at the bottom: player → screen side via `side(player)`, never assume P0 is "you".
   Before the engine starts, `DuelScene.decideFirst` plays rock-paper-scissors on the board (`src/ui/duel/RpsIntro.ts`:
   both draw ROCK/PAPER/SCISSORS, set one face-down in the middle Monster Zone, both flip, the loser's card flashes red,
@@ -173,7 +190,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   `DuelScene` redraws the whole board from `snapshot()` after every engine step; `src/scenes/duelPrompts.ts`
   (`showPrompt`, through a `PromptHost`) maps each SELECT_* prompt to UI: card action menus (idle/battle), board picks
   and zone highlights (`BoardPick`), and `Modal` dialogs/card pickers for everything else. The info panel is
-  `src/ui/duel/InfoPanel.ts`. The `&anims` / `&dialogs` previews are written for seat 0 = you (`previewSeats.ts` swaps seats).
+  `src/ui/duel/InfoPanel.ts` (the card part is `CardInfo.ts`, shared with the deck editor). The `&anims` / `&dialogs` previews are written for seat 0 = you (`previewSeats.ts` swaps seats).
   Calling a coin (`SELECT_OPTION` between system strings 60/61) gets `Modal.coinCall` (the two coin faces); the call
   comes back as HINT type 4 (`coinCallText`): logged, and the opponent's pauses on a "YOUR OPPONENT CALLED: …" notice.
   Declarations (`ANNOUNCE_*`): Type / Attribute / number as button dialogs, card names in `Modal.search` (typed search,
@@ -357,7 +374,8 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
    run yet on df34ec9 / b795a67.
 4. **Overworld**: ✅ first Tiled map (ported from the owner's Phaser 3 prototype), collisions, y-sorted walls, NPCs with
    dialogue who duel with their own decks, settings menu (M). ✅ touch controls + full screen on phones. Next: trainer line-of-sight challenges, map transitions.
-5. **RPG loop**: card collection, deck editor, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
+5. **RPG loop**: ✅ deck editor v1 (every pool card, custom deck slots, both themes; later: limited to your collection).
+   Next: card collection, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.
 7. **Multiplayer**: ✅ peer-to-peer v1 (lockstep over PeerJS, room codes / invite links, each player's chosen deck, leave
    detection, FORFEIT). Later: own decks once the deck editor exists, a "waiting for opponent" indicator, reconnect,

@@ -1,4 +1,4 @@
-// Card-name search for typed input (card declarations now, the deck editor later). No Phaser.
+// Card-name search for typed input (card declarations). No Phaser.
 //
 // Case and punctuation don't matter ("blue eyes" finds "Blue-Eyes White Dragon"); every typed word must
 // appear in the name, in any order ("white blue" works too); typing without spaces matches across them
@@ -11,7 +11,7 @@ export interface NamedCard {
 }
 
 /** Lowercase words: punctuation and runs of spaces become single spaces. */
-function normalize(s: string): string {
+export function normalize(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 

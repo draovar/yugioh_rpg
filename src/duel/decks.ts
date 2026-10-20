@@ -1,4 +1,4 @@
-// Prebuilt decks until the deck editor exists. Every card must be in data/pool.json (the smoke tests check).
+// Prebuilt decks (NPCs, the AI, starting points in the deck editor). Every card must be in data/pool.json (the smoke tests check).
 import { TYPE, type CardDb } from "./cardData.ts";
 import type { Deck } from "./DuelSession.ts";
 

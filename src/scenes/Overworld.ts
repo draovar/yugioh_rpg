@@ -282,7 +282,7 @@ export class Overworld extends Phaser.Scene {
     this.dialog.open(def.name, def.text, ["Yes", "No"], (choice) => {
       if (choice !== "Yes") return;
       this.savePosition(def.name);
-      const data: DuelSceneData = { opponentName: def.name, playerDeck: DECKS[chosenDeck()].deck, opponentDeck: DECKS[def.deck].deck };
+      const data: DuelSceneData = { opponentName: def.name, playerDeck: chosenDeck().deck, opponentDeck: DECKS[def.deck].deck };
       this.scene.stop("WorldMenu");
       this.scene.start("Duel", data);
     }, this.player);

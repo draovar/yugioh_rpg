@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DECKS, deckProblems } from "../duel/decks.ts";
+import { deckProblems } from "../duel/decks.ts";
 import { loadEngine } from "../duel/loadEngine.ts";
 import { CODE_LENGTH, hostDuel, joinDuel, type DuelEntry, type NetDuel, type PendingDuel } from "../net/p2p.ts";
 import { chosenDeck } from "../ui/prefs.ts";
@@ -53,13 +53,13 @@ export class Lobby extends Phaser.Scene {
   private header(subtitle: string) {
     this.view.add(text(this, CX, 50, "MULTIPLAYER", { color: WHITE, scale: 2, originX: 0.5 }));
     this.view.add(text(this, CX, 70, subtitle, { color: SOFT, originX: 0.5, maxWidth: 420 }));
-    this.view.add(text(this, CX, 330, `YOUR DECK: ${DECKS[chosenDeck()].label.toUpperCase()} (CHANGE IT IN THE WORLD MENU)`, { color: SOFT, originX: 0.5 }));
+    this.view.add(text(this, CX, 330, `YOUR DECK: ${chosenDeck().label.toUpperCase()} (CHANGE IT IN THE WORLD MENU)`, { color: SOFT, originX: 0.5 }));
   }
 
   /** This machine's side of the handshake: data fingerprint, the chosen deck, and the check for the other deck. */
   private async entry(): Promise<DuelEntry> {
     const { fingerprint, cards } = await loadEngine();
-    return { fingerprint, deck: DECKS[chosenDeck()].deck, deckProblems: (deck) => deckProblems(deck, cards) };
+    return { fingerprint, deck: chosenDeck().deck, deckProblems: (deck) => deckProblems(deck, cards) };
   }
 
   private button(y: number, label: string, onClick: () => void) {

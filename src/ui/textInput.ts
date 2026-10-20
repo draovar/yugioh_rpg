@@ -6,6 +6,10 @@ import Phaser from "phaser";
 export interface TextInput {
   readonly value: string;
   focus(): void;
+  /** Sets the text (no onChange). */
+  setValue(value: string): void;
+  /** Hidden: the box can't be tapped or typed into (e.g. while a dialog covers it). */
+  setVisible(on: boolean): void;
   destroy(): void;
 }
 
@@ -50,6 +54,11 @@ export function createTextInput(scene: Phaser.Scene, box: { x: number; y: number
   return {
     get value() { return el.value; },
     focus: () => el.focus({ preventScroll: true }),
+    setValue: (value: string) => { el.value = value; },
+    setVisible: (on: boolean) => {
+      el.style.display = on ? "" : "none";
+      if (!on) el.blur();
+    },
     destroy: () => {
       window.removeEventListener("resize", place);
       el.remove();
