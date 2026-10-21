@@ -53,7 +53,7 @@ let saved: { x: number; y: number; facing: Facing; flipX: boolean; opponent?: st
 export class Overworld extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private npcs!: Phaser.Physics.Arcade.StaticGroup;
-  private walls!: Phaser.Tilemaps.TilemapLayer;
+  private walls: Phaser.Tilemaps.TilemapLayer[] = [];
   /** The map's hidden "collision" layer, if it has one. */
   private blockers: Phaser.Tilemaps.TilemapLayer | null = null;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -91,9 +91,10 @@ export class Overworld extends Phaser.Scene {
     this.blockers = map.getLayerIndex("collision") === null ? null
       : (map.createLayer("collision", tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false).setCollisionByExclusion([-1]);
 
-    // The walls layer is only used for collision and is not drawn: its tiles are redrawn in y-sorted layers.
-    this.walls = (map.createLayer("walls", tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false);
-    this.walls.setCollisionByProperty({ collision: true });
+    // Walls layers (walls, walls2...) are only used for collision and are not drawn: their tiles are redrawn in
+    // y-sorted layers.
+    this.walls = map.layers.filter((l) => l.name.startsWith("walls")).map((l) =>
+      (map.createLayer(l.name, tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false).setCollisionByProperty({ collision: true }));
     this.buildSortedWalls(map, tileset, this.walls);
 
     const walk = (key: string, start: number, end: number, frameRate: number) => {
@@ -118,7 +119,7 @@ export class Overworld extends Phaser.Scene {
       this.player.setFlipX(saved.flipX);
     }
     this.player.setFrame(IDLE_FRAME[this.facing]);
-    this.physics.add.collider(this.player, this.walls);
+    for (const walls of this.walls) this.physics.add.collider(this.player, walls);
     if (this.blockers) this.physics.add.collider(this.player, this.blockers);
     this.sortByFeet(this.player);
 
@@ -189,80 +190,85 @@ export class Overworld extends Phaser.Scene {
    *  - if there is none in that column (edge of a tree crown), the lowest collision tile of the connected group
    *  - purely decorative groups with no collision use their own bottom edge
    * A cell of the "collision" layer counts as a collision tile, with or without a wall tile on it (a tree whose trunk
-   * is drawn on a ground layer still sorts by it).
+   * is drawn on a ground layer still sorts by it). All walls layers count together: a crown on walls2 sorts by the
+   * trunk below it on walls.
    */
-  private wallBaseY(layer: Phaser.Tilemaps.TilemapLayer): Map<Phaser.Tilemaps.Tile, number> {
-    const { width: w, height: h } = layer.layer;
-    const tileH = layer.tilemap.tileHeight;
-    const get = (x: number, y: number) => {
-      const t = layer.getTileAt(x, y);
-      return t && t.index !== -1 ? t : null;
-    };
+  private wallBaseY(layers: Phaser.Tilemaps.TilemapLayer[]): Map<Phaser.Tilemaps.Tile, number> {
+    const { width: w, height: h } = layers[0].layer;
+    const tileH = layers[0].tilemap.tileHeight;
+    const tilesAt = (x: number, y: number) => layers.map((l) => l.getTileAt(x, y)).filter((t): t is Phaser.Tilemaps.Tile => !!t && t.index !== -1);
     const blocked = (x: number, y: number) => !!this.blockers?.hasTileAt(x, y);
     const collides = (t: Phaser.Tilemaps.Tile) => !!(t.properties as { collision?: boolean })?.collision || blocked(t.x, t.y);
-    const solid = (x: number, y: number) => { const t = get(x, y); return t ? collides(t) : blocked(x, y); };
+    const occupied = (x: number, y: number) => tilesAt(x, y).length > 0;
+    const solid = (x: number, y: number) => blocked(x, y) || tilesAt(x, y).some(collides);
 
-    const groupBase = new Map<Phaser.Tilemaps.Tile, number>();
-    const seen = new Set<Phaser.Tilemaps.Tile>();
+    // Groups of touching wall cells (any walls layer): the lowest collision bottom of each.
+    const groupBase = new Int32Array(w * h).fill(-1);
+    const seen = new Uint8Array(w * h);
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
-        const start = get(x, y);
-        if (!start || seen.has(start)) continue;
-        // Flood fill one group of touching wall tiles.
-        const group: Phaser.Tilemaps.Tile[] = [];
-        const stack = [start];
-        seen.add(start);
+        if (seen[y * w + x] || !occupied(x, y)) continue;
+        const group: number[] = [];
+        const stack = [y * w + x];
+        seen[y * w + x] = 1;
         let base = -1;
         while (stack.length) {
-          const t = stack.pop()!;
-          group.push(t);
-          if (collides(t)) base = Math.max(base, t.bottom);
+          const k = stack.pop()!, cx = k % w, cy = (k - cx) / w;
+          group.push(k);
+          if (solid(cx, cy)) base = Math.max(base, (cy + 1) * tileH);
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            const n = get(t.x + dx, t.y + dy);
-            if (n && !seen.has(n)) { seen.add(n); stack.push(n); }
+            const nx = cx + dx, ny = cy + dy;
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[ny * w + nx] || !occupied(nx, ny)) continue;
+            seen[ny * w + nx] = 1;
+            stack.push(ny * w + nx);
           }
         }
-        for (const t of group) groupBase.set(t, base);
+        for (const k of group) groupBase[k] = base;
       }
     }
 
     const baseYs = new Map<Phaser.Tilemaps.Tile, number>();
-    layer.forEachTile((tile) => {
-      if (tile.index === -1) return;
-      let baseY = tile.bottom;
-      if (!collides(tile)) {
-        // Walk down the column to the first collision tile, then to the end of that run.
-        let y = tile.y + 1;
-        while (y < h && get(tile.x, y) && !solid(tile.x, y)) y++;
-        if (y < h && solid(tile.x, y)) {
-          while (y < h && solid(tile.x, y)) baseY = (++y) * tileH;
-        } else {
-          const group = groupBase.get(tile) ?? -1;
-          baseY = group >= 0 ? group : tile.bottom;
+    for (const layer of layers) {
+      layer.forEachTile((tile) => {
+        if (tile.index === -1) return;
+        let baseY = tile.bottom;
+        if (!collides(tile)) {
+          // Walk down the column to the first collision tile, then to the end of that run.
+          let y = tile.y + 1;
+          while (y < h && occupied(tile.x, y) && !solid(tile.x, y)) y++;
+          if (y < h && solid(tile.x, y)) {
+            while (y < h && solid(tile.x, y)) baseY = (++y) * tileH;
+          } else {
+            const group = groupBase[tile.y * w + tile.x];
+            baseY = group >= 0 ? group : tile.bottom;
+          }
         }
-      }
-      baseYs.set(tile, baseY);
-    });
+        baseYs.set(tile, baseY);
+      });
+    }
     return baseYs;
   }
 
   /**
    * Wall tiles that share a base y go into one layer, whose depth comes from the base y the same way characters get
    * theirs from their feet. So walls, the player and NPCs all sort together. Each layer only covers its tiles' rows.
+   * Every walls layer gets its own strips (two layers can fill the same cell); a later layer is drawn over an earlier
+   * one on the same base.
    */
-  private buildSortedWalls(map: Phaser.Tilemaps.Tilemap, tileset: Phaser.Tilemaps.Tileset, layer: Phaser.Tilemaps.TilemapLayer) {
-    const byBase = new Map<number, Phaser.Tilemaps.Tile[]>();
-    for (const [tile, baseY] of this.wallBaseY(layer)) {
-      if (!byBase.has(baseY)) byBase.set(baseY, []);
-      byBase.get(baseY)!.push(tile);
+  private buildSortedWalls(map: Phaser.Tilemaps.Tilemap, tileset: Phaser.Tilemaps.Tileset, layers: Phaser.Tilemaps.TilemapLayer[]) {
+    const strips = new Map<string, { order: number; baseY: number; tiles: Phaser.Tilemaps.Tile[] }>();
+    for (const [tile, baseY] of this.wallBaseY(layers)) {
+      const order = layers.indexOf(tile.tilemapLayer as Phaser.Tilemaps.TilemapLayer), key = `${order}:${baseY}`;
+      if (!strips.has(key)) strips.set(key, { order, baseY, tiles: [] });
+      strips.get(key)!.tiles.push(tile);
     }
-    for (const [baseY, tiles] of byBase) {
+    for (const [key, { order, baseY, tiles }] of strips) {
       const top = Math.min(...tiles.map((t) => t.y));
       const bottom = Math.max(...tiles.map((t) => t.y));
-      const sorted = map.createBlankLayer(`walls_${baseY}`, tileset, 0, top * map.tileHeight, map.width, bottom - top + 1)!;
+      const sorted = map.createBlankLayer(`walls_${key}`, tileset, 0, top * map.tileHeight, map.width, bottom - top + 1)!;
       for (const t of tiles) sorted.putTileAt(t.index, t.x, t.y - top);
       // -0.5 so a character standing exactly on the base is drawn in front.
-      this.bake([sorted]).setDepth(this.depthForY(baseY - 0.5));
+      this.bake([sorted]).setDepth(this.depthForY(baseY - 0.5) + order * 1e-7);
     }
   }
 
