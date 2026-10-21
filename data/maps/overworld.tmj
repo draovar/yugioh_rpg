@@ -163,9 +163,9 @@
          "width":64,
          "x":0,
          "y":0
-        }],
- "nextlayerid":4,
- "nextobjectid":1,
+        },{"draworder":"topdown","id":4,"name":"objects","opacity":1,"type":"objectgroup","visible":true,"x":0,"y":0,"objects":[{"height":800,"id":1,"name":"warp","rotation":0,"type":"","visible":true,"width":16,"x":1008,"y":224,"properties":[{"name":"keepY","type":"bool","value":true},{"name":"map","type":"string","value":"maze"},{"name":"spawn","type":"string","value":"from-town"}]},{"height":0,"id":2,"name":"from-maze","rotation":0,"type":"","visible":true,"width":0,"x":976,"y":672,"point":true}]}],
+ "nextlayerid":5,
+ "nextobjectid":3,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",

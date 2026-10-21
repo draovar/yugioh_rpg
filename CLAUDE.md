@@ -64,7 +64,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 to the console (also in the deployed game, for misplay reports), after a first line with the duel seed, who went first,
 the decks and brain and a `?duel&seed=…&first=…` URL that replays the same duel (duels vs the AI always use a seed that fits `&seed=N`); with it, the L key logs the whole board, both hands and set
 cards included (`src/duel/boardText.ts`),
-`&map=NAME` shows another map instead of the overworld (`maze`; the player starts at its `spawn` point object, NPCs stand on the overworld only),
+`&map=NAME` starts on another map instead of the overworld (`maze`; the player starts at its `spawn` point object),
 `&touch` shows the overworld's touch controls on a desktop (phones get them automatically: `TOUCH` in `src/ui/touch.ts` = coarse pointer),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
@@ -168,7 +168,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (the Tiled map from `build-tiles`, Arcade physics (scene-local
   config), arrow keys; wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`); ground layers (every `ground*` layer, in map order) and wall layers (every `walls*` layer: walls, walls2...; they collide and y-sort together, a later layer drawn over an earlier one on the same base) are baked into RenderTextures once; an optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision for the y-sort (walls' own tiles collide by the tileset's `collision` property) (`bake`: live tilemap layers re-culled every tile each frame: 4.2 → 0.6 ms a frame on a desktop);
-  32px character frames drawn at 2x; NPCs (`NPCS`: name, text, their own deck) talk with X / Enter / Space in a
+  32px character frames drawn at 2x; maps link through `warp` rectangles in their `objects` layer (properties `map`,
+  `spawn` = the arrival point's name there, `keepY` = keep the height: town and maze sit side by side, tops aligned,
+  town's right edge ↔ maze's left meadow, by the entrance); a warp fades out and restarts the scene on the target map (loaded on first
+  visit in `preload`), an arrival on something solid is nudged to the nearest free spot (`freeY`);
+  NPCs (`NPCS`, per map: name, text, their own deck) talk with X / Enter / Space in a
   `DialogBox` (`src/ui/DialogBox.ts`, tiny5 at 2x, clickable options); YES starts a duel, and the player comes back to the
   same spot (`savePosition`) with the NPC's line about the result; on touch devices a semi-transparent D-pad (diagonals,
   keeps steering when the finger slides off) and X button (`src/ui/TouchPad.ts`), and the dialog sits between them) + `WorldMenu` (overlay scene launched by Overworld, so
@@ -380,7 +384,8 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
    positions in the opponent's turn, draw plans averaged over Deck orders; open findings stay in `docs/ai-reports.md`. No arena
    run yet on df34ec9 / b795a67.
 4. **Overworld**: ✅ first Tiled map (ported from the owner's Phaser 3 prototype), collisions, y-sorted walls, NPCs with
-   dialogue who duel with their own decks, settings menu (M). ✅ touch controls + full screen on phones. Next: trainer line-of-sight challenges, map transitions.
+   dialogue who duel with their own decks, settings menu (M). ✅ touch controls + full screen on phones. ✅ hedge maze map east of the town (`tools/hedge-maze.mjs`, then edited by hand), map transitions (warps).
+   Next: trainer line-of-sight challenges.
 5. **RPG loop**: ✅ deck editor v1 (every pool card, custom deck slots, both themes; later: limited to your collection).
    Next: card collection, rewards/boosters after duels, story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.

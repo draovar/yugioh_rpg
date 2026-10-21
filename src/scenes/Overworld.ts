@@ -8,14 +8,22 @@ import { TOUCH } from "../ui/touch.ts";
 import type { DuelSceneData } from "./DuelScene.ts";
 import type { WorldMenu } from "./WorldMenu.ts";
 
-const MAP = "overworld-map", TILES = "overworld-tiles", PLAYER = "overworld-player", NPC_SHEET = "overworld-npcs";
-/** Which map to show: `&map=NAME` (data/maps/NAME.tmj, e.g. `maze`) until maps link to each other. */
-const MAP_NAME = new URLSearchParams(location.search).get("map")?.replace(/[^\w-]/g, "") || "overworld";
+const PLAYER = "overworld-player", NPC_SHEET = "overworld-npcs";
+const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
-/** Called from Boot. The map and its tiles come from `npm run build-tiles` (public/maps/, gitignored). */
+/** The map the player is on (data/maps/NAME.tmj). Starts on `&map=NAME` (e.g. `maze`), else the town. */
+let currentMap = new URLSearchParams(location.search).get("map")?.replace(/[^\w-]/g, "") || "overworld";
+
+/** A map and its tiles, from `npm run build-tiles` (public/maps/, gitignored). Loaded once, on first visit. */
+function loadMap(load: Phaser.Loader.LoaderPlugin, name: string) {
+  if (load.cacheManager.tilemap.exists(mapKey(name))) return;
+  load.tilemapTiledJSON(mapKey(name), `maps/${name}.json`);
+  load.image(tilesKey(name), `maps/${name}.png`);
+}
+
+/** Called from Boot: the characters and the first map. */
 export function loadOverworld(load: Phaser.Loader.LoaderPlugin) {
-  load.tilemapTiledJSON(MAP, `maps/${MAP_NAME}.json`);
-  load.image(TILES, `maps/${MAP_NAME}.png`);
+  loadMap(load, currentMap);
   load.spritesheet(PLAYER, "assets/overworld/player.png", { frameWidth: 32, frameHeight: 32 });
   // One frame per character: Yugi, Kaiba, Joey, Bonz.
   load.spritesheet(NPC_SHEET, "assets/overworld/npcs.png", { frameWidth: 32, frameHeight: 32 });
@@ -31,20 +39,24 @@ interface NpcDef {
   deck: DeckName;
 }
 
-// Placeholder text until real dialog is written. They stand on the overworld map only.
-const NPCS: NpcDef[] = MAP_NAME !== "overworld" ? [] : [
-  { name: "Yugi", frame: 0, x: 500, y: 440, text: "Hey! Do you want to duel?", deck: "yugi" },
-  { name: "Kaiba", frame: 1, x: 680, y: 440, text: "Hmph. Do you think you can beat me?", deck: "kaiba" },
-  { name: "Joey", frame: 2, x: 160, y: 690, text: "Yo! Wanna see my Red-Eyes?", deck: "dragonsRoar" },
-  { name: "Bonz", frame: 3, x: 120, y: 150, text: "Heh heh... care for a shadow game?", deck: "zombieMadness" },
-];
+// NPCs by map. Placeholder text until real dialog is written.
+const NPCS: Record<string, NpcDef[]> = {
+  overworld: [
+    { name: "Yugi", frame: 0, x: 500, y: 440, text: "Hey! Do you want to duel?", deck: "yugi" },
+    { name: "Kaiba", frame: 1, x: 680, y: 440, text: "Hmph. Do you think you can beat me?", deck: "kaiba" },
+    { name: "Joey", frame: 2, x: 160, y: 690, text: "Yo! Wanna see my Red-Eyes?", deck: "dragonsRoar" },
+    { name: "Bonz", frame: 3, x: 120, y: 150, text: "Heh heh... care for a shadow game?", deck: "zombieMadness" },
+  ],
+};
 
-const TALK_DISTANCE = 56, SPEED = 100;
+const TALK_DISTANCE = 56, SPEED = 100, FADE_MS = 200;
 type Facing = "down" | "side" | "up";
 const IDLE_FRAME: Record<Facing, number> = { down: 2, side: 5, up: 8 };
 
 /** Where the player stood when they left for a duel or the lobby, and who they were dueling. */
 let saved: { x: number; y: number; facing: Facing; flipX: boolean; opponent?: string } | null = null;
+/** Set when walking through a warp: the point to arrive at, and the height to keep (maps placed side by side). */
+let arrival: { spawn: string; y?: number; facing: Facing; flipX: boolean } | null = null;
 
 /**
  * The overworld: a Tiled map, the player (arrow keys) and NPCs to talk to (X). Saying yes to an NPC starts a duel
@@ -63,6 +75,8 @@ export class Overworld extends Phaser.Scene {
   private talkHint!: Phaser.GameObjects.BitmapText;
   private facing: Facing = "down";
   private duelResult: { won: boolean } | undefined;
+  /** Fading out towards another map: no second warp, no movement. */
+  private warping = false;
   /** Chips (placeholder: nothing earns or spends them yet). */
   private chips = 2;
 
@@ -72,16 +86,22 @@ export class Overworld extends Phaser.Scene {
 
   init(data: { duelResult?: { won: boolean } }) {
     this.duelResult = data?.duelResult;
+    this.warping = false;
+  }
+
+  /** A map visited for the first time (through a warp) loads here. */
+  preload() {
+    loadMap(this.load, currentMap);
   }
 
   create() {
     this.scene.launch("WorldMenu");
-    if (!this.cache.tilemap.exists(MAP)) {
+    if (!this.cache.tilemap.exists(mapKey(currentMap))) {
       text(this, 320, 170, "NO MAP: RUN NPM RUN BUILD-TILES (NEEDS VENDOR/PAID)", { color: WHITE, originX: 0.5 });
       return;
     }
-    const map = this.make.tilemap({ key: MAP });
-    const tileset = map.addTilesetImage("world", TILES)!;
+    const map = this.make.tilemap({ key: mapKey(currentMap) });
+    const tileset = map.addTilesetImage("world", tilesKey(currentMap))!;
 
     // Ground layers (ground, ground2, ground3...): no collision, always under everything.
     const grounds = map.layers.filter((l) => l.name.startsWith("ground")).map((l) => map.createLayer(l.name, tileset, 0, 0)!);
@@ -107,17 +127,24 @@ export class Overworld extends Phaser.Scene {
     walk("walk-up", 6, 7, 4);
 
     // The 32px character frames are drawn at 2x. Body size/offset are in frame pixels and scale with the sprite.
-    // A map can place the start with a point object named "spawn" (layer "objects").
-    const spawn = map.findObject("objects", (o) => o.name === "spawn");
-    this.player = this.physics.add.sprite(saved?.x ?? spawn?.x ?? 400, saved?.y ?? spawn?.y ?? 520, PLAYER).setScale(2);
+    // Start: back from a duel on the same spot, through a warp at its arrival point (layer "objects"), else at the
+    // map's point named "spawn".
+    const point = (name: string) => map.findObject("objects", (o) => o.name === name);
+    const at = arrival ? point(arrival.spawn) : point("spawn");
+    const x = saved?.x ?? at?.x ?? 400;
+    let y = saved?.y ?? arrival?.y ?? at?.y ?? 520;
+    if (!saved) y = this.freeY(x, y);
+    this.player = this.physics.add.sprite(x, y, PLAYER).setScale(2);
     this.player.body.setSize(16, 16, false).setOffset(8, 16);
     // Snapped like the (unscaled) map, which "safeAuto" would skip at 2x: no half-pixel shimmer against the ground.
     this.player.vertexRoundMode = "fullAuto";
     this.player.setCollideWorldBounds(true);
-    if (saved) {
-      this.facing = saved.facing;
-      this.player.setFlipX(saved.flipX);
+    const facing = saved ?? arrival;
+    if (facing) {
+      this.facing = facing.facing;
+      this.player.setFlipX(facing.flipX);
     }
+    arrival = null;
     this.player.setFrame(IDLE_FRAME[this.facing]);
     for (const walls of this.walls) this.physics.add.collider(this.player, walls);
     if (this.blockers) this.physics.add.collider(this.player, this.blockers);
@@ -125,7 +152,7 @@ export class Overworld extends Phaser.Scene {
 
     // NPCs are y-sorted against the player and the walls, see sortByFeet().
     this.npcs = this.physics.add.staticGroup();
-    for (const def of NPCS) {
+    for (const def of NPCS[currentMap] ?? []) {
       const npc = (this.npcs.create(def.x, def.y, NPC_SHEET, def.frame) as Phaser.Physics.Arcade.Sprite).setScale(2).refreshBody();
       // Static bodies use world pixels: a 32x32 box at the feet, like the player's.
       npc.body!.setSize(32, 32, false).setOffset(16, 32);
@@ -134,6 +161,17 @@ export class Overworld extends Phaser.Scene {
       this.sortByFeet(npc);
     }
     this.physics.add.collider(this.player, this.npcs);
+
+    // Warps: rectangles named "warp" (layer "objects") with properties map (target map) and spawn (the point to
+    // arrive at there); keepY keeps the player's height, for maps placed side by side with their tops aligned.
+    for (const o of map.getObjectLayer("objects")?.objects ?? []) {
+      if (o.name !== "warp") continue;
+      const prop = (name: string) => (o.properties as { name: string; value: unknown }[] | undefined)?.find((p) => p.name === name)?.value;
+      const zone = this.add.zone(o.x! + o.width! / 2, o.y! + o.height! / 2, o.width!, o.height!);
+      this.physics.add.existing(zone, true);
+      this.physics.add.overlap(this.player, zone, () =>
+        this.warp(String(prop("map")), String(prop("spawn")), prop("keepY") === true));
+    }
 
     text(this, 8, 8, `CHIPS: ${this.chips}`, { color: WHITE, scale: 2 }).setScrollFactor(0).setDepth(100);
     this.talkHint = text(this, 0, 0, "X", { color: 0xffd75e, scale: 2 }).setDepth(150).setVisible(false);
@@ -149,6 +187,7 @@ export class Overworld extends Phaser.Scene {
     // half-pixel scrolls the baked wall strips then leave 1px seams.
     this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels).startFollow(this.player, true);
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
+    this.cameras.main.fadeIn(FADE_MS);
     this.cursors = this.input.keyboard!.createCursorKeys();
 
     const opponent = saved?.opponent;
@@ -159,6 +198,33 @@ export class Overworld extends Phaser.Scene {
       this.time.delayedCall(0, () => this.dialog.open(opponent, won ? "Not bad... you got me this time." : "Better luck next time!",
         ["OK"], () => {}, this.player));
     }
+  }
+
+  /** Fades out and starts the target map at its arrival point. */
+  private warp(mapName: string, spawn: string, keepY: boolean) {
+    if (this.warping) return;
+    this.warping = true;
+    this.player.setVelocity(0, 0);
+    arrival = { spawn, y: keepY ? Math.round(this.player.y) : undefined, facing: this.facing, flipX: this.player.flipX };
+    this.cameras.main.fadeOut(FADE_MS);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      currentMap = mapName;
+      this.scene.restart();
+    });
+  }
+
+  /**
+   * The nearest y (stepping a tile at a time, up to 10) where the player's feet box at x is clear of walls, for arrival
+   * points that may land on something solid (a warp keeping the height across maps).
+   */
+  private freeY(x: number, y: number): number {
+    const clear = (yy: number) => [...this.walls, ...(this.blockers ? [this.blockers] : [])]
+      .every((l) => l.getTilesWithinWorldXY(x - 15, yy + 1, 30, 30, { isColliding: true }).length === 0);
+    for (let d = 0; d <= 160; d += 16) {
+      if (clear(y + d)) return y + d;
+      if (clear(y - d)) return y - d;
+    }
+    return y;
   }
 
   private menuOpen() {
@@ -317,6 +383,10 @@ export class Overworld extends Phaser.Scene {
 
   update() {
     if (!this.player) return;
+    if (this.warping) {
+      this.player.setVelocity(0, 0);
+      return;
+    }
     if (this.dialog.isOpen || this.menuOpen()) {
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
