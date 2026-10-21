@@ -9,11 +9,13 @@ import type { DuelSceneData } from "./DuelScene.ts";
 import type { WorldMenu } from "./WorldMenu.ts";
 
 const MAP = "overworld-map", TILES = "overworld-tiles", PLAYER = "overworld-player", NPC_SHEET = "overworld-npcs";
+/** Which map to show: `&map=NAME` (data/maps/NAME.tmj, e.g. `maze`) until maps link to each other. */
+const MAP_NAME = new URLSearchParams(location.search).get("map")?.replace(/[^\w-]/g, "") || "overworld";
 
 /** Called from Boot. The map and its tiles come from `npm run build-tiles` (public/maps/, gitignored). */
 export function loadOverworld(load: Phaser.Loader.LoaderPlugin) {
-  load.tilemapTiledJSON(MAP, "maps/overworld.json");
-  load.image(TILES, "maps/overworld.png");
+  load.tilemapTiledJSON(MAP, `maps/${MAP_NAME}.json`);
+  load.image(TILES, `maps/${MAP_NAME}.png`);
   load.spritesheet(PLAYER, "assets/overworld/player.png", { frameWidth: 32, frameHeight: 32 });
   // One frame per character: Yugi, Kaiba, Joey, Bonz.
   load.spritesheet(NPC_SHEET, "assets/overworld/npcs.png", { frameWidth: 32, frameHeight: 32 });
@@ -29,8 +31,8 @@ interface NpcDef {
   deck: DeckName;
 }
 
-// Placeholder text until real dialog is written.
-const NPCS: NpcDef[] = [
+// Placeholder text until real dialog is written. They stand on the overworld map only.
+const NPCS: NpcDef[] = MAP_NAME !== "overworld" ? [] : [
   { name: "Yugi", frame: 0, x: 500, y: 440, text: "Hey! Do you want to duel?", deck: "yugi" },
   { name: "Kaiba", frame: 1, x: 680, y: 440, text: "Hmph. Do you think you can beat me?", deck: "kaiba" },
   { name: "Joey", frame: 2, x: 160, y: 690, text: "Yo! Wanna see my Red-Eyes?", deck: "dragonsRoar" },
@@ -52,6 +54,8 @@ export class Overworld extends Phaser.Scene {
   private player!: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
   private npcs!: Phaser.Physics.Arcade.StaticGroup;
   private walls!: Phaser.Tilemaps.TilemapLayer;
+  /** The map's hidden "collision" layer, if it has one. */
+  private blockers: Phaser.Tilemaps.TilemapLayer | null = null;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   /** On-screen D-pad and X on touch devices. */
   private pad: TouchPad | null = null;
@@ -79,8 +83,13 @@ export class Overworld extends Phaser.Scene {
     const map = this.make.tilemap({ key: MAP });
     const tileset = map.addTilesetImage("world", TILES)!;
 
-    // Ground layers: no collision, always under everything.
-    this.bake([map.createLayer("ground", tileset, 0, 0)!, map.createLayer("ground2", tileset, 0, 0)!]).setDepth(0);
+    // Ground layers (ground, ground2, ground3...): no collision, always under everything.
+    const grounds = map.layers.filter((l) => l.name.startsWith("ground")).map((l) => map.createLayer(l.name, tileset, 0, 0)!);
+    this.bake(grounds).setDepth(0);
+
+    // Optional hidden "collision" layer: every tile in it blocks, whatever it shows (a map's exact footprints).
+    this.blockers = map.getLayerIndex("collision") === null ? null
+      : (map.createLayer("collision", tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false).setCollisionByExclusion([-1]);
 
     // The walls layer is only used for collision and is not drawn: its tiles are redrawn in y-sorted layers.
     this.walls = (map.createLayer("walls", tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false);
@@ -97,8 +106,12 @@ export class Overworld extends Phaser.Scene {
     walk("walk-up", 6, 7, 4);
 
     // The 32px character frames are drawn at 2x. Body size/offset are in frame pixels and scale with the sprite.
-    this.player = this.physics.add.sprite(saved?.x ?? 400, saved?.y ?? 520, PLAYER).setScale(2);
+    // A map can place the start with a point object named "spawn" (layer "objects").
+    const spawn = map.findObject("objects", (o) => o.name === "spawn");
+    this.player = this.physics.add.sprite(saved?.x ?? spawn?.x ?? 400, saved?.y ?? spawn?.y ?? 520, PLAYER).setScale(2);
     this.player.body.setSize(16, 16, false).setOffset(8, 16);
+    // Snapped like the (unscaled) map, which "safeAuto" would skip at 2x: no half-pixel shimmer against the ground.
+    this.player.vertexRoundMode = "fullAuto";
     this.player.setCollideWorldBounds(true);
     if (saved) {
       this.facing = saved.facing;
@@ -106,6 +119,7 @@ export class Overworld extends Phaser.Scene {
     }
     this.player.setFrame(IDLE_FRAME[this.facing]);
     this.physics.add.collider(this.player, this.walls);
+    if (this.blockers) this.physics.add.collider(this.player, this.blockers);
     this.sortByFeet(this.player);
 
     // NPCs are y-sorted against the player and the walls, see sortByFeet().
@@ -115,6 +129,7 @@ export class Overworld extends Phaser.Scene {
       // Static bodies use world pixels: a 32x32 box at the feet, like the player's.
       npc.body!.setSize(32, 32, false).setOffset(16, 32);
       npc.setData("def", def);
+      npc.vertexRoundMode = "fullAuto";
       this.sortByFeet(npc);
     }
     this.physics.add.collider(this.player, this.npcs);
@@ -129,7 +144,9 @@ export class Overworld extends Phaser.Scene {
     // Key events rather than JustDown polling, so quick taps are never missed.
     this.input.keyboard!.on("keydown", (event: KeyboardEvent) => this.handleKey(event.code));
 
-    this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels).startFollow(this.player);
+    // roundPixels: startFollow's default (false) would switch off the game's pixel snapping for this camera, and at
+    // half-pixel scrolls the baked wall strips then leave 1px seams.
+    this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels).startFollow(this.player, true);
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     this.cursors = this.input.keyboard!.createCursorKeys();
 
@@ -171,14 +188,19 @@ export class Overworld extends Phaser.Scene {
    *    so a whole tree sorts by its trunk
    *  - if there is none in that column (edge of a tree crown), the lowest collision tile of the connected group
    *  - purely decorative groups with no collision use their own bottom edge
+   * A cell of the "collision" layer counts as a collision tile, with or without a wall tile on it (a tree whose trunk
+   * is drawn on a ground layer still sorts by it).
    */
   private wallBaseY(layer: Phaser.Tilemaps.TilemapLayer): Map<Phaser.Tilemaps.Tile, number> {
     const { width: w, height: h } = layer.layer;
+    const tileH = layer.tilemap.tileHeight;
     const get = (x: number, y: number) => {
       const t = layer.getTileAt(x, y);
       return t && t.index !== -1 ? t : null;
     };
-    const collides = (t: Phaser.Tilemaps.Tile) => !!(t.properties as { collision?: boolean })?.collision;
+    const blocked = (x: number, y: number) => !!this.blockers?.hasTileAt(x, y);
+    const collides = (t: Phaser.Tilemaps.Tile) => !!(t.properties as { collision?: boolean })?.collision || blocked(t.x, t.y);
+    const solid = (x: number, y: number) => { const t = get(x, y); return t ? collides(t) : blocked(x, y); };
 
     const groupBase = new Map<Phaser.Tilemaps.Tile, number>();
     const seen = new Set<Phaser.Tilemaps.Tile>();
@@ -211,10 +233,9 @@ export class Overworld extends Phaser.Scene {
       if (!collides(tile)) {
         // Walk down the column to the first collision tile, then to the end of that run.
         let y = tile.y + 1;
-        let t = get(tile.x, y);
-        while (t && !collides(t)) t = get(tile.x, ++y);
-        if (t) {
-          while (t && collides(t)) { baseY = t.bottom; t = get(tile.x, ++y); }
+        while (y < h && get(tile.x, y) && !solid(tile.x, y)) y++;
+        if (y < h && solid(tile.x, y)) {
+          while (y < h && solid(tile.x, y)) baseY = (++y) * tileH;
         } else {
           const group = groupBase.get(tile) ?? -1;
           baseY = group >= 0 ? group : tile.bottom;

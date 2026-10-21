@@ -20,6 +20,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` (gitignored) |
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
 | `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled) + its external tileset `data/maps/modern-exteriors.tsj` (image = the paid sheet in `vendor/paid/`) → `public/maps/<name>.png` (only the tiles the map uses) + `<name>.json` (tile ids remapped) |
+| `node tools/hedge-maze.mjs data/maps/maze-layout.json data/maps/maze.tmj` | maze layout (walls per grid line, extracted from the owner's maze picture) → hedge maze map: hedges auto-tiled from the sheet's hedge ring (flowered hedges after each fork of the right path, a subtle hint), meadows left/right, pine forests above/below (the only way across is the maze), ground decorations, the hidden `collision` layer and a `spawn` point at the entrance; **overwrites** the .tmj (Tiled edits lost), then `build-tiles` |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
@@ -63,6 +64,7 @@ logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`)
 to the console (also in the deployed game, for misplay reports), after a first line with the duel seed, who went first,
 the decks and brain and a `?duel&seed=…&first=…` URL that replays the same duel (duels vs the AI always use a seed that fits `&seed=N`); with it, the L key logs the whole board, both hands and set
 cards included (`src/duel/boardText.ts`),
+`&map=NAME` shows another map instead of the overworld (`maze`; the player starts at its `spawn` point object, NPCs stand on the overworld only),
 `&touch` shows the overworld's touch controls on a desktop (phones get them automatically: `TOUCH` in `src/ui/touch.ts` = coarse pointer),
 `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
 Use `&timeout` for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look
@@ -165,7 +167,7 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   seed; then rock-paper-scissors packets (`rps` hands, the winner's `order`) decide the seats. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (the Tiled map from `build-tiles`, Arcade physics (scene-local
-  config), arrow keys; wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`); ground and wall layers are baked into RenderTextures once (`bake`: live tilemap layers re-culled every tile each frame: 4.2 → 0.6 ms a frame on a desktop);
+  config), arrow keys; wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`); ground layers (every `ground*` layer, in map order) and wall layers are baked into RenderTextures once; an optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision for the y-sort (walls' own tiles collide by the tileset's `collision` property) (`bake`: live tilemap layers re-culled every tile each frame: 4.2 → 0.6 ms a frame on a desktop);
   32px character frames drawn at 2x; NPCs (`NPCS`: name, text, their own deck) talk with X / Enter / Space in a
   `DialogBox` (`src/ui/DialogBox.ts`, tiny5 at 2x, clickable options); YES starts a duel, and the player comes back to the
   same spot (`savePosition`) with the NPC's line about the result; on touch devices a semi-transparent D-pad (diagonals,
