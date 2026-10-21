@@ -18,3 +18,5 @@ public/cards/
 /assets/
 # Dev frame captures / GIFs (src/dev/capture.ts, tools/make-gif.mjs)
 captures/
+# TiledMCP checkpoints (undo history for map edits made through the Tiled MCP server)
+.tiledmcp/

@@ -19,7 +19,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run check-cards` | list pool cards using mechanics the UI doesn't fully support yet (declare, counters, equips, tokens, fusions...) |
 | `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` (gitignored) |
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
-| `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled) + the paid tileset in `vendor/paid/` → `public/maps/<name>.png` (only the tiles the map uses) + `<name>.json` (tile ids remapped) |
+| `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled) + its external tileset `data/maps/modern-exteriors.tsj` (image = the paid sheet in `vendor/paid/`) → `public/maps/<name>.png` (only the tiles the map uses) + `<name>.json` (tile ids remapped) |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
@@ -34,6 +34,11 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`, then
 `git clone https://github.com/Draovar/yugioh_rpg-assets.git vendor/paid && npm run build-tiles` (private repo with the
 paid art packs; without it the overworld shows a "no map" message, duels still work).
+Maps can be edited through the Tiled MCP server (`tiled` in `.mcp.json`, local paths: PengLx/TiledMCP built in
+`D:/Programming/tools/TiledMCP`, branch `windows-dir-fsync` = a local fix, directory fsync fails with EPERM on Windows).
+It edits only maps whose tilesets are external `.tsj` files inside the repo; edits go preview → `tiled_apply_change_set`,
+with undo checkpoints in `.tiledmcp/` (gitignored). `tiled_render_preview` refuses the 92 MP LimeZu sheet (16 MP limit):
+check maps with `build-tiles` + the game instead. Edited tile layers are saved on one line; Tiled re-wraps them on save.
 After changing `data/pool.json`, rerun `build-data`, `check-cards`, `fetch-art`, `build-art`, then `smoke` (it validates
 the decks in `src/duel/decks.ts` and plays every deck pairing). `fetch-art`/`build-art` read `public/data/cards.json`, so
 tokens get art too.

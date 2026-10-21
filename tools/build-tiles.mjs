@@ -1,6 +1,6 @@
 // Packs the overworld maps' tiles. The paid tileset (LimeZu Modern Exteriors, 5632x16448) is taller than most GPUs'
 // max texture size and may not go into the public repo, so each map gets only the tiles it uses:
-//   data/maps/<name>.tmj (Tiled, committed) + vendor/paid/<tileset image> (private assets repo, gitignored)
+//   data/maps/<name>.tmj + its tileset data/maps/*.tsj (Tiled, committed) + vendor/paid/<tileset image> (private assets repo, gitignored)
 //   → public/maps/<name>.png (used tiles, 32 per row) + public/maps/<name>.json (the map with its tile ids remapped)
 // vendor/paid is a clone of the private Draovar/yugioh_rpg-assets repo (the deploy checks it out with a deploy key).
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -30,8 +30,11 @@ async function sheet(image) {
 
 async function pack(name) {
   const map = JSON.parse(readFileSync(path.join(MAPS, `${name}.tmj`), "utf-8"));
-  if (map.tilesets.length !== 1 || !map.tilesets[0].image) throw new Error(`${name}: expected one embedded tileset`);
-  const set = map.tilesets[0];
+  if (map.tilesets.length !== 1) throw new Error(`${name}: expected one tileset`);
+  // External tilesets (data/maps/*.tsj, what Tiled and the Tiled MCP server edit) are inlined: Phaser needs them embedded.
+  const ref = map.tilesets[0];
+  const set = ref.source ? { ...JSON.parse(readFileSync(path.join(MAPS, ref.source), "utf-8")), firstgid: ref.firstgid } : ref;
+  if (!set.image) throw new Error(`${name}: expected an image tileset`);
   const { tilewidth: tw, tileheight: th } = set;
   const layers = map.layers.filter((l) => l.type === "tilelayer");
 
@@ -67,7 +70,8 @@ async function pack(name) {
   }
   // Custom tile properties (collision) for the tiles we kept.
   const tiles = (set.tiles ?? []).filter((t) => remap.has(t.id + set.firstgid)).map((t) => ({ ...t, id: remap.get(t.id + set.firstgid) - 1 }));
-  map.tilesets[0] = { ...set, firstgid: 1, image: `${name}.png`, columns: COLUMNS, tilecount: remap.size,
+  const { type, version, tiledversion, ...embedded } = set;
+  map.tilesets[0] = { ...embedded, firstgid: 1, image: `${name}.png`, columns: COLUMNS, tilecount: remap.size,
     imagewidth: width, imageheight: height, margin: 0, spacing: 0, tiles };
   writeFileSync(path.join(OUT, `${name}.json`), JSON.stringify(map));
   console.log(`${name}: ${remap.size} tiles → public/maps/${name}.png (${width}x${height})`);
