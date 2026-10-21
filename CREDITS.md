@@ -18,6 +18,8 @@
 - **3x3 Font for Nerds** — Norwegian Ink (www.noink.no). *No license found (checked 2026-10: none in the font file, noink.no is gone); kept by the project owner's choice for this non-commercial project.*
 - **Modern Exteriors** tileset by **LimeZu** (paid pack, https://limezu.itch.io): overworld map tiles. Not in this
   repository; only the tiles the maps use are packed into the built game.
+- Overworld characters, props and reaction balloons — from *Yu-Gi-Oh! Reshef of Destruction* (© Konami), sheet ripped
+  by **Darkbolt99** (The Spriters Resource); sliced by `tools/build-characters.mjs`.
 - Card frames, card back, attribute icons, Spell/Trap kind icons and level star — made for this project.
 - **tiny5** pixel font — made for this project.
 

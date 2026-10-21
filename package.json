@@ -22,7 +22,8 @@
     "build-fonts": "node tools/build-pixel-font.mjs public/assets/fonts/3x3_font_for_nerds.ttf nerds3 228.3 && node tools/build-tiny5-font.mjs",
     "build-art": "node tools/build-art.mjs",
     "build-palette": "node tools/build-palette.mjs",
-    "build-tiles": "node tools/build-tiles.mjs"
+    "build-tiles": "node tools/build-tiles.mjs",
+    "build-characters": "node tools/build-characters.mjs"
   },
   "dependencies": {
     "ocgcore-wasm": "^0.1.2",

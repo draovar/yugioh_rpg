@@ -8,7 +8,7 @@ import { TOUCH } from "../ui/touch.ts";
 import type { DuelSceneData } from "./DuelScene.ts";
 import type { WorldMenu } from "./WorldMenu.ts";
 
-const PLAYER = "overworld-player", NPC_SHEET = "overworld-npcs";
+const CHARACTERS = "overworld-characters";
 const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
 /** The map the player is on (data/maps/NAME.tmj). Starts on `&map=NAME` (e.g. `maze`), else the town. */
@@ -24,15 +24,38 @@ function loadMap(load: Phaser.Loader.LoaderPlugin, name: string) {
 /** Called from Boot: the characters and the first map. */
 export function loadOverworld(load: Phaser.Loader.LoaderPlugin) {
   loadMap(load, currentMap);
-  load.spritesheet(PLAYER, "assets/overworld/player.png", { frameWidth: 32, frameHeight: 32 });
-  // One frame per character: Yugi, Kaiba, Joey, Bonz.
-  load.spritesheet(NPC_SHEET, "assets/overworld/npcs.png", { frameWidth: 32, frameHeight: 32 });
+  // Every character, from `npm run build-characters` (data/characters/); names in characters.json, picks in
+  // docs/characters.png.
+  load.spritesheet(CHARACTERS, "assets/overworld/characters.png", { frameWidth: 32, frameHeight: 32 });
+  load.json(CHARACTERS, "assets/overworld/characters.json");
+}
+
+type Facing = "down" | "side" | "up";
+const FACINGS: Facing[] = ["down", "side", "up"];
+
+/** A character's frame in characters.png: 9 per character, down / side (facing right) / up × stand, step, step. */
+function frameOf(scene: Phaser.Scene, name: string, facing: Facing, step = 0): number {
+  const index = (scene.cache.json.get(CHARACTERS) as { names: string[] }).names.indexOf(name);
+  if (index < 0) throw new Error(`no character "${name}" in characters.json`);
+  return index * 9 + FACINGS.indexOf(facing) * 3 + step;
+}
+
+/** The character's walk animation for a facing (step, stand, other step, stand), created on first use. */
+function walkAnim(scene: Phaser.Scene, name: string, facing: Facing): string {
+  const key = `${name}-walk-${facing}`;
+  if (!scene.anims.exists(key)) {
+    const frames = [1, 0, 2, 0].map((step) => ({ key: CHARACTERS, frame: frameOf(scene, name, facing, step) }));
+    scene.anims.create({ key, frames, frameRate: 8, repeat: -1 });
+  }
+  return key;
 }
 
 interface NpcDef {
   name: string;
-  /** Frame in npcs.png. */
-  frame: number;
+  /** Character in characters.json (docs/characters.png shows them all). */
+  sprite: string;
+  /** Where they look while nobody talks to them (default down; side = right, left = side flipped). */
+  facing?: Facing | "left";
   x: number;
   y: number;
   text: string;
@@ -42,16 +65,14 @@ interface NpcDef {
 // NPCs by map. Placeholder text until real dialog is written.
 const NPCS: Record<string, NpcDef[]> = {
   overworld: [
-    { name: "Yugi", frame: 0, x: 500, y: 440, text: "Hey! Do you want to duel?", deck: "yugi" },
-    { name: "Kaiba", frame: 1, x: 680, y: 440, text: "Hmph. Do you think you can beat me?", deck: "kaiba" },
-    { name: "Joey", frame: 2, x: 160, y: 690, text: "Yo! Wanna see my Red-Eyes?", deck: "dragonsRoar" },
-    { name: "Bonz", frame: 3, x: 120, y: 150, text: "Heh heh... care for a shadow game?", deck: "zombieMadness" },
+    { name: "Yugi", sprite: "yugi", x: 500, y: 440, text: "Hey! Do you want to duel?", deck: "yugi" },
+    { name: "Kaiba", sprite: "kaiba", x: 680, y: 440, text: "Hmph. Do you think you can beat me?", deck: "kaiba" },
+    { name: "Joey", sprite: "joey", x: 160, y: 690, text: "Yo! Wanna see my Red-Eyes?", deck: "dragonsRoar" },
+    { name: "Bonz", sprite: "bonz", x: 120, y: 150, text: "Heh heh... care for a shadow game?", deck: "zombieMadness" },
   ],
 };
 
 const TALK_DISTANCE = 56, SPEED = 100, FADE_MS = 200;
-type Facing = "down" | "side" | "up";
-const IDLE_FRAME: Record<Facing, number> = { down: 2, side: 5, up: 8 };
 
 /** Where the player stood when they left for a duel or the lobby, and who they were dueling. */
 let saved: { x: number; y: number; facing: Facing; flipX: boolean; opponent?: string } | null = null;
@@ -117,15 +138,6 @@ export class Overworld extends Phaser.Scene {
       (map.createLayer(l.name, tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false).setCollisionByProperty({ collision: true }));
     this.buildSortedWalls(map, tileset, this.walls);
 
-    const walk = (key: string, start: number, end: number, frameRate: number) => {
-      if (!this.anims.exists(key)) {
-        this.anims.create({ key, frames: this.anims.generateFrameNumbers(PLAYER, { start, end }), frameRate, repeat: -1 });
-      }
-    };
-    walk("walk-down", 0, 1, 4);
-    walk("walk-side", 3, 5, 6);
-    walk("walk-up", 6, 7, 4);
-
     // The 32px character frames are drawn at 2x. Body size/offset are in frame pixels and scale with the sprite.
     // Start: back from a duel on the same spot, through a warp at its arrival point (layer "objects"), else at the
     // map's point named "spawn".
@@ -134,7 +146,7 @@ export class Overworld extends Phaser.Scene {
     const x = saved?.x ?? at?.x ?? 400;
     let y = saved?.y ?? arrival?.y ?? at?.y ?? 520;
     if (!saved) y = this.freeY(x, y);
-    this.player = this.physics.add.sprite(x, y, PLAYER).setScale(2);
+    this.player = this.physics.add.sprite(x, y, CHARACTERS, frameOf(this, "player", "down")).setScale(2);
     this.player.body.setSize(16, 16, false).setOffset(8, 16);
     // Snapped like the (unscaled) map, which "safeAuto" would skip at 2x: no half-pixel shimmer against the ground.
     this.player.vertexRoundMode = "fullAuto";
@@ -145,7 +157,7 @@ export class Overworld extends Phaser.Scene {
       this.player.setFlipX(facing.flipX);
     }
     arrival = null;
-    this.player.setFrame(IDLE_FRAME[this.facing]);
+    this.player.setFrame(frameOf(this, "player", this.facing));
     for (const walls of this.walls) this.physics.add.collider(this.player, walls);
     if (this.blockers) this.physics.add.collider(this.player, this.blockers);
     this.sortByFeet(this.player);
@@ -153,10 +165,11 @@ export class Overworld extends Phaser.Scene {
     // NPCs are y-sorted against the player and the walls, see sortByFeet().
     this.npcs = this.physics.add.staticGroup();
     for (const def of NPCS[currentMap] ?? []) {
-      const npc = (this.npcs.create(def.x, def.y, NPC_SHEET, def.frame) as Phaser.Physics.Arcade.Sprite).setScale(2).refreshBody();
+      const npc = (this.npcs.create(def.x, def.y, CHARACTERS) as Phaser.Physics.Arcade.Sprite).setScale(2).refreshBody();
+      npc.setData("def", def);
+      this.face(npc, def.facing ?? "down");
       // Static bodies use world pixels: a 32x32 box at the feet, like the player's.
       npc.body!.setSize(32, 32, false).setOffset(16, 32);
-      npc.setData("def", def);
       npc.vertexRoundMode = "fullAuto";
       this.sortByFeet(npc);
     }
@@ -370,9 +383,19 @@ export class Overworld extends Phaser.Scene {
     return best;
   }
 
+  /** Shows an NPC's standing frame for a facing ("left" = the side view flipped). */
+  private face(npc: Phaser.Physics.Arcade.Sprite, facing: Facing | "left") {
+    const def = npc.getData("def") as NpcDef | undefined;
+    npc.setFrame(frameOf(this, def?.sprite ?? "", facing === "left" ? "side" : facing)).setFlipX(facing === "left");
+  }
+
   private talkTo(npc: Phaser.Physics.Arcade.Sprite) {
     const def = npc.getData("def") as NpcDef;
+    // The NPC turns to the player while talking (the larger offset decides), then back.
+    const dx = this.player.x - npc.x, dy = this.player.y - npc.y;
+    this.face(npc, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "side" : "left") : dy > 0 ? "down" : "up");
     this.dialog.open(def.name, def.text, ["Yes", "No"], (choice) => {
+      this.face(npc, def.facing ?? "down");
       if (choice !== "Yes") return;
       this.savePosition(def.name);
       const data: DuelSceneData = { opponentName: def.name, playerDeck: chosenDeck().deck, opponentDeck: DECKS[def.deck].deck };
@@ -390,7 +413,7 @@ export class Overworld extends Phaser.Scene {
     if (this.dialog.isOpen || this.menuOpen()) {
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.player.setFrame(IDLE_FRAME[this.facing]);
+      this.player.setFrame(frameOf(this, "player", this.facing));
       this.talkHint.setVisible(false);
       return;
     }
@@ -414,10 +437,10 @@ export class Overworld extends Phaser.Scene {
     } else if (vy < 0) this.facing = "up";
     else if (vy > 0) this.facing = "down";
 
-    if (vx !== 0 || vy !== 0) this.player.play(`walk-${this.facing}`, true);
+    if (vx !== 0 || vy !== 0) this.player.play(walkAnim(this, "player", this.facing), true);
     else {
       this.player.anims.stop();
-      this.player.setFrame(IDLE_FRAME[this.facing]);
+      this.player.setFrame(frameOf(this, "player", this.facing));
     }
     this.sortByFeet(this.player);
   }

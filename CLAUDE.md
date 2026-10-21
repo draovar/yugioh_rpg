@@ -21,6 +21,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
 | `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled) + its external tileset `data/maps/modern-exteriors.tsj` (image = the paid sheet in `vendor/paid/`) → `public/maps/<name>.png` (only the tiles the map uses) + `<name>.json` (tile ids remapped) |
 | `node tools/hedge-maze.mjs data/maps/maze-layout.json data/maps/maze.tmj` | maze layout (walls per grid line, extracted from the owner's maze picture) → hedge maze map: hedges auto-tiled from the sheet's hedge ring (flowered hedges after each fork of the right path, a subtle hint), meadows left/right, pine forests above/below (the only way across is the maze), ground decorations, the hidden `collision` layer and a `spawn` point at the entrance; **overwrites** the .tmj (Tiled edits lost), then `build-tiles` |
+| `npm run build-characters` | overworld sprites: `data/characters/reshef-sheet.png` (every Reshef of Destruction character, green cells on a purple grid) sliced per `data/characters/characters.json` (name → 3x3 block or explicit cells per direction) → `public/assets/overworld/characters.png`+`.json` (one row of 9 32x32 frames per character: down / side (facing right) / up × stand, step, step), `props.png`+`.json`, `balloons.png`+`.json` (16x16 reaction balloons: heart, dots, exclaim, anger, sweat, question), and the contact sheet `docs/characters.png` with every name |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/build-tiny5-font.mjs`) |
@@ -168,11 +169,11 @@ choppy in screenshots. In dev builds `window.duelScene` exposes the scene (`.con
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - `src/scenes/` — Phaser scenes. `Boot` → `Overworld` (the Tiled map from `build-tiles`, Arcade physics (scene-local
   config), arrow keys; wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`); ground layers (every `ground*` layer, in map order) and wall layers (every `walls*` layer: walls, walls2...; they collide and y-sort together, a later layer drawn over an earlier one on the same base) are baked into RenderTextures once; an optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision for the y-sort (walls' own tiles collide by the tileset's `collision` property) (`bake`: live tilemap layers re-culled every tile each frame: 4.2 → 0.6 ms a frame on a desktop);
-  32px character frames drawn at 2x; maps link through `warp` rectangles in their `objects` layer (properties `map`,
+  32px character frames (`characters.png`, by name: `frameOf`, `walkAnim`) drawn at 2x; maps link through `warp` rectangles in their `objects` layer (properties `map`,
   `spawn` = the arrival point's name there, `keepY` = keep the height: town and maze sit side by side, tops aligned,
   town's right edge ↔ maze's left meadow, by the entrance); a warp fades out and restarts the scene on the target map (loaded on first
   visit in `preload`), an arrival on something solid is nudged to the nearest free spot (`freeY`);
-  NPCs (`NPCS`, per map: name, text, their own deck) talk with X / Enter / Space in a
+  NPCs (`NPCS`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn to the player while talking) talk with X / Enter / Space in a
   `DialogBox` (`src/ui/DialogBox.ts`, tiny5 at 2x, clickable options); YES starts a duel, and the player comes back to the
   same spot (`savePosition`) with the NPC's line about the result; on touch devices a semi-transparent D-pad (diagonals,
   keeps steering when the finger slides off) and X button (`src/ui/TouchPad.ts`), and the dialog sits between them) + `WorldMenu` (overlay scene launched by Overworld, so

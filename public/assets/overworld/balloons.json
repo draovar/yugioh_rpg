@@ -1,0 +1,31 @@
+{
+ "frameWidth": 16,
+ "frameHeight": 16,
+ "perRow": 6,
+ "balloons": {
+  "heart": {
+   "row": 0,
+   "frames": 3
+  },
+  "dots": {
+   "row": 1,
+   "frames": 4
+  },
+  "exclaim": {
+   "row": 2,
+   "frames": 5
+  },
+  "anger": {
+   "row": 3,
+   "frames": 3
+  },
+  "sweat": {
+   "row": 4,
+   "frames": 4
+  },
+  "question": {
+   "row": 5,
+   "frames": 6
+  }
+ }
+}
