@@ -4,7 +4,7 @@
 // stage. Results go to vendor/tune/ (gitignored): best.json (resumed on the next run) and log.jsonl.
 // Usage: npm run tune -- [--brain planner] [--rounds 20] [--quick 10] [--long 30] [--seed 1] [--jobs N]
 //   --quick / --long  duels per deck pairing and seat order in the first / second stage (x18 duels each)
-// Afterwards: compare best.json with the built-in weights (`npm run arena -- --a sim --b sim --wa vendor/tune/best.json`)
+// Afterwards: compare best.json with the built-in weights (`npm run arena -- --a planner --b planner --wa vendor/tune/best.json`)
 // and copy the winners into DEFAULT_WEIGHTS by hand.
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
@@ -13,15 +13,10 @@ import { DEFAULT_WEIGHTS, type Weights } from "../../src/duel/ai/board.ts";
 import { isBrainName, type BrainName } from "../../src/duel/ai/brains.ts";
 import { DECKS, type DeckName } from "../../src/duel/decks/decks.ts";
 import { mulberry32 } from "../../src/duel/engine/rng.ts";
+import { parseArgs } from "../lib/args.ts";
 import { matchJobs, runMatch, winRate, type Result } from "../lib/match.ts";
 
-const args = new Map<string, string>();
-const argv = process.argv.slice(2);
-for (let i = 0; i < argv.length; i++) {
-  if (!argv[i].startsWith("--")) continue;
-  const next = argv[i + 1];
-  args.set(argv[i].slice(2), next && !next.startsWith("--") ? argv[++i] : "");
-}
+const args = parseArgs();
 const brain = (args.get("brain") ?? "planner") as BrainName;
 if (!isBrainName(brain)) throw new Error(`unknown brain ${brain}`);
 const rounds = Number(args.get("rounds") ?? 20);

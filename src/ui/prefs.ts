@@ -5,6 +5,14 @@ import { DECK_RULES } from "../duel/decks/deckRules.ts";
 import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import type { Deck } from "../duel/engine/DuelSession.ts";
 
+function load(key: string): string | null {
+  try { return localStorage.getItem(key); } catch { return null; }
+}
+
+function store(key: string, value: string): void {
+  try { localStorage.setItem(key, value); } catch { /* storage unavailable */ }
+}
+
 const DECK_KEY = "deck";
 
 /** A deck the player built in the deck editor (saved in localStorage). */
@@ -21,9 +29,12 @@ export const MAX_CUSTOM_DECKS = 8;
 /** Deck choices that are custom decks: this prefix + the deck's id (prebuilt decks are chosen by their DeckName). */
 const CUSTOM_PREFIX = "custom:";
 
+/** The world menu's choice for a custom deck (to pick a deck right after saving it). */
+export const customDeckKey = (id: string) => CUSTOM_PREFIX + id;
+
 export function customDecks(): CustomDeck[] {
   try {
-    const list = JSON.parse(localStorage.getItem(CUSTOM_KEY) ?? "[]") as CustomDeck[];
+    const list = JSON.parse(load(CUSTOM_KEY) ?? "[]") as CustomDeck[];
     return Array.isArray(list) ? list.filter((d) => d && typeof d.id === "string" && Array.isArray(d.main)) : [];
   } catch { return []; }
 }
@@ -34,11 +45,11 @@ export function saveCustomDeck(deck: CustomDeck): void {
   const i = list.findIndex((d) => d.id === deck.id);
   if (i >= 0) list[i] = deck;
   else list.push(deck);
-  try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list)); } catch { /* storage unavailable */ }
+  store(CUSTOM_KEY, JSON.stringify(list));
 }
 
 export function deleteCustomDeck(id: string): void {
-  try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(customDecks().filter((d) => d.id !== id))); } catch { /* storage unavailable */ }
+  store(CUSTOM_KEY, JSON.stringify(customDecks().filter((d) => d.id !== id)));
 }
 
 /** A deck the world menu offers: `key` is a DeckName or `custom:<id>`. */
@@ -55,7 +66,7 @@ export interface DeckEntry {
 export function deckEntries(): DeckEntry[] {
   const prebuilt = (Object.keys(DECKS) as DeckName[]).map((name) => ({ key: name, label: DECKS[name].label, deck: DECKS[name].deck }));
   const custom = customDecks().filter((d) => d.main.length >= DECK_RULES.mainMin)
-    .map((d) => ({ key: CUSTOM_PREFIX + d.id, label: d.name, deck: { main: d.main, extra: d.extra } }));
+    .map((d) => ({ key: customDeckKey(d.id), label: d.name, deck: { main: d.main, extra: d.extra } }));
   return [...prebuilt, ...custom];
 }
 
@@ -66,36 +77,33 @@ function deckEntry(key: string | null, fallback: DeckName): DeckEntry {
 
 /** The deck the player picked in the world menu (vs the AI and in multiplayer). */
 export function chosenDeck(): DeckEntry {
-  try { return deckEntry(localStorage.getItem(DECK_KEY), "yugi"); } catch { return deckEntry(null, "yugi"); }
+  return deckEntry(load(DECK_KEY), "yugi");
 }
 
 export function setChosenDeck(key: string): void {
-  try { localStorage.setItem(DECK_KEY, key); } catch { /* storage unavailable */ }
+  store(DECK_KEY, key);
 }
-
-/** The world menu's choice for a custom deck (to pick a deck right after saving it). */
-export const customDeckKey = (id: string) => CUSTOM_PREFIX + id;
 
 const AI_DECK_KEY = "aiDeck";
 
 /** The deck the Rival (the AI) uses in a quick duel, picked in the world menu. */
 export function aiDeck(): DeckEntry {
-  try { return deckEntry(localStorage.getItem(AI_DECK_KEY), "kaiba"); } catch { return deckEntry(null, "kaiba"); }
+  return deckEntry(load(AI_DECK_KEY), "kaiba");
 }
 
 export function setAiDeck(key: string): void {
-  try { localStorage.setItem(AI_DECK_KEY, key); } catch { /* storage unavailable */ }
+  store(AI_DECK_KEY, key);
 }
 
 const REVEAL_KEY = "duel.revealAi";
 
 /** Testing aid from the world menu: show the AI's hand and set cards during duels. */
 export function revealAiCards(): boolean {
-  try { return localStorage.getItem(REVEAL_KEY) === "1"; } catch { return false; }
+  return load(REVEAL_KEY) === "1";
 }
 
 export function setRevealAiCards(on: boolean): void {
-  try { localStorage.setItem(REVEAL_KEY, on ? "1" : "0"); } catch { /* storage unavailable */ }
+  store(REVEAL_KEY, on ? "1" : "0");
 }
 
 const LOOK_KEY = "player.look";
@@ -104,11 +112,11 @@ export const PLAYER_LOOKS = { boy: { walk: "player", run: "player-run" }, girl: 
 export type PlayerLook = keyof typeof PLAYER_LOOKS;
 
 export function playerLook(): PlayerLook {
-  try { return localStorage.getItem(LOOK_KEY) === "girl" ? "girl" : "boy"; } catch { return "boy"; }
+  return load(LOOK_KEY) === "girl" ? "girl" : "boy";
 }
 
 export function setPlayerLook(look: PlayerLook): void {
-  try { localStorage.setItem(LOOK_KEY, look); } catch { /* storage unavailable */ }
+  store(LOOK_KEY, look);
 }
 
 const CHAIN_KEY = "duel.chainMode";
@@ -116,15 +124,12 @@ export const CHAIN_MODES: ChainMode[] = ["auto", "all", "off"];
 
 /** When the duel asks whether to chain (the duel screen's CHAIN button). */
 export function chainMode(): ChainMode {
-  try {
-    const mode = localStorage.getItem(CHAIN_KEY);
-    if (CHAIN_MODES.includes(mode as ChainMode)) return mode as ChainMode;
-  } catch { /* storage unavailable */ }
-  return "auto";
+  const mode = load(CHAIN_KEY);
+  return CHAIN_MODES.includes(mode as ChainMode) ? mode as ChainMode : "auto";
 }
 
 export function setChainMode(mode: ChainMode): void {
-  try { localStorage.setItem(CHAIN_KEY, mode); } catch { /* storage unavailable */ }
+  store(CHAIN_KEY, mode);
 }
 
 const SPEED_KEY = "duel.animSpeed";
@@ -132,13 +137,10 @@ export const ANIM_SPEEDS = [1, 2, 4];
 
 /** Duel animation speed (the duel screen's 1X/2X/4X button). */
 export function animSpeed(): number {
-  try {
-    const saved = Number(localStorage.getItem(SPEED_KEY));
-    if (ANIM_SPEEDS.includes(saved)) return saved;
-  } catch { /* storage unavailable */ }
-  return 1;
+  const saved = Number(load(SPEED_KEY));
+  return ANIM_SPEEDS.includes(saved) ? saved : 1;
 }
 
 export function setAnimSpeed(speed: number): void {
-  try { localStorage.setItem(SPEED_KEY, String(speed)); } catch { /* storage unavailable */ }
+  store(SPEED_KEY, String(speed));
 }

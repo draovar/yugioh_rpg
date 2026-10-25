@@ -16,7 +16,7 @@ const pool = JSON.parse(readFileSync(path.join(ROOT, "public/data/cards.json"), 
 mkdirSync(path.join(OUT, "art128"), { recursive: true });
 
 /** Resize + boost + map to the shared palette; returns a PNG buffer. */
-export async function renderArt(file, style) {
+async function renderArt(file, style) {
   const { size } = style;
   const px = await boost(sharp(file).resize(size, size, { fit: "cover", position: "centre", kernel: "lanczos3" }), style)
     .removeAlpha().raw().toBuffer();

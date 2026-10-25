@@ -12,7 +12,7 @@
 import { Peer, type DataConnection, type PeerError } from "peerjs";
 import type { OcgResponse } from "ocgcore-wasm";
 import type { RemotePeer } from "../duel/DuelController.ts";
-import { randomSeed, type Deck, type DuelSeed as Seed } from "../duel/engine/DuelSession.ts";
+import { randomSeed, type Deck, type DuelSeed } from "../duel/engine/DuelSession.ts";
 import type { RpsHand, RpsOpponent } from "../duel/rps.ts";
 import { decodeResponse, encodeResponse } from "./wire.ts";
 
@@ -42,7 +42,7 @@ type Packet =
 
 /** A connected peer-to-peer duel, ready to hand to the Duel scene. */
 export interface NetDuel {
-  seed: Seed;
+  seed: DuelSeed;
   /** This machine's deck and the other player's. The seats (who goes first) come from rock-paper-scissors. */
   deck: Deck;
   opponentDeck: Deck;
@@ -126,7 +126,7 @@ export function joinDuel(code: string, entry: DuelEntry): PendingDuel {
         const problems = entry.deckProblems(p.deck);
         if (problems.length) { conn.close(); return fail(`The host's deck isn't valid here: ${problems.join(", ")}.`); }
         clearTimeout(timer);
-        resolve(link(peer, conn, p.seed.map(BigInt) as Seed, entry.deck, p.deck));
+        resolve(link(peer, conn, p.seed.map(BigInt) as DuelSeed, entry.deck, p.deck));
       });
     });
   });
@@ -134,7 +134,7 @@ export function joinDuel(code: string, entry: DuelEntry): PendingDuel {
 }
 
 /** Wraps an open connection as the duel's RemotePeer. Answers that arrive before the duel listens are kept. */
-function link(peer: Peer, conn: DataConnection, seed: Seed, deck: Deck, opponentDeck: Deck): NetDuel {
+function link(peer: Peer, conn: DataConnection, seed: DuelSeed, deck: Deck, opponentDeck: Deck): NetDuel {
   const hands = inbox<RpsHand>();
   const order = inbox<boolean>();
   let onAnswer: ((response: OcgResponse, checksum: number) => void) | null = null;

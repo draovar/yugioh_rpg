@@ -97,7 +97,9 @@ export const COIN_HEADS_STRING = 60, COIN_TAILS_STRING = 61;
  */
 export function coinCallText(hintType: number, value: bigint): string | null {
   if (hintType !== 4) return null;
-  return Number(value) === COIN_HEADS_STRING ? "Heads" : Number(value) === COIN_TAILS_STRING ? "Tails" : null;
+  if (Number(value) === COIN_HEADS_STRING) return "Heads";
+  if (Number(value) === COIN_TAILS_STRING) return "Tails";
+  return null;
 }
 
 export const PHASE_NAMES: Record<number, string> = {

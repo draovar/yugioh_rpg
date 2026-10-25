@@ -43,11 +43,6 @@ export class BoardView {
     this.container = host.scene.add.container(0, 0);
   }
 
-  clear() {
-    this.sprites.clear();
-    this.counterBadges.clear();
-  }
-
   hideCounterBadges() {
     for (const b of this.counterBadges.values()) b.setVisible(false);
   }
@@ -55,7 +50,8 @@ export class BoardView {
   render(snap: FieldSnapshot) {
     const h = this.host;
     this.container.removeAll(true);
-    this.clear();
+    this.sprites.clear();
+    this.counterBadges.clear();
     snap.players.forEach((p, player) => {
       const s = h.side(player);
       h.handCount[s] = p.hand.length;
@@ -108,9 +104,8 @@ export class BoardView {
     for (const p of snap.players) {
       for (const c of [...p.monsters, ...p.spells]) {
         if (!c?.equipTarget) continue;
-        const t = c.equipTarget;
         const equip = this.sprites.get(cardKey(c));
-        const target = this.sprites.get(cardKey(t));
+        const target = this.sprites.get(cardKey(c.equipTarget));
         if (!equip || !target) continue;
         link(equip, target);
         link(target, equip);

@@ -6,7 +6,6 @@ import {
   OcgLocation,
   OcgMessageType,
   OcgResponseType,
-  SelectBattleCMDAction,
   SelectIdleCMDAction,
   type OcgMessage,
   type OcgResponse,

@@ -74,5 +74,5 @@ export class BrainState {
 /** The `blockedAttacks` key of an attack by the monster in zone `attacker` on the one in zone `target`. */
 export const attackKey = (attacker: number, target: number) => `${attacker}>${target}`;
 
-export const sameLoc =(a: Pick<OcgCardLoc, "controller" | "location" | "sequence">, b: Pick<OcgCardLoc, "controller" | "location" | "sequence">) =>
+export const sameLoc = (a: Pick<OcgCardLoc, "controller" | "location" | "sequence">, b: Pick<OcgCardLoc, "controller" | "location" | "sequence">) =>
   a.controller === b.controller && a.location === b.location && a.sequence === b.sequence;

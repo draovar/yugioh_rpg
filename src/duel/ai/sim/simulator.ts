@@ -22,11 +22,12 @@ import { fnv1a } from "../../engine/hash.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
 import { evaluate, type Weights } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";
+import type { AiMemory } from "../memory.ts";
 import { formatTrace } from "../trace.ts";
 import { replayPositions, replayResponses, situationOf, type ResponseOutcome, type Situation } from "./replay.ts";
 import { findSame, idleList, type CardOption } from "./options.ts";
 import { playSequence, type PlanStep, type SequenceOptions, type SequenceResult } from "./sequence.ts";
-import { BLANK, copyScripts, layoutFrom, withBlanks, type SimLayout } from "./world.ts";
+import { BLANK, copyScripts, freeMonsterZone, layoutFrom, withBlanks, type SimLayout } from "./world.ts";
 
 /** The rules engine (not a duel): what the simulator needs to build copies. Holds no hidden information. */
 export interface SimEngine {
@@ -53,6 +54,9 @@ const MAX_STEPS = 200;
 /** Copies prepared ahead of time (about 1.5 MB of engine memory each; it never shrinks, so keep this small). */
 const POOL_SIZE = 24;
 
+/** A cache key for a JSON-able value (bigints as strings). */
+const cacheKey = (value: unknown): number => fnv1a(JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+
 export class Simulator {
   /** Debugging: receives every decision made inside the copies (arena `--sim-trace`). */
   static debug: ((line: string) => void) | null = null;
@@ -65,8 +69,6 @@ export class Simulator {
   /** Everything about a copy except its cards and LP. */
   private readonly copyConfig: Omit<DuelConfig, "decks">;
   private readonly pool: PreparedDuel[] = [];
-  /** Copies built so far (for the arena's statistics). */
-  builds = 0;
 
   /** The owning brain's weights: the copies' brains and board scores use them too. */
   readonly weights: Readonly<Weights> | undefined;
@@ -110,13 +112,7 @@ export class Simulator {
     const option = idleList(prompt, action)?.[index];
     if (!option) return null;
     const layout = layoutFrom(view);
-    const key = fnv1a(JSON.stringify([layout, action, option],
-      (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
-    if (this.cache.has(key)) return this.cache.get(key)!;
-    if (this.cache.size > 2000) this.cache.clear();
-    const outcome = this.play(layout, action, option);
-    this.cache.set(key, outcome);
-    return outcome;
+    return this.cached(cacheKey([layout, action, option]), () => this.play(layout, action, option));
   }
 
   /**
@@ -125,10 +121,13 @@ export class Simulator {
    */
   alone(view: AiView, card: CardOption): SimOutcome | null {
     const layout = layoutFrom(view);
-    const key = fnv1a(JSON.stringify([layout, "alone", card], (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+    return this.cached(cacheKey([layout, "alone", card]), () => this.play(layout, SelectIdleCMDAction.SELECT_ACTIVATE, card));
+  }
+
+  private cached(key: number, compute: () => SimOutcome | null): SimOutcome | null {
     if (this.cache.has(key)) return this.cache.get(key)!;
     if (this.cache.size > 2000) this.cache.clear();
-    const outcome = this.play(layout, SelectIdleCMDAction.SELECT_ACTIVATE, card);
+    const outcome = compute();
     this.cache.set(key, outcome);
     return outcome;
   }
@@ -141,7 +140,7 @@ export class Simulator {
   responses(view: AiView, prompt: ChainMessage): { situation: Situation; outcomes: ResponseOutcome[] } | null {
     const situation = situationOf(view);
     if (!situation) return null;
-    const key = fnv1a(JSON.stringify([layoutFrom(view), situation, prompt.selects], (_k, v) => (typeof v === "bigint" ? v.toString() : v)));
+    const key = cacheKey([layoutFrom(view), situation, prompt.selects]);
     if (!this.responseCache.has(key)) {
       if (this.responseCache.size > 2000) this.responseCache.clear();
       this.responseCache.set(key, replayResponses(this, view, prompt, situation));
@@ -178,17 +177,11 @@ export class Simulator {
    */
   canAttackThisTurn(view: AiView): boolean | null {
     const layout = layoutFrom(view);
-    // A zone free in the copy: no monster of ours, none of theirs parked there to be handed back (StartCard.control),
-    // none we took from them coming back to it.
-    const taken = new Set([
-      ...(layout.decks[0].start ?? []).filter((s) => s.location === OcgLocation.MZONE).map((s) => s.sequence ?? 0),
-      ...(layout.decks[1].start ?? []).filter((s) => s.control?.team === 0).map((s) => s.control!.sequence),
-    ]);
-    const zone = [0, 1, 2, 3, 4].find((z) => !taken.has(z));
+    const zone = freeMonsterZone(layout);
     if (zone === undefined) return null;
     layout.decks[0].start = [...(layout.decks[0].start ?? []),
       { code: BLANK.ATTACKER, location: OcgLocation.MZONE, sequence: zone, position: OcgPosition.FACEUP_ATTACK }];
-    const key = fnv1a(JSON.stringify(["attack", layout]));
+    const key = cacheKey(["attack", layout]);
     if (this.attackCache.has(key)) return this.attackCache.get(key)!;
     if (this.attackCache.size > 200) this.attackCache.clear();
     const duel = this.build(layout);
@@ -218,9 +211,13 @@ export class Simulator {
     return this.cards;
   }
 
+  /** A copy's board as `seat` there sees it, for scoring: no hint, a fixed rng, the owning brain's weights. */
+  copyView(duel: DuelSession, memory: AiMemory, seat: 0 | 1 = 0): AiView {
+    return { seat, board: duel.snapshot(seat), memory, cards: this.cards, hint: null, rng: () => 0.5, deckList: null, weights: this.weights };
+  }
+
   /** A fresh duel laid out as `layout` (from the pool when one is ready); team 0 moves first, on a turn 1 that may attack. */
   build(layout: SimLayout): DuelSession {
-    this.builds++;
     return new DuelSession({ ...this.copyConfig, decks: layout.decks, startingLP: layout.lp, prepared: this.pool.pop() });
   }
 
@@ -229,9 +226,6 @@ export class Simulator {
     try {
       const debug = Simulator.debug;
       const ai = new AiSeat({ seat: 0, brain: createGenericBrain({ weights: this.weights }), duel, onTrace: debug ? (e) => debug(`    (copy) ${formatTrace(e)}`) : undefined });
-      const view = (): AiView => ({
-        seat: 0, board: duel.snapshot(0), memory: ai.memory, cards: this.cards, hint: null, rng: () => 0.5, deckList: null, weights: this.weights,
-      });
       const step = () => {
         const s = duel.advance();
         ai.observe(s.messages);
@@ -252,7 +246,7 @@ export class Simulator {
       const j = findSame(idleList(idle, action) ?? [], option);
       if (j < 0) return null;
 
-      const before = evaluate(view());
+      const before = evaluate(this.copyView(duel, ai.memory));
       const boardBefore = debug ? this.describe(duel) : "";
       duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action, index: j });
       let steps = 0;
@@ -262,11 +256,9 @@ export class Simulator {
         if (++steps > MAX_STEPS) return null;
         duel.respond(p.player === 0 ? ai.decide(p) : this.passive(p));
       }
-      const after = s.ended ? (s.winner === 0 ? 1000 : s.winner === 1 ? -1000 : 0) : evaluate(view());
-      debug?.(`    (copy) ${this.cards.name(option.code)}: ${before.toFixed(2)} -> ${after.toFixed(2)}
-` +
-        `      before ${boardBefore}
-      after  ${this.describe(duel)}`);
+      const after = s.ended ? (s.winner === 0 ? 1000 : s.winner === 1 ? -1000 : 0) : evaluate(this.copyView(duel, ai.memory));
+      debug?.(`    (copy) ${this.cards.name(option.code)}: ${before.toFixed(2)} -> ${after.toFixed(2)}\n`
+        + `      before ${boardBefore}\n      after  ${this.describe(duel)}`);
       return { delta: after - before, steps };
     } catch {
       return null; // the copy couldn't play it (e.g. RETRY): judge the move without simulation

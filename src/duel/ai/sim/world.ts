@@ -10,7 +10,7 @@ import type { AiView } from "../AiSeat.ts";
 
 /** Stand-in passcodes (no real card uses them). */
 export const BLANK = { TRAP: 1, MONSTER: 2, CARD: 3, ATTACKER: 4 } as const;
-const BLANK_CODES = new Set<number>(Object.values(BLANK));
+export const BLANK_CODES: ReadonlySet<number> = new Set<number>(Object.values(BLANK));
 
 const blank = (code: number, type: number, def = 0, atk = 0, level = 3): CardRecord => ({
   code, alias: 0, setcode: "0", type, atk, def, level: type & TYPE.MONSTER ? level : 0, race: type & TYPE.MONSTER ? "1" : "0",
@@ -63,6 +63,18 @@ export function layoutFrom(view: AiView): SimLayout {
   const decks: [Deck, Deck] = [ownSide(view, me), opponentSide(opp, view.seat)];
   returnStolen(decks);
   return { decks, lp: [me.lp, opp.lp] };
+}
+
+/**
+ * A Monster Zone of the AI's that is free in the copy: no monster of ours there, and none of theirs parked there to be
+ * handed back to us as the copy starts (`StartCard.control`). Undefined if all are taken.
+ */
+export function freeMonsterZone(layout: SimLayout): number | undefined {
+  const taken = new Set([
+    ...(layout.decks[0].start ?? []).filter((s) => s.location === OcgLocation.MZONE).map((s) => s.sequence ?? 0),
+    ...(layout.decks[1].start ?? []).filter((s) => s.control?.team === 0).map((s) => s.control!.sequence),
+  ]);
+  return [0, 1, 2, 3, 4].find((z) => !taken.has(z));
 }
 
 type Place = { team: 0 | 1; sequence: number };

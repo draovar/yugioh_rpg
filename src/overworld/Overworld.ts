@@ -249,7 +249,8 @@ export class Overworld extends Phaser.Scene {
     const def = npc.getData("def") as NpcDef;
     // The NPC turns to the player while talking (the larger offset decides), then back.
     const dx = this.player.x - npc.x, dy = this.player.y - npc.y;
-    this.face(npc, Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "side" : "left") : dy > 0 ? "down" : "up");
+    if (Math.abs(dx) > Math.abs(dy)) this.face(npc, dx > 0 ? "side" : "left");
+    else this.face(npc, dy > 0 ? "down" : "up");
     this.dialog.open(def.name, def.text, ["Yes", "No"], (choice) => {
       this.face(npc, def.facing ?? "down");
       if (choice !== "Yes") return;

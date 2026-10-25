@@ -71,7 +71,7 @@ for (let i = 0; i < font.glyphs.length; i++) {
     bits.push(row);
   }
   const advance = empty ? Math.max(1, Math.round(g.advanceWidth / UNIT)) : cols + SPACING;
-  for (const code of codes) glyphs.push({ code, cols, rows, rowTop, bits, advance });
+  for (const code of codes) glyphs.push({ code, rowTop, bits, advance });
 }
 
 const { width, height } = await writeBitmapFont(OUT, outName, glyphs, { capHeight: lineRows, lineHeight: lineRows + 2 });

@@ -27,9 +27,7 @@ import { SELECT_HINT } from "../generic/select.ts";
 import { formatTrace } from "../trace.ts";
 import { findSame, idleList, type CardOption } from "./options.ts";
 import type { Simulator } from "./simulator.ts";
-import { BLANK, layoutFrom } from "./world.ts";
-
-const BLANK_CODES = new Set<number>(Object.values(BLANK));
+import { BLANK_CODES, layoutFrom } from "./world.ts";
 
 /** A card a move picks (its first card choice): theirs or ours, by place. Code for traces (0 = unknown). */
 export interface PickTarget {
@@ -58,8 +56,8 @@ export interface SequenceOptions {
   battleAfter?: boolean;
   /**
    * After the steps, the generic brain plays on in this main phase with the cards a draw brought (summons and sets only:
-   * summon a drawn monster, set a drawn Trap) until it would do anything else, then as usual. For plans ending in a draw, whose next moves the planner
-   * can't plan (the draw is a guess).
+   * summon a drawn monster, set a drawn Trap) until it would do anything else, then as usual. For plans ending in a
+   * draw, whose next moves the planner can't plan (the draw is a guess).
    */
   playOn?: boolean;
 }
@@ -127,9 +125,7 @@ export function playSequence(sim: Simulator, view: AiView, steps: readonly PlanS
     const brain = () => createGenericBrain({ weights: sim.weights });
     const ai = new AiSeat({ seat: 0, brain: brain(), duel, onTrace: debug ? (e) => debug(`      (plan) ${formatTrace(e)}`) : undefined });
     const opp = opts.opponentTurn ? new AiSeat({ seat: 1, brain: brain(), duel }) : null;
-    const score = () => evaluate({
-      seat: 0, board: duel.snapshot(0), memory: ai.memory, cards: sim.cardDb, hint: null, rng: () => 0.5, deckList: null, weights: sim.weights,
-    });
+    const score = () => evaluate(sim.copyView(duel, ai.memory));
     let done = 0;
     let next: PlanStep[] = [];
     const checkpoints: number[] = [];

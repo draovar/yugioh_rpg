@@ -3,22 +3,12 @@
 // each machine's own prompts; animations are simulated by random waits. Both duels must end the same
 // way with the same board, and no checksum mismatch may happen along the way.
 // Usage: npm run smoke-p2p [-- <duels>]     (needs `npm run build-data` first)
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import createCore, { type OcgResponse } from "ocgcore-wasm";
-import { CardDb, type CardRecord } from "../../src/duel/engine/cardData.ts";
-import { DuelSession } from "../../src/duel/engine/DuelSession.ts";
+import type { OcgResponse } from "ocgcore-wasm";
 import { DuelController, type RemotePeer } from "../../src/duel/DuelController.ts";
 import { autoRespond } from "../../src/duel/ai/autoBot.ts";
 import { DECKS } from "../../src/duel/decks/decks.ts";
 import { decodeResponse, encodeResponse } from "../../src/net/wire.ts";
-
-const DATA = path.resolve(import.meta.dirname, "../../public/data");
-const records: CardRecord[] = JSON.parse(readFileSync(path.join(DATA, "cards.json"), "utf-8"));
-const scripts: Record<string, string> = JSON.parse(readFileSync(path.join(DATA, "scripts.json"), "utf-8"));
-const cards = new CardDb(records);
-const core = await createCore({ sync: true });
-const readScript = (name: string) => scripts[path.basename(name)] ?? null;
+import { cards, newDuel } from "../lib/engine.ts";
 
 const jitter = (max: number) => new Promise<void>((r) => setTimeout(r, Math.random() * max));
 
@@ -42,7 +32,7 @@ interface Result { winner: number | null; checksum: number; prompts: number }
 function play(seed: [bigint, bigint, bigint, bigint]): Promise<[Result, Result]> {
   const links = wire();
   const runs = ([0, 1] as const).map((me) => new Promise<Result>((resolve, reject) => {
-    const session = new DuelSession({ core, cards, readScript, seed, decks: [DECKS.goat.deck, DECKS.yugi.deck], onCoreLog: () => {} });
+    const session = newDuel({ seed, decks: [DECKS.goat.deck, DECKS.yugi.deck], onCoreLog: () => {} });
     let prompts = 0;
     const ctl: DuelController = new DuelController({
       session, me, remote: links[me],

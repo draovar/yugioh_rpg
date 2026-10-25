@@ -22,12 +22,12 @@ const DIRS = ["down", "side", "up"];
 
 const sheet = await sharp(path.join(SRC, "reshef-sheet.png")).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 const W = sheet.info.width, H = sheet.info.height;
-const isBg = (x, y) => {
+const isColour = (x, y, [r, g, b]) => {
   const i = (y * W + x) * 4, d = sheet.data;
-  return d[i] === BR && d[i + 1] === BG && d[i + 2] === BB;
+  return d[i] === r && d[i + 1] === g && d[i + 2] === b;
 };
-const GRID = [178, 0, 255];
-const isGrid = (x, y) => { const i = (y * W + x) * 4, d = sheet.data; return d[i] === GRID[0] && d[i + 1] === GRID[1] && d[i + 2] === GRID[2]; };
+const isBg = (x, y) => isColour(x, y, [BR, BG, BB]);
+const isGrid = (x, y) => isColour(x, y, [178, 0, 255]);
 
 /** A w x h RGBA region of the sheet with the background (and the grid of empty cells) made transparent; null when it holds only background. */
 function region(x0, y0, w, h, flip = false) {
@@ -133,7 +133,10 @@ const runs = [];
 for (const rowY of [...new Set(boxes.map((b) => b.y))].sort((a, b) => a - b)) {
   const row = boxes.filter((b) => b.y === rowY).sort((a, b) => a.x - b.x);
   const step = Math.min(...row.slice(1).map((b, i) => b.x - row[i].x));
-  row.forEach((b, i) => (i && b.x - row[i - 1].x > step ? runs.push([b]) : i ? runs.at(-1).push(b) : runs.push([b])));
+  row.forEach((b, i) => {
+    if (i && b.x - row[i - 1].x <= step) runs.at(-1).push(b);
+    else runs.push([b]);
+  });
 }
 if (runs.length !== spec.balloons.names.length) throw new Error(`found ${runs.length} balloons, named ${spec.balloons.names.length}`);
 const longest = Math.max(...runs.map((r) => r.length));

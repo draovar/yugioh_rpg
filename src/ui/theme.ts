@@ -173,6 +173,8 @@ const HOLOGRAM: Theme = {
 
 export const THEMES: Record<string, Theme> = { runewood: RUNEWOOD, hologram: HOLOGRAM };
 
+const THEME_KEY = "theme";
+
 function chooseTheme(): Theme {
   let name: string | null = null;
   try {
@@ -180,8 +182,6 @@ function chooseTheme(): Theme {
   } catch { /* no storage */ }
   return (name && THEMES[name]) || RUNEWOOD;
 }
-
-const THEME_KEY = "theme";
 
 /**
  * The theme in use. Always this one object: `setTheme` swaps its contents, so read it when drawing and

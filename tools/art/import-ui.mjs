@@ -20,6 +20,9 @@ const OUT = path.join(ROOT, "public/assets/ui");
  *   recolor  – paint every opaque pixel this colour (single-colour fillers in other colours)
  *   replace  – { from: to, ... }: swap exact colours (e.g. a frame's fill for another theme colour)
  */
+/** The hologram frames' inner grid colours, flattened into the last one. */
+const HOLO_GRID = ["#2b3961", "#2d3b63", "#2b3b68", "#29375f"];
+
 const THEMES = {
   runewood: {
     // Phase column. a = light wood, b = dark wood; _4 = raised, _1 = pressed (32x21).
@@ -61,8 +64,8 @@ const THEMES = {
     "lp-fill-red": ["06_Hologram_Theme/Sprites/UI_Hologram_Fillbar_Filler_04a.png", { trim: true, recolor: "#ff4050" }],
     // Info panel: the notched frame. Dialogs: the plain navy frame with a 2px cyan rim. Inner grids
     // flattened. The paper inset is the square outline bar (navy, 1px cyan line inside).
-    "info-frame": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Standard_02a.png", { flatten: ["#2b3961", "#2d3b63", "#2b3b68", "#29375f"] }],
-    "panel-frame": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Standard_01a.png", { flatten: ["#2b3961", "#2d3b63", "#2b3b68", "#29375f"] }],
+    "info-frame": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Standard_02a.png", { flatten: HOLO_GRID }],
+    "panel-frame": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Standard_01a.png", { flatten: HOLO_GRID }],
     "panel-paper": ["06_Hologram_Theme/Sprites/UI_Hologram_Fillbar_03a.png", { trim: true }],
     // Plates: the "available" slot (28x28, rounded, cyan line). List rows: the square outline bar,
     // solid cyan on hover.
@@ -73,7 +76,7 @@ const THEMES = {
     // paper inset (the info panel's description box); the other zones use the plain slot.
     "zone-monster": ["06_Hologram_Theme/Sprites/UI_Hologram_Slot_Available_01a.png", { trim: true, replace: { "#1d2d51": "#2c416d" } }],
     // Card action menu: the small square frame (straight edges, 2px cyan rim, inner grid flattened).
-    "card-menu": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Lite_01a.png", { flatten: ["#2b3961", "#2d3b63", "#2b3b68", "#29375f"] }],
+    "card-menu": ["06_Hologram_Theme/Sprites/UI_Hologram_Frame_Lite_01a.png", { flatten: HOLO_GRID }],
     // No hologram versions: Runewood's red attack arrows and the level star.
     "attack-up": ["@runewood/attack-up.png"],
     "attack-down": ["@runewood/attack-down.png"],

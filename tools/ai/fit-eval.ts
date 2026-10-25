@@ -151,8 +151,9 @@ function fit(w0: Weights, sample: number[], rounds: number) {
 // Train / test split by duel.
 const rng = mulberry32(12345);
 const testDuels = new Set(duels.filter(() => rng() < 0.2));
-const train = positions.map((_p, i) => i).filter((i) => !testDuels.has(positions[i].duel));
-const test = positions.map((_p, i) => i).filter((i) => testDuels.has(positions[i].duel));
+const all = positions.map((_p, i) => i);
+const train = all.filter((i) => !testDuels.has(positions[i].duel));
+const test = all.filter((i) => testDuels.has(positions[i].duel));
 
 // The current weights' best scale/bias (only those two fitted), for a fair comparison.
 const current = (() => {
@@ -168,7 +169,6 @@ console.log(`held-out duels (${test.length} positions): current weights loss ${b
   `(scale ${fitted.scale.toFixed(2)}, bias ${fitted.bias.toFixed(2)} for the player on turn)`);
 
 // Bootstrap over duels (one relinearisation from the fitted point: cheap, and near the optimum the linear model holds).
-const all = positions.map((_p, i) => i);
 const byDuel = new Map<string, number[]>();
 for (const i of all) byDuel.set(positions[i].duel, [...(byDuel.get(positions[i].duel) ?? []), i]);
 const samples: Record<string, number[]> = Object.fromEntries([...FITTED, "scale"].map((k) => [k, []]));
@@ -195,6 +195,6 @@ for (const k of FITTED) {
   console.log(`${k.padEnd(18)} ${String(DEFAULT_WEIGHTS[k]).padStart(8)} ${full.w[k].toFixed(3).padStart(10)}   ± ${s.toFixed(3)}`);
 }
 if (opt("out")) {
-  writeFileSync(opt("out")!, JSON.stringify({ ...set, ...Object.fromEntries([...FITTED.map((k) => [k, Number(full.w[k].toFixed(3))])]) }, null, 2));
+  writeFileSync(opt("out")!, JSON.stringify({ ...set, ...Object.fromEntries(FITTED.map((k) => [k, Number(full.w[k].toFixed(3))])) }, null, 2));
   console.log(`wrote ${opt("out")}`);
 }

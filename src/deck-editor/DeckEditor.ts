@@ -287,9 +287,7 @@ export class DeckEditor extends Phaser.Scene {
 
   private changed() {
     this.dirty = true;
-    this.drawBar();
-    this.drawDeck();
-    this.refreshList(false);
+    this.redraw();
     this.refreshOpened();
   }
 
@@ -577,15 +575,19 @@ export class DeckEditor extends Phaser.Scene {
   private showHint() {
     this.statusText.setText(TOUCH ? "TAP: ADD / REMOVE   TAP THE ART: CARD INFO" : "CLICK: ADD / REMOVE   CLICK THE ART: CARD INFO")
       .setTint(THEME.panel.inkSoft);
-    this.statusText.setX(Math.round(PANEL.x + PANEL.w / 2 - this.statusText.width / 2));
+    this.centreStatus();
   }
 
   /** A message under the list for a moment (red for refusals), then the hint again. */
   private status(msg: string, error = false) {
     this.statusText.setText(msg).setTint(error ? THEME.panel.error : THEME.panel.ink);
-    this.statusText.setX(Math.round(PANEL.x + PANEL.w / 2 - this.statusText.width / 2));
+    this.centreStatus();
     this.statusTimer?.remove();
     this.statusTimer = this.time.delayedCall(1800, () => this.showHint());
+  }
+
+  private centreStatus() {
+    this.statusText.setX(Math.round(PANEL.x + PANEL.w / 2 - this.statusText.width / 2));
   }
 
   // --- Saving, renaming, deleting ------------------------------------------------------------------------------

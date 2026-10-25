@@ -13,11 +13,10 @@ export const SPELL_SHEET = "spells";
 /** Chain link mark (32x32, public/assets/duel/chain.png): drawn over the art window with the link number inside. */
 export const CHAIN_MARK = "chain-mark";
 
-
 export const FRAMES = ["normal_monster", "effect_monster", "fusion_monster", "ritual_monster", "token", "spell", "trap"] as const;
 export const frameKey = (name: (typeof FRAMES)[number]) => `frame-${name}`;
 
-export function frameFor(type: number): (typeof FRAMES)[number] {
+function frameFor(type: number): (typeof FRAMES)[number] {
   if (type & TYPE.SPELL) return "spell";
   if (type & TYPE.TRAP) return "trap";
   if (type & TYPE.FUSION) return "fusion_monster";
@@ -35,7 +34,7 @@ export const SPELL_KIND_ICON: [number, number][] = [
   [TYPE.COUNTER, 0], [TYPE.QUICKPLAY, 1], [TYPE.EQUIP, 2], [TYPE.RITUAL, 3], [TYPE.FIELD, 4], [TYPE.CONTINUOUS, 6],
 ];
 export const SPELL_NORMAL_ICON = 5;
-export const SPELL_EQUIP_ICON = 2;
+const SPELL_EQUIP_ICON = 2;
 /** Opacity of the equip icon shown over a card's art while its equip partner is hovered. */
 const EQUIP_MARK_ALPHA = 0.5;
 
@@ -45,7 +44,6 @@ export const ATTRIBUTE_INDEX: Record<number, number> = { 0x20: 0, 0x01: 1, 0x04:
 export const SPELL_ATTRIBUTE = 7, TRAP_ATTRIBUTE = 8;
 /** Small 3x3 attribute swatch colours for the card's name bar (sampled from attributes.png). */
 const ATTRIBUTE_COLOR: Record<number, number> = { 0x20: 0x7d1f9e, 0x01: 0x2f4a19, 0x04: 0x7a1a14, 0x10: 0x9c8d55, 0x02: 0x1d2f7a, 0x08: 0x4c7a2a, 0x40: 0xc9b400 };
-
 
 /** Field targeting: "choice" = can be picked (yellow, 1px), "selected" = picked (orange, 2px). */
 export type CardHighlight = "none" | "choice" | "selected" | "attacker" | "attacked";

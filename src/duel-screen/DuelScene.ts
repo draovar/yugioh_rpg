@@ -9,7 +9,7 @@ import {
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { DuelSession, type CardView, type FieldSnapshot, type Deck, type DuelSeed } from "../duel/engine/DuelSession.ts";
 import { DuelController, type HumanPrompt } from "../duel/DuelController.ts";
-import { AiSeat } from "../duel/ai/AiSeat.ts";
+import { AiSeat, type AiPlayer } from "../duel/ai/AiSeat.ts";
 import { BRAINS, DEFAULT_BRAIN, type BrainName } from "../duel/ai/brains.ts";
 import { formatTrace, type TraceEntry } from "../duel/ai/trace.ts";
 import { AiWorkerClient } from "../duel/ai/worker/AiWorkerClient.ts";
@@ -239,8 +239,9 @@ export class DuelScene extends Phaser.Scene {
     const seedNumber = this.sceneData.seed ?? Math.floor(Math.random() * 2 ** 31);
     const seed = net ? net.seed : ([BigInt(seedNumber), 0n, 0n, 0n] as DuelSeed);
     session = new DuelSession({ core, cards, readScript, startingLP: this.sceneData.startingLP, seed, decks });
+    const params = new URLSearchParams(location.search);
     // `&aitrace` prints every AI decision to the console (also in the deployed game, for reporting misplays).
-    const trace = new URLSearchParams(location.search).has("aitrace");
+    const trace = params.has("aitrace");
     if (trace && !net) {
       console.log(replayInfo(this.sceneData, this.me, seedNumber, mine, theirs));
       // L logs the whole board, both hands and set cards included (not while typing in a text field).
@@ -250,18 +251,21 @@ export class DuelScene extends Phaser.Scene {
           { turn: this.turnCount, phase: this.phase, turnPlayer: this.turnPlayer, seed: seedNumber }));
       });
     }
-    this.revealOpponent = !net && (revealAiCards() || new URLSearchParams(location.search).has("reveal"));
-    // The AI thinks in a Web Worker (`&noworker`: on the main thread, as before).
+    this.revealOpponent = !net && (revealAiCards() || params.has("reveal"));
+    // The AI thinks in a Web Worker (`&noworker`: on the main thread).
     const aiSeat = (1 - this.me) as 0 | 1;
     const brain = this.sceneData.ai ?? DEFAULT_BRAIN;
     const onTrace = trace ? (e: TraceEntry) => console.log(formatTrace(e)) : undefined;
-    const ai = net ? undefined
-      : typeof Worker !== "undefined" && !new URLSearchParams(location.search).has("noworker")
+    let ai: AiPlayer | undefined;
+    if (!net) {
+      const useWorker = typeof Worker !== "undefined" && !params.has("noworker");
+      ai = useWorker
         ? new AiWorkerClient({ seat: aiSeat, brain, duel: session, engine: { core, cards, readScript }, deck: theirs.main, onTrace })
         : new AiSeat({
           seat: aiSeat, brain: BRAINS[brain]({ engine: { core, cards, readScript } }), duel: session,
           deck: theirs.main, strict: import.meta.env.DEV, onTrace,
         });
+    }
     this.controller = new DuelController({
       session,
       me: this.me,
@@ -283,13 +287,13 @@ export class DuelScene extends Phaser.Scene {
     });
     this.controller.start();
     // Dev: `&anims` adds a dropdown to replay single animations (see animPreview.ts).
-    if (import.meta.env.DEV && new URLSearchParams(location.search).has("anims")) {
+    if (import.meta.env.DEV && params.has("anims")) {
       installAnimPreview({
         scene: this, animator: this.animator, me: () => this.me, snapshot: () => this.snapshot, renderBoard: (snap) => this.view.render(snap),
       });
     }
     // Dev: `&dialogs` adds a dropdown to open every prompt UI with sample cards (see dialogPreview.ts).
-    if (import.meta.env.DEV && new URLSearchParams(location.search).has("dialogs")) {
+    if (import.meta.env.DEV && params.has("dialogs")) {
       installDialogPreview({
         scene: this,
         me: () => this.me,
@@ -402,10 +406,10 @@ export class DuelScene extends Phaser.Scene {
   }
 
   private endDialog(winner: number | null, onContinue: () => void) {
-    const lost = winner === 1 - this.me;
-    this.modal.dialog(winner === this.me ? "YOU WIN THE DUEL!" : lost ? "YOU LOST THE DUEL..." : "THE DUEL ENDED IN A DRAW.", [
-      { label: "CONTINUE", onClick: onContinue },
-    ]);
+    let message = "THE DUEL ENDED IN A DRAW.";
+    if (winner === this.me) message = "YOU WIN THE DUEL!";
+    else if (winner === 1 - this.me) message = "YOU LOST THE DUEL...";
+    this.modal.dialog(message, [{ label: "CONTINUE", onClick: onContinue }]);
   }
 
   /** Lists a pile's cards in a picker dialog: a Graveyard (newest first, then banished cards) or your Extra Deck. */

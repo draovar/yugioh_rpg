@@ -21,7 +21,7 @@ import {
 import type { FieldSnapshot } from "../../engine/DuelSession.ts";
 import { mulberry32 } from "../../engine/rng.ts";
 import type { AiView } from "../AiSeat.ts";
-import { boardDigest, nextSteps, type PickTarget, type PlanStep } from "./sequence.ts";
+import { nextSteps, type PickTarget, type PlanStep } from "./sequence.ts";
 import type { Simulator } from "./simulator.ts";
 
 type IdleMessage = Extract<OcgMessage, { type: OcgMessageType.SELECT_IDLECMD }>;

@@ -99,7 +99,6 @@ export const T = {
 };
 const EASE = "Quad.easeOut";
 
-
 const turnLine = (turn: number | undefined) => (turn ? `TURN ${turn}` : undefined);
 
 export class DuelAnimator {
@@ -112,13 +111,6 @@ export class DuelAnimator {
 
   /** Sprite keys of the currently declared attack (attacker, target). */
   private attackKeys: [string | null, string | null] = [null, null];
-
-  private clearAttack() {
-    if (!this.attackKeys[0] && !this.attackKeys[1]) return;
-    this.attackKeys = [null, null];
-    this.host.markAttack(null, null);
-  }
-
   /** Message currently being animated (debugging aid). */
   current: OcgMessage | null = null;
   /** Card just flipped face-up (it already flashed, so a following FLIPSUMMONING doesn't flash again). */
@@ -327,7 +319,7 @@ export class DuelAnimator {
     if (toHand) this.relayoutHand(toSide);
 
     // Destroyed cards (by battle or effect) flash red before leaving; other moves to the GY don't.
-    if (cause === "destroyed") await this.destroyFlash(sp);
+    if (cause === "destroyed") await this.flash(sp, 0xff4444);
     h.board.bringToTop(sp);
     const showCode = this.visible(code, to) ? code : 0;
     // Going face-down (a Set): turn to the back as it leaves, like placing a real card face-down.
@@ -339,11 +331,6 @@ export class DuelAnimator {
     if (showCode !== sp.code) this.reveal(sp, showCode);
     h.sprites.set(cardKey(to), sp);
     if (toHand) this.rekeyHand(to.controller);
-  }
-
-  /** Red flash on a destroyed card before it leaves for the GY. */
-  private async destroyFlash(sp: CardSprite): Promise<void> {
-    await this.flash(sp, 0xff4444);
   }
 
   /** Summoned card flashes (white for Normal/Flip, blue for Special Summons). */
@@ -395,21 +382,21 @@ export class DuelAnimator {
   private async toss(results: number[], sheet: string): Promise<void> {
     if (!results.length) return;
     const h = this.host;
-    const size = sheet === COIN_SHEET ? 64 : 32, pitch = size + 8;
+    const coin = sheet === COIN_SHEET;
+    const size = coin ? 64 : 32, pitch = size + 8;
     const left = FIELD_CENTER.x - ((results.length - 1) * pitch) / 2;
     const shade = h.scene.add.rectangle(0, 0, 640, 360, 0x000000, THEME.shadeAlpha).setOrigin(0).setDepth(599);
     const sprites = results.map((_, i) => h.scene.add.image(Math.round(left + i * pitch), FIELD_CENTER.y, sheet, 0).setScale(2).setDepth(600));
-    const coin = sheet === COIN_SHEET;
     const frame = coin ? T.coinFrame : T.diceFrame;
     const steps = Math.ceil((coin ? T.coinSpin : T.diceSpin) / frame);
     // The coin keeps flipping until it lands on its face; the die never shows the same face twice in a row.
     const coinSteps = results.map((r) => steps + ((r - steps) % COIN_FRAMES + COIN_FRAMES) % COIN_FRAMES);
-    const total = sheet === COIN_SHEET ? Math.max(...coinSteps) : steps;
+    const total = coin ? Math.max(...coinSteps) : steps;
     let faces = results.map(() => 0);
     for (let step = 1; step <= total; step++) {
       await this.wait(frame);
       faces = faces.map((f, i) => {
-        if (sheet === COIN_SHEET) return step <= coinSteps[i] ? step % COIN_FRAMES : results[i];
+        if (coin) return step <= coinSteps[i] ? step % COIN_FRAMES : results[i];
         if (step === total) return results[i];
         const next = Math.floor(Math.random() * 5);
         return next >= f ? next + 1 : next;
@@ -515,7 +502,7 @@ export class DuelAnimator {
    * lighter line on top, darker at the bottom; the big text has a 1px dark drop shadow, the turn number
    * sits small under it.
    */
-  private async banner(label: string, sub: string | undefined, look: { fill: number; light: number; dark: number }, hold = T.banner): Promise<void> {
+  private async banner(label: string, sub: string | undefined, look: { fill: number; light: number; dark: number }): Promise<void> {
     const s = this.host.scene;
     const h = sub ? 26 : 18;
     const top = FIELD_CENTER.y - Math.floor(h / 2), w = FIELD.right - FIELD.left;
@@ -529,11 +516,17 @@ export class DuelAnimator {
     big(1, 1, look.dark);
     big(0, 0, 0xffffff);
     if (sub) parts.push(text(s, FIELD_CENTER.x, top + 17, sub, { color: look.light, originX: 0.5 }).setDepth(701));
-    await this.wait(hold);
+    await this.wait(T.banner);
     for (const p of parts) p.destroy();
   }
 
   // ---------------------------------------------------------------- helpers
+
+  private clearAttack() {
+    if (!this.attackKeys[0] && !this.attackKeys[1]) return;
+    this.attackKeys = [null, null];
+    this.host.markAttack(null, null);
+  }
 
   /** Puts chain marks on the cards of the given links (indexes into the open chain) and spins their rings in. */
   private async showChainMarks(links: number[]): Promise<void> {
@@ -590,10 +583,16 @@ export class DuelAnimator {
     return sp;
   }
 
+  /** A player's hand sprites with their keys, left to right. */
+  private handSprites(controller: number): [string, CardSprite][] {
+    const prefix = `${controller}:${OcgLocation.HAND}:`;
+    return [...this.host.sprites].filter(([k]) => k.startsWith(prefix)).sort((a, b) => a[1].x - b[1].x);
+  }
+
   /** Re-numbers a player's hand sprites 0..n-1 in left-to-right order. */
   private rekeyHand(controller: number) {
     const prefix = `${controller}:${OcgLocation.HAND}:`;
-    const hand = [...this.host.sprites].filter(([k]) => k.startsWith(prefix)).sort((a, b) => a[1].x - b[1].x);
+    const hand = this.handSprites(controller);
     for (const [k] of hand) this.host.sprites.delete(k);
     hand.forEach(([, s], i) => this.host.sprites.set(prefix + i, s));
   }
@@ -601,8 +600,7 @@ export class DuelAnimator {
   /** Slides the cards already in a hand to their positions for a hand of `n` cards (default: current size). */
   private relayoutHand(side: 0 | 1, n = this.host.handCount[side]) {
     const me = this.host.me;
-    const prefix = `${side === 0 ? me : 1 - me}:${OcgLocation.HAND}:`;
-    const hand = [...this.host.sprites].filter(([k]) => k.startsWith(prefix)).sort((a, b) => a[1].x - b[1].x);
+    const hand = this.handSprites(side === 0 ? me : 1 - me);
     hand.forEach(([, s], i) => {
       const p = handXY(side, i, Math.max(n, hand.length));
       this.host.scene.tweens.add({ targets: s, x: p.x, y: p.y, duration: T.relayout / this.speed, ease: EASE });
@@ -615,7 +613,7 @@ export class DuelAnimator {
     return sp;
   }
 
-  /** Shows another face (or the back) instantly -- no squash/stretch flip. */
+  /** Shows another face (or the back) instantly: no squash/stretch flip. */
   private reveal(sp: CardSprite, code: number) {
     sp.show(code, this.host.cards.records.get(code), { back: !code });
   }

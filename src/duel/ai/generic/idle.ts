@@ -95,7 +95,7 @@ export function decideIdle(m: IdleMessage, view: AiView, state: BrainState): Dec
     // Simulated: the board change it really makes. Worth doing early when it gains (draws, removal before attacking).
     const sim = state.simulator?.activation(view, m, i) ?? null;
     if (sim) {
-      const score = (sim.delta > weightsOf(view).activateMin ? 2 + sim.delta : sim.delta - 0.3) - repeats;
+      const score = (sim.delta > w.activateMin ? 2 + sim.delta : sim.delta - 0.3) - repeats;
       const label = `activate ${name(c.code)} (sim ${sim.delta >= 0 ? "+" : ""}${sim.delta.toFixed(2)})`;
       options.push({ label, score, response: act(SelectIdleCMDAction.SELECT_ACTIVATE, i) });
       return;

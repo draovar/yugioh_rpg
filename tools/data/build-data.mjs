@@ -70,9 +70,10 @@ for (const c of cards) {
 const system = {};
 const counter = {}; // counter type (decimal) -> name, e.g. 1: "Spell Counter"
 for (const line of readFileSync(path.join(ROOT, "vendor/strings.conf"), "utf-8").split("\n")) {
-  const m = line.trimEnd().match(/^!system (\d+) (.*)$/);
+  const l = line.trimEnd();
+  const m = l.match(/^!system (\d+) (.*)$/);
   if (m) system[m[1]] = m[2];
-  const c = line.trimEnd().match(/^!counter (0x[0-9a-f]+) (.*)$/i);
+  const c = l.match(/^!counter (0x[0-9a-f]+) (.*)$/i);
   if (c) counter[parseInt(c[1], 16)] = c[2];
 }
 

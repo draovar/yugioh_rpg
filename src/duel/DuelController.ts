@@ -123,11 +123,6 @@ export class DuelController {
     return this.pending;
   }
 
-  /** Peer-to-peer: the duel is waiting for the other player's answer (for the planned "waiting for opponent" indicator). */
-  get waitingForRemote(): boolean {
-    return this.awaitingRemote;
-  }
-
   /** Stops the loop (scene shut down mid-animation); the session is destroyed by its owner. */
   stop(): void {
     this.destroyed = true;

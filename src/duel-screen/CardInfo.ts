@@ -189,7 +189,7 @@ export class CardInfo {
  * A monster's types in card type-line order (after the race): special kinds, Flip, then Effect or Normal.
  * Man-Eater Bug: FLIP, EFFECT.
  */
-export function monsterTypes(type: number): string[] {
+function monsterTypes(type: number): string[] {
   const kinds: [number, string][] = [
     [TYPE.FUSION, "FUSION"], [TYPE.RITUAL, "RITUAL"], [TYPE.SYNCHRO, "SYNCHRO"], [TYPE.SPIRIT, "SPIRIT"], [TYPE.UNION, "UNION"],
     [TYPE.GEMINI, "GEMINI"], [TYPE.TOON, "TOON"], [TYPE.TUNER, "TUNER"], [TYPE.FLIP, "FLIP"],

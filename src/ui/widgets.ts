@@ -42,6 +42,11 @@ export function makeButton(
   return c;
 }
 
+/** A drop-down's 5x3 down-pointing triangle, top-left at (x, y): 4px from the button's right edge. */
+function downArrow(g: Phaser.GameObjects.Graphics, x: number, y: number) {
+  g.fillRect(x, y, 5, 1).fillRect(x + 1, y + 1, 3, 1).fillRect(x + 2, y + 2, 1, 1);
+}
+
 /** Rows of an open drop-down list: darker than buttons, so the list doesn't blend into the ones under it. */
 const DROP_LIST_COLOR = 0x1b2638;
 
@@ -94,9 +99,7 @@ export function makeDropDown<T>(
   const button = makeButton(scene, x, y, w, h, "", open, color);
   const t = button.list[1] as Phaser.GameObjects.BitmapText;
   const arrow = scene.add.graphics().fillStyle(0xffffff);
-  // 5x3 down-pointing triangle, 4px from the right edge.
-  const ax = Math.floor(w / 2) - 9, ay = -1;
-  arrow.fillRect(ax, ay, 5, 1).fillRect(ax + 1, ay + 1, 3, 1).fillRect(ax + 2, ay + 2, 1, 1);
+  downArrow(arrow, Math.floor(w / 2) - 9, -1);
   button.add(arrow);
   button.setLabel = (s: string) => {
     t.setText(s);
@@ -226,12 +229,9 @@ export function makeListDropDown<T>(
     scene.input.keyboard?.on("keydown-ESC", close);
   };
   const button = makeListButton(scene, x, y, w, "", open);
-  // 5x3 down-pointing triangle, 4px from the right edge, in the label's colour.
+  // The arrow takes the label's colour.
   const arrow = scene.add.graphics();
-  const drawArrow = (color: number) => {
-    const ax = x + w - 9, ay = y + 4;
-    arrow.clear().fillStyle(color).fillRect(ax, ay, 5, 1).fillRect(ax + 1, ay + 1, 3, 1).fillRect(ax + 2, ay + 2, 1, 1);
-  };
+  const drawArrow = (color: number) => downArrow(arrow.clear().fillStyle(color), x + w - 9, y + 4);
   drawArrow(THEME.listButton.ink);
   button[2].on("pointerover", () => drawArrow(THEME.listButton.inkHover));
   button[2].on("pointerout", () => drawArrow(THEME.listButton.ink));

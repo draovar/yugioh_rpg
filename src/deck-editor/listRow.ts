@@ -5,8 +5,14 @@ import { spellTrapKind } from "../duel-screen/CardInfo.ts";
 
 /** Colour strip on a list row by frame (the card frames' main colours). */
 const KIND_COLOR = { normal: 0xd8b04a, effect: 0xc8692c, ritual: 0x4f78c8, fusion: 0x8a54a8, spell: 0x2a9a7a, trap: 0xb04a8a };
-export const kindColor = (r: CardRecord) => r.type & TYPE.SPELL ? KIND_COLOR.spell : r.type & TYPE.TRAP ? KIND_COLOR.trap
-  : r.type & TYPE.FUSION ? KIND_COLOR.fusion : r.type & TYPE.RITUAL ? KIND_COLOR.ritual : r.type & TYPE.EFFECT ? KIND_COLOR.effect : KIND_COLOR.normal;
+export function kindColor(r: CardRecord): number {
+  if (r.type & TYPE.SPELL) return KIND_COLOR.spell;
+  if (r.type & TYPE.TRAP) return KIND_COLOR.trap;
+  if (r.type & TYPE.FUSION) return KIND_COLOR.fusion;
+  if (r.type & TYPE.RITUAL) return KIND_COLOR.ritual;
+  if (r.type & TYPE.EFFECT) return KIND_COLOR.effect;
+  return KIND_COLOR.normal;
+}
 
 /** A list row's second and third lines: "LV4 DARK SPELLCASTER" / "ATK 2500  DEF 2100", or "SPELL - QUICK-PLAY". */
 export function describe(r: CardRecord): [string, string] {

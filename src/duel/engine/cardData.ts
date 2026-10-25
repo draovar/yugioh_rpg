@@ -29,7 +29,7 @@ export interface CardRecord {
   strings: string[];
 }
 
-export function toOcgCardData(r: CardRecord): OcgCardData {
+function toOcgCardData(r: CardRecord): OcgCardData {
   const setcode = BigInt(r.setcode);
   const setcodes: number[] = [];
   for (let i = 0n; i < 4n; i++) {

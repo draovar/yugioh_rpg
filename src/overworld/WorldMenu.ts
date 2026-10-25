@@ -74,7 +74,7 @@ export class WorldMenu extends Phaser.Scene {
       y += PANEL.row;
       return at;
     };
-    /** Two buttons side by side (one choice each); `redraw` rebuilds them after a pick. */
+    /** Two buttons side by side (one choice each), rebuilt after a pick. */
     const pair = (rowY: number, labels: [string, string], picked: () => number, onPick: (i: number) => void) => {
       let buttons: Button[] = [];
       const draw = () => {

@@ -136,7 +136,7 @@ const ALL_GROUPS: FilterGroup[] = [
 ];
 
 /** The filter groups, keeping only the options some card of `pool` has (no choice that always shows nothing). */
-export function filterGroups(pool: CardRecord[]): FilterGroup[] {
+function filterGroups(pool: CardRecord[]): FilterGroup[] {
   return ALL_GROUPS
     .map((g) => ({ ...g, options: g.options.filter((o) => pool.some(o.test)) }))
     .filter((g) => g.options.length > 0);

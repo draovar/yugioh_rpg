@@ -43,7 +43,9 @@ export class CardSearch {
       const has = (t: string) => (t.length === 1 ? e.words.some((w) => w.startsWith(t)) : e.norm.includes(t));
       const hit = tokens.every(has) || (qCompact.length > 1 && e.compact.includes(qCompact));
       if (!hit) continue;
-      const score = e.norm.startsWith(q) || e.compact.startsWith(qCompact) ? 0 : e.words.some((w) => w.startsWith(tokens[0])) ? 1 : 2;
+      let score = 2;
+      if (e.norm.startsWith(q) || e.compact.startsWith(qCompact)) score = 0;
+      else if (e.words.some((w) => w.startsWith(tokens[0]))) score = 1;
       scored.push({ card: e.card, score });
     }
     return scored.sort((a, b) => a.score - b.score || byName(a.card, b.card)).map((s) => s.card);

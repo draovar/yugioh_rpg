@@ -21,15 +21,10 @@ import { DEFAULT_WEIGHTS, type Weights } from "../../src/duel/ai/board.ts";
 import { BRAINS } from "../../src/duel/ai/brains.ts";
 import { Simulator } from "../../src/duel/ai/sim/simulator.ts";
 import { DECKS, type DeckName } from "../../src/duel/decks/decks.ts";
+import { parseArgs } from "../lib/args.ts";
 import { isMatchBrain, matchJobs, runMatch, winRate, type MatchBrain, type MatchSettings, type PassivityStats, type Result } from "../lib/match.ts";
 
-const args = new Map<string, string>();
-const argv = process.argv.slice(2);
-for (let i = 0; i < argv.length; i++) {
-  if (!argv[i].startsWith("--")) continue;
-  const next = argv[i + 1];
-  args.set(argv[i].slice(2), next && !next.startsWith("--") ? argv[++i] : "");
-}
+const args = parseArgs();
 const brainArg = (key: string): MatchBrain => {
   const name = args.get(key) ?? "autobot";
   if (!isMatchBrain(name)) throw new Error(`unknown brain "${name}" (have: ${Object.keys(BRAINS).join(", ")}, baseline with vendor/baseline)`);

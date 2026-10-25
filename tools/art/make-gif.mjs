@@ -15,7 +15,7 @@ const frames = [];
 for (const f of files) {
   let img = sharp(path.join(dir, f));
   if (crop) img = img.extract({ left: crop[0], top: crop[1], width: crop[2], height: crop[3] });
-  const meta = await img.clone().png().toBuffer({ resolveWithObject: true });
+  const meta = await img.png().toBuffer({ resolveWithObject: true });
   frames.push(await sharp(meta.data).resize(meta.info.width * scale, meta.info.height * scale, { kernel: "nearest" }).png().toBuffer());
 }
 const out = path.join(dir, "..", `${clip}.gif`);

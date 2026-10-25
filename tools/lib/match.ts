@@ -195,7 +195,7 @@ export function matchJobs(decks: readonly DeckName[], n: number): Job[] {
 }
 
 /** Plays one duel. */
-export function playJob(job: Job, s: MatchSettings): Result {
+function playJob(job: Job, s: MatchSettings): Result {
   const { k, aDeck, bDeck, aFirst } = job;
   const aSeat = aFirst ? 0 : 1;
   const decks = aFirst ? [DECKS[aDeck].deck, DECKS[bDeck].deck] : [DECKS[bDeck].deck, DECKS[aDeck].deck];

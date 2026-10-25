@@ -6,8 +6,9 @@
 // opponent with the generic brain, the AI with its usual chain rule after the action. Then the board is scored.
 // One copy per answer; the best one wins if it beats passing.
 //
-// Mostly the opponent's turn: in ours, only a chain link of theirs (scored as soon as it has resolved). Everything the copy doesn't know stays a stand-in (world.ts), so the
-// replay never uses hidden information: the opponent's face-down cards and hand never respond.
+// Mostly the opponent's turn: in ours, only a chain link of theirs (scored as soon as it has resolved). Everything the
+// copy doesn't know stays a stand-in (world.ts), so the replay never uses hidden information: the opponent's face-down
+// cards and hand never respond.
 import {
   OcgLocation,
   OcgMessageType,
@@ -29,7 +30,7 @@ import { SELECT_HINT } from "../generic/select.ts";
 import { formatTrace } from "../trace.ts";
 import { findSame } from "./options.ts";
 import type { Simulator } from "./simulator.ts";
-import { BLANK, layoutFrom, swapSides, type SimLayout } from "./world.ts";
+import { BLANK, freeMonsterZone, layoutFrom, swapSides, type SimLayout } from "./world.ts";
 
 /** What the opponent did that the chain prompt answers. Zones are sequences on their side (targets: on ours). */
 export type Situation =
@@ -145,7 +146,7 @@ function replayLink(sim: Simulator, layout: SimLayout, situation: Situation & { 
         if (!done) done = m.type === OcgMessageType.CHAINING && m.controller === 1 && m.code === situation.code;
         else if (m.type === OcgMessageType.CHAIN_END) {
           if (candidate && !used) return null;
-          const value = evaluate({ seat: 0, board: duel.snapshot(0), memory: ai.memory, cards: sim.cardDb, hint: null, rng: () => 0.5, deckList: null, weights: sim.weights });
+          const value = evaluate(sim.copyView(duel, ai.memory));
           debug?.(`      (replay) their link in our turn: ${candidate ? sim.cardDb.name(candidate.code) : "pass"} -> ${value.toFixed(2)}`);
           return value;
         }
@@ -296,7 +297,7 @@ function replayOne(sim: Simulator, view: AiView, layout: SimLayout, situation: S
       }
     }
     if (!done || (candidate && !used)) return null;
-    const value = evaluate({ seat: 1, board: duel.snapshot(1), memory: ai.memory, cards: sim.cardDb, hint: null, rng: () => 0.5, deckList: null, weights: sim.weights });
+    const value = evaluate(sim.copyView(duel, ai.memory, 1));
     debug?.(`      (replay) ${situation.kind}: ${candidate ? sim.cardDb.name(candidate.code) : "pass"} -> ${value.toFixed(2)}`);
     return value;
   } catch {
@@ -318,11 +319,7 @@ export function replayPositions(sim: Simulator, view: AiView, code: number, posi
   const out: { position: OcgPosition; value: number }[] = [];
   for (const position of positions) {
     const base = layoutFrom(view);
-    const taken = new Set([
-      ...(base.decks[0].start ?? []).filter((s) => s.location === OcgLocation.MZONE).map((s) => s.sequence ?? 0),
-      ...(base.decks[1].start ?? []).filter((s) => s.control?.team === 0).map((s) => s.control!.sequence),
-    ]);
-    const zone = [0, 1, 2, 3, 4].find((z) => !taken.has(z));
+    const zone = freeMonsterZone(base);
     if (zone === undefined) return null;
     base.decks[0].start = [...(base.decks[0].start ?? []), { code, location: OcgLocation.MZONE, sequence: zone, position }];
     const layout = opponentFirst(view, situation, base);

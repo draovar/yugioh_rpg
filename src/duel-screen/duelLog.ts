@@ -1,7 +1,6 @@
 // Human-readable log lines for engine messages (null = not worth logging).
 import { OcgLocation, OcgMessageType, type OcgMessage } from "ocgcore-wasm";
-import type { DuelText } from "../duel/engine/text.ts";
-import { PHASE_NAMES, coinCallText, declarationText } from "../duel/engine/text.ts";
+import { PHASE_NAMES, coinCallText, declarationText, type DuelText } from "../duel/engine/text.ts";
 
 /** `me` = seat of the player on this machine ("You"); the other seat is "Opponent". */
 export function describeMessage(m: OcgMessage, text: DuelText, me: number): string | null {
@@ -13,7 +12,7 @@ export function describeMessage(m: OcgMessage, text: DuelText, me: number): stri
     case OcgMessageType.NEW_TURN:
       return `-- ${whose(m.player)} turn --`;
     case OcgMessageType.NEW_PHASE:
-      return PHASE_NAMES[m.phase] ? `${PHASE_NAMES[m.phase]}` : null;
+      return PHASE_NAMES[m.phase] || null;
     case OcgMessageType.DRAW:
       return m.player === me
         ? `You draw ${m.drawn.map((d) => name(d.code)).join(", ")}`
@@ -32,7 +31,7 @@ export function describeMessage(m: OcgMessage, text: DuelText, me: number): stri
     case OcgMessageType.CHAIN_DISABLED:
       return `Chain link ${m.chain_size} was negated`;
     case OcgMessageType.ATTACK:
-      return m.target ? `${whose(m.card.controller)} monster attacks` : `${whose(m.card.controller)} monster attacks directly`;
+      return `${whose(m.card.controller)} monster attacks${m.target ? "" : " directly"}`;
     case OcgMessageType.DAMAGE:
       return `${act(m.player, "take")} ${m.amount} damage`;
     case OcgMessageType.RECOVER:

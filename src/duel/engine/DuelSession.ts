@@ -85,8 +85,7 @@ export interface PreparedDuel {
 
 /** Creates the engine duel for `cfg` and loads constant.lua and utility.lua into it: everything before the cards. */
 export function prepareDuel(cfg: Omit<DuelConfig, "decks" | "prepared">): PreparedDuel {
-  const lp = cfg.startingLP ?? 8000;
-  const lps: [number, number] = typeof lp === "number" ? [lp, lp] : lp;
+  const lps = startingLPs(cfg);
   const draws = { drawCountPerTurn: cfg.draws?.perTurn ?? 1, startingDrawCount: cfg.draws?.opening ?? 5 };
   const handle = cfg.core.createDuel({
     flags: OcgDuelMode.MODE_GOAT | (cfg.extraFlags ?? 0n),
@@ -104,6 +103,11 @@ export function prepareDuel(cfg: Omit<DuelConfig, "decks" | "prepared">): Prepar
     cfg.core.loadScript(handle, s, src);
   }
   return { handle, lp: lps };
+}
+
+function startingLPs(cfg: Pick<DuelConfig, "startingLP">): [number, number] {
+  const lp = cfg.startingLP ?? 8000;
+  return typeof lp === "number" ? [lp, lp] : lp;
 }
 
 /** One card as the viewing player is allowed to see it. */
@@ -201,33 +205,27 @@ export class DuelSession {
     // ocgcore does not shuffle at duel start (EDOPro shuffles client-side), so we do it here,
     // driven by the duel seed so a given seed always replays the same duel.
     const rng = mulberry32(Number(seed[0] & 0xffffffffn));
-    cfg.decks.forEach((deck, team) => {
-      const add = (code: number, location: OcgLocation) =>
-        this.core.duelNewCard(this.handle, {
-          team: team as 0 | 1, duelist: 0, code, controller: team as 0 | 1,
-          location, sequence: 0, position: OcgPosition.FACEDOWN_DEFENSE,
-        });
+    cfg.decks.forEach((deck, i) => {
+      const team = i as 0 | 1;
+      const add = (code: number, location: OcgLocation, sequence = 0, position: OcgPosition = OcgPosition.FACEDOWN_DEFENSE) =>
+        this.core.duelNewCard(this.handle, { team, duelist: 0, code, controller: team, location, sequence, position });
       shuffle([...deck.main], rng).forEach((c) => add(c, OcgLocation.DECK));
       deck.extra?.forEach((c) => add(c, OcgLocation.EXTRA));
-      deck.start?.forEach((c) =>
-        this.core.duelNewCard(this.handle, {
-          team: team as 0 | 1, duelist: 0, code: c.code, controller: team as 0 | 1, location: c.location, sequence: c.sequence ?? 0,
-          position: c.position ?? (c.location === OcgLocation.HAND ? OcgPosition.FACEDOWN_DEFENSE : OcgPosition.FACEUP_ATTACK),
-        }));
+      deck.start?.forEach((c) => add(c.code, c.location, c.sequence ?? 0,
+        c.position ?? (c.location === OcgLocation.HAND ? OcgPosition.FACEDOWN_DEFENSE : OcgPosition.FACEUP_ATTACK)));
     });
 
     this.core.startDuel(this.handle);
     // Equip links: Duel.Equip has to run inside the duel (it yields), so a one-off effect does it at the first draw phase.
     // Card targets (persistent Traps) are linked there too, the way their activation does it (proc_persistent.lua), and
     // monsters another team controls are handed over (StartCard.control).
-    const links = (pick: (c: StartCard) => { team: 0 | 1; sequence: number }[]) => cfg.decks.flatMap((deck, team) =>
-      (deck.start ?? []).flatMap((c) => c.location === OcgLocation.SZONE
+    // Each link is a Lua table {team, zone, other team, other zone}.
+    const links = (location: OcgLocation, pick: (c: StartCard) => { team: 0 | 1; sequence: number }[]) =>
+      cfg.decks.flatMap((deck, team) => (deck.start ?? []).flatMap((c) => c.location === location
         ? pick(c).map((t) => `{${team},${c.sequence ?? 0},${t.team},${t.sequence}}`) : []));
-    const equips = links((c) => (c.equipTo ? [c.equipTo] : []));
-    const targets = links((c) => c.cardTargets ?? []);
-    // Monsters another team controls: {owner, owner's zone, controller, controller's zone}.
-    const controls = cfg.decks.flatMap((deck, team) => (deck.start ?? []).flatMap((c) =>
-      c.control && c.location === OcgLocation.MZONE ? [`{${team},${c.sequence ?? 0},${c.control.team},${c.control.sequence}}`] : []));
+    const equips = links(OcgLocation.SZONE, (c) => (c.equipTo ? [c.equipTo] : []));
+    const targets = links(OcgLocation.SZONE, (c) => c.cardTargets ?? []);
+    const controls = links(OcgLocation.MZONE, (c) => (c.control ? [c.control] : []));
     if (equips.length || targets.length || controls.length) this.core.loadScript(this.handle, "start_links.lua", `local e=Effect.GlobalEffect()
 e:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
 e:SetCode(EVENT_PHASE_START+PHASE_DRAW)
@@ -257,8 +255,7 @@ e:SetOperation(function(e)
 end)
 Duel.RegisterEffect(e,0)`);
     // A prepared duel was created with other LP: set the real ones before anything happens.
-    const lp = cfg.startingLP ?? 8000;
-    const [lp0, lp1] = typeof lp === "number" ? [lp, lp] : lp;
+    const [lp0, lp1] = startingLPs(cfg);
     if (lp0 !== prepared.lp[0] || lp1 !== prepared.lp[1]) this.core.loadScript(this.handle, "set_lp.lua", `Duel.SetLP(0, ${lp0}) Duel.SetLP(1, ${lp1})`);
   }
 
@@ -339,8 +336,8 @@ Duel.RegisterEffect(e,0)`);
       attack: hidden ? 0 : q.attack ?? 0,
       defense: hidden ? 0 : q.defense ?? 0,
       counters: counterList(q.counters),
-      ...(q.equipCard ? { equipTarget: { controller: q.equipCard.controller, location: q.equipCard.location, sequence: q.equipCard.sequence } } : {}),
-      ...(q.targetCards?.length && !hidden ? { cardTargets: q.targetCards.map((t) => ({ controller: t.controller, location: t.location, sequence: t.sequence })) } : {}),
+      ...(q.equipCard ? { equipTarget: placeOf(q.equipCard) } : {}),
+      ...(q.targetCards?.length && !hidden ? { cardTargets: q.targetCards.map(placeOf) } : {}),
       ...(q.owner !== undefined && q.owner !== controller ? { owner: q.owner as 0 | 1 } : {}),
     };
   }
@@ -356,6 +353,10 @@ Duel.RegisterEffect(e,0)`);
   destroy(): void {
     this.core.destroyDuel(this.handle);
   }
+}
+
+function placeOf(p: CardPlace): CardPlace {
+  return { controller: p.controller, location: p.location, sequence: p.sequence };
 }
 
 /**

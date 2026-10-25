@@ -19,7 +19,7 @@ const MECHANICS = [
   { key: "coin/dice", test: /Toss(Coin|Dice)|CallCoin|AnnounceCoin/, status: "works; coin/dice animation + log line, coin call dialog" },
   { key: "token", test: /CreateToken/, status: "works if build-data exported its tokens (see below)" },
 ];
-const TYPE = { fusion: 0x40, ritual: 0x80, token: 0x4000 };
+const TYPE = { spellOrTrap: 0x6, effect: 0x20, fusion: 0x40, ritual: 0x80, token: 0x4000 };
 
 const byMechanic = new Map(MECHANICS.map((m) => [m.key, []]));
 const extra = [], ritual = [], noScript = [];
@@ -27,7 +27,7 @@ for (const c of cards) {
   if (!pool.has(c.code)) continue;
   const src = scripts[`c${c.code}.lua`];
   if (!src) {
-    if (c.type & 0x20 || c.type & 0x6) noScript.push(c.name); // effect monster, spell or trap
+    if (c.type & (TYPE.effect | TYPE.spellOrTrap)) noScript.push(c.name);
     continue;
   }
   for (const m of MECHANICS) if (m.test.test(src)) byMechanic.get(m.key).push(c.name);
@@ -35,10 +35,11 @@ for (const c of cards) {
   if (c.type & TYPE.ritual) ritual.push(c.name);
 }
 
+const tokens = cards.filter((c) => c.type & TYPE.token);
 const section = (title, names) => names.length && console.log(`\n${title} (${names.length})\n  ${names.sort().join(", ")}`);
-console.log(`${pool.size} pool cards, ${cards.filter((c) => c.type & TYPE.token).length} tokens exported`);
+console.log(`${pool.size} pool cards, ${tokens.length} tokens exported`);
 section("NO SCRIPT (effects won't work)", noScript);
 for (const m of MECHANICS) section(`${m.key}: ${m.status}`, byMechanic.get(m.key));
 section("fusion: Extra Deck card; needs a deck with it in `extra`", extra);
 section("ritual: needs its Ritual Spell in the pool", ritual);
-console.log(`\ntokens: ${cards.filter((c) => c.type & TYPE.token).map((c) => `${c.name} (${c.code})`).join(", ") || "none"}`);
+console.log(`\ntokens: ${tokens.map((c) => `${c.name} (${c.code})`).join(", ") || "none"}`);

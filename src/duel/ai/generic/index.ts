@@ -111,7 +111,7 @@ function decide(m: OcgMessage, view: AiView, state: BrainState): Decision {
     case OcgMessageType.ANNOUNCE_RACE:
       return decideAnnounceBits(m, view);
     default:
-      // Zones, options, sums, counters, numbers, sorting, rock-paper-scissors: the first legal answer for now.
+      // Zones, options, counters, numbers, sorting, rock-paper-scissors: the first legal answer for now.
       return { response: autoRespond(m, view.rng, view.cards), reason: "default answer" };
   }
 }

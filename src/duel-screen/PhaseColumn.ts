@@ -44,7 +44,8 @@ export class PhaseColumn {
       const x = PHASE_COL.x, y = PHASE_COL.top + i * PHASE_COL.pitch;
       const action = PHASE_ACTION[i];
       const clickable = !!action && host.phaseActions.has(action);
-      const state: PhaseState = (host.phase & p.bits) !== 0 ? "current" : clickable ? "clickable" : "idle";
+      let state: PhaseState = clickable ? "clickable" : "idle";
+      if ((host.phase & p.bits) !== 0) state = "current";
       const look = THEME.phase[state];
       const box = scene.add.nineslice(x, y, ui(`phase-${state}`), undefined, PHASE_COL.w, PHASE_COL.h, ...look.slice).setOrigin(0);
       this.gfx.add(box);

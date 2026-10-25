@@ -45,7 +45,9 @@ export class Boot extends Phaser.Scene {
         const seed = params.has("seed") ? Number(params.get("seed")) : undefined;
         const setup = params.get("setup") ?? undefined;
         const first = params.get("first");
-        const goFirst = first === "opp" ? false : first === "you" || seed !== undefined ? true : undefined;
+        let goFirst: boolean | undefined;
+        if (first === "opp") goFirst = false;
+        else if (first === "you" || seed !== undefined) goFirst = true;
         const ai = params.get("ai") ?? "";
         // Invite link from a multiplayer host: ?join=CODE (dropped from the address so a reload doesn't rejoin).
         const join = params.get("join");

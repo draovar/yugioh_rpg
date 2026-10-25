@@ -84,6 +84,8 @@ function shown(snap: FieldSnapshot, side: 0 | 1): number[] {
   return [...p.hand, ...p.monsters, ...p.spells, ...p.grave, ...p.banished, ...p.extra].map((c) => c?.code ?? 0).filter((c) => c);
 }
 
+const serialize = (messages: OcgMessage[]) => JSON.stringify(messages, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
+
 const runs = Number(process.argv[2] ?? 30);
 const names = Object.keys(DECKS) as DeckName[];
 for (let i = 0; i < runs; i++) {
@@ -101,7 +103,7 @@ for (let i = 0; i < runs; i++) {
   try {
     record();
     runDuel(duel, seats, (step) => {
-      const before = JSON.stringify(step.messages, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
+      const before = serialize(step.messages);
       for (const m of step.messages) {
         // Revealed cards: deck-top reveals (Cyber Jar) to both, other confirms to both unless they're in a Deck.
         if (m.type === OcgMessageType.CONFIRM_DECKTOP)
@@ -120,7 +122,7 @@ for (let i = 0; i < runs; i++) {
         for (const c of [...theirSide.main, ...(theirSide.extra ?? []), ...(theirSide.start ?? []).map((s) => s.code)])
           check(blanks.has(c) || visible.has(c), `duel ${i}: P${v}'s copy places P${1 - v}'s ${cards.name(c)}, which it can't see`);
       }
-      check(JSON.stringify(step.messages, (_k, v) => (typeof v === "bigint" ? v.toString() : v)) === before, `duel ${i}: redact mutated messages`);
+      check(serialize(step.messages) === before, `duel ${i}: redact mutated messages`);
       record();
     });
     record();

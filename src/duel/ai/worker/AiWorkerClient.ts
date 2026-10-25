@@ -1,7 +1,7 @@
 // The game's side of the AI's Web Worker: an AiPlayer whose thinking happens off the main thread, so the screen keeps
 // animating while it plans. Hidden information never leaves the main thread: messages are redacted and the board is
 // masked here, before they're posted. A local AiSeat shadows the worker (same messages, so the same memory); if the
-// worker can't start or fails on a prompt, that shadow answers instead, on the main thread like before.
+// worker can't start or fails on a prompt, that shadow answers instead, on the main thread.
 import type { OcgMessage, OcgResponse } from "ocgcore-wasm";
 import type { DuelSession } from "../../engine/DuelSession.ts";
 import { AiSeat, type AiPlayer } from "../AiSeat.ts";

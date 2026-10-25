@@ -25,7 +25,7 @@ const BUTTON = { w: 120, h: 16 };
 export class Lobby extends Phaser.Scene {
   private view!: Phaser.GameObjects.Container;
   private pending: PendingDuel | null = null;
-  /** Join screen: typed code and the listeners that feed it (removed when leaving the screen). */
+  /** Join screen: the typed code, and `detach` removes its text input when leaving the screen. */
   private code = "";
   private detach: (() => void) | null = null;
 

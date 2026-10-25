@@ -180,11 +180,7 @@ export class Modal {
     const w = STANDARD_W, innerW = innerWidth(w);
     const heading = text(s, 0, 0, title.toUpperCase(), { color: THEME.panel.ink, maxWidth: innerW }).setCenterAlign();
     const h = rim + pad + heading.height + 3 + HOVER_LIFT + coin + 5 + LIST_BUTTON_H + pad + rim;
-    const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
-    const innerX = left + rim + pad;
-    root.add(board(s, left, top, w, h));
-    heading.setPosition(Math.round(innerX + (innerW - heading.width) / 2), top + rim + pad);
-    root.add(heading);
+    const { innerX } = addBoard(s, root, w, h, heading);
     const coinsTop = heading.y + heading.height + 3 + HOVER_LIFT;
     const rowLeft = innerX + Math.round((innerW - (2 * colW + gap)) / 2);
     const pick = (heads: boolean) => { this.close(); onPick(heads); };
@@ -218,11 +214,7 @@ export class Modal {
     const innerW = innerWidth(w);
     const title = text(s, 0, 0, opts.title.toUpperCase(), { color: THEME.panel.ink, maxWidth: innerW }).setCenterAlign();
     const h = rim + pad + title.height + 3 + SELECTED_LIFT + CARD.h + 5 + LIST_BUTTON_H + pad + rim;
-    const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
-    const innerX = left + rim + pad;
-    root.add(board(s, left, top, w, h));
-    title.setPosition(Math.round(innerX + (innerW - title.width) / 2), top + rim + pad);
-    root.add(title);
+    const { innerX } = addBoard(s, root, w, h, title);
 
     /** Click number of each card (0-based), -1 while it has none. */
     const order: number[] = opts.codes.map(() => -1);
@@ -243,7 +235,7 @@ export class Modal {
     const refresh = (hovered = -1) => {
       items.forEach(({ sp, x, y, label, box }, i) => {
         const numbered = order[i] >= 0;
-        sp.y = y - (numbered ? SELECTED_LIFT : i === hovered ? HOVER_LIFT : 0);
+        sp.y = y - lift(numbered, i === hovered);
         label.setText(numbered ? String(order[i] + 1) : "");
         const bw = label.width + 4, right = x + CARD.w / 2, bTop = Math.round(sp.y - CARD.h / 2);
         box.setSize(bw, 7).setPosition(right - bw, bTop).setVisible(numbered);
@@ -306,11 +298,7 @@ export class Modal {
       const innerW = innerWidth(w);
       const title = text(s, 0, 0, opts.title.toUpperCase(), { color: THEME.panel.ink, maxWidth: innerW }).setCenterAlign();
       const h = rim + pad + title.height + 3 + SELECTED_LIFT + cardsH + (buttons.length ? 5 + LIST_BUTTON_H : 0) + pad + rim;
-      const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
-      const innerX = left + rim + pad;
-      root.add(board(s, left, top, w, h));
-      title.setPosition(Math.round(innerX + (innerW - title.width) / 2), top + rim + pad);
-      root.add(title);
+      const { top, innerX } = addBoard(s, root, w, h, title);
 
       let confirm: ListButton | null = null;
       const sprites = new Map<number, CardSprite>();
@@ -318,7 +306,7 @@ export class Modal {
       // No outlines: selected cards are raised; in single mode a hovered card rises a little.
       const place = (i: number, hovered = false) => {
         const sp = sprites.get(i)!;
-        sp.y = baseY.get(i)! - (selected.has(i) ? SELECTED_LIFT : hovered ? HOVER_LIFT : 0);
+        sp.y = baseY.get(i)! - lift(selected.has(i), hovered);
       };
       const refresh = () => {
         for (const i of sprites.keys()) place(i);
@@ -386,11 +374,7 @@ export class Modal {
     const rowPitch = LIST_BUTTON_H + 2;
     const title = text(s, 0, 0, opts.title.toUpperCase(), { color: THEME.panel.ink, maxWidth: innerW }).setCenterAlign();
     const h = rim + pad + title.height + 4 + FIELD_H + 4 + SEARCH_ROWS * rowPitch - 2 + 5 + 5 + pad + rim;
-    const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
-    const innerX = left + rim + pad;
-    root.add(board(s, left, top, w, h));
-    title.setPosition(Math.round(innerX + (innerW - title.width) / 2), top + rim + pad);
-    root.add(title);
+    const { innerX } = addBoard(s, root, w, h, title);
 
     // Text field: paper inset, typed text + blinking caret on the left, match count on the right.
     const fieldY = title.y + title.height + 4;
@@ -473,6 +457,27 @@ function buttonGrid(scene: Phaser.Scene, labels: string[], width: number): { w: 
   if (perRow === 1 && labels.length > 1) w = width; // a stacked list; a lone button keeps its size
   const rows = Math.ceil(labels.length / perRow);
   return { w, perRow, width: perRow * (w + BTN_GAP) - BTN_GAP, h: rows * (LIST_BUTTON_H + BTN_GAP) - BTN_GAP };
+}
+
+/**
+ * Adds a board of `w` x `h` centred on the field, with `title` centred at its top. Returns the board's top and
+ * the left edge of its content.
+ */
+function addBoard(s: Phaser.Scene, root: Phaser.GameObjects.Container, w: number, h: number,
+  title: Phaser.GameObjects.BitmapText): { top: number; innerX: number } {
+  const rim = INSET.board;
+  const left = Math.round(MID_X - w / 2), top = Math.round(180 - h / 2);
+  const innerX = left + rim + CARD_GAP;
+  root.add(board(s, left, top, w, h));
+  title.setPosition(Math.round(innerX + (innerWidth(w) - title.width) / 2), top + rim + CARD_GAP);
+  root.add(title);
+  return { top, innerX };
+}
+
+/** How far a picker card is raised: selected cards more than a hovered one. */
+function lift(selected: boolean, hovered: boolean): number {
+  if (selected) return SELECTED_LIFT;
+  return hovered ? HOVER_LIFT : 0;
 }
 
 /** Content width inside a board of width `w`: the rim plus CARD_GAP padding on each side. */

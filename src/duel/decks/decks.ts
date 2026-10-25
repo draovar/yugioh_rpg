@@ -1,6 +1,7 @@
 // Prebuilt decks (NPCs, the AI, starting points in the deck editor). Every card must be in data/pool.json (the smoke tests check).
 import { TYPE, type CardDb } from "../engine/cardData.ts";
 import type { Deck } from "../engine/DuelSession.ts";
+import { DECK_RULES } from "./deckRules.ts";
 
 /** Passcodes of the cards the decks use, by name. */
 const C = {
@@ -56,7 +57,7 @@ type Name = keyof typeof C;
 const list = (cards: Partial<Record<Name, number>>): number[] =>
   Object.entries(cards).flatMap(([name, n]) => Array<number>(n).fill(C[name as Name]));
 
-export interface DeckDef {
+interface DeckDef {
   label: string;
   deck: Deck;
 }
@@ -190,15 +191,15 @@ export function deckNameOf(deck: Deck): DeckName | null {
 export function deckProblems(deck: Deck, cards: CardDb): string[] {
   const out: string[] = [];
   const main = deck.main, extra = deck.extra ?? [];
-  if (main.length < 40 || main.length > 60) out.push(`main deck has ${main.length} cards`);
-  if (extra.length > 15) out.push(`extra deck has ${extra.length} cards`);
+  if (main.length < DECK_RULES.mainMin || main.length > DECK_RULES.mainMax) out.push(`main deck has ${main.length} cards`);
+  if (extra.length > DECK_RULES.extraMax) out.push(`extra deck has ${extra.length} cards`);
   const counts = new Map<number, number>();
   for (const code of [...main, ...extra]) counts.set(code, (counts.get(code) ?? 0) + 1);
   for (const [code, n] of counts) {
     const r = cards.records.get(code);
     if (!r) out.push(`unknown card ${code}`);
     else if (r.type & TYPE.TOKEN) out.push(`${r.name} is a token`);
-    if (n > 3) out.push(`${r?.name ?? code} x${n}`);
+    if (n > DECK_RULES.copies) out.push(`${r?.name ?? code} x${n}`);
   }
   return out;
 }

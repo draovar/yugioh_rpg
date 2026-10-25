@@ -164,14 +164,14 @@ const PREVIEWS: Preview[] = [
   attackPreview("#7 Attack: direct attack", "mine", false),
   attackPreview("#7 Attack: opponent attacks you", "theirs", true),
   attackPreview("#7 Attack: attack stopped (attacker destroyed)", "mine", true, true),
-  damagePreview("#8 Damage: opponent takes 1500", 1, 1500),
-  damagePreview("#8 Damage: you take 450", 0, 450),
-  damagePreview("#8 Damage: lethal (opponent to 0)", 1, 8000),
-  lpPreview("#9 LP: you gain 1000 (recover)", { type: OcgMessageType.RECOVER, player: 0, amount: 1000 }),
-  lpPreview("#9 LP: you pay 1000 (cost)", { type: OcgMessageType.PAY_LPCOST, player: 0, amount: 1000 }),
-  lpPreview("#9 LP: opponent's LP set to 4000", { type: OcgMessageType.LPUPDATE, player: 1, lp: 4000 }),
-  lpPreview("#10 Turn banner: your turn", { type: OcgMessageType.NEW_TURN, player: 0, turn: 3 }),
-  lpPreview("#10 Turn banner: opponent's turn", { type: OcgMessageType.NEW_TURN, player: 1, turn: 4 }),
+  messagePreview("#8 Damage: opponent takes 1500", { type: OcgMessageType.DAMAGE, player: 1, amount: 1500 }),
+  messagePreview("#8 Damage: you take 450", { type: OcgMessageType.DAMAGE, player: 0, amount: 450 }),
+  messagePreview("#8 Damage: lethal (opponent to 0)", { type: OcgMessageType.DAMAGE, player: 1, amount: 8000 }),
+  messagePreview("#9 LP: you gain 1000 (recover)", { type: OcgMessageType.RECOVER, player: 0, amount: 1000 }),
+  messagePreview("#9 LP: you pay 1000 (cost)", { type: OcgMessageType.PAY_LPCOST, player: 0, amount: 1000 }),
+  messagePreview("#9 LP: opponent's LP set to 4000", { type: OcgMessageType.LPUPDATE, player: 1, lp: 4000 }),
+  messagePreview("#10 Turn banner: your turn", { type: OcgMessageType.NEW_TURN, player: 0, turn: 3 }),
+  messagePreview("#10 Turn banner: opponent's turn", { type: OcgMessageType.NEW_TURN, player: 1, turn: 4 }),
   {
     label: "#12 Search: card revealed (lifts), then hand shuffled (you)",
     async run(host, snap) {
@@ -226,8 +226,8 @@ const PREVIEWS: Preview[] = [
       await host.animator.play([0x1, 0x2, 0x4, 0x8, 0x100, 0x200].map((phase) => ({ type: OcgMessageType.NEW_PHASE, phase }) as OcgMessage));
     },
   },
-  lpPreview("#13 Coin toss: heads", { type: OcgMessageType.TOSS_COIN, player: 0, results: [true] }),
-  lpPreview("#13 Coin toss: tails", { type: OcgMessageType.TOSS_COIN, player: 0, results: [false] }),
+  messagePreview("#13 Coin toss: heads", { type: OcgMessageType.TOSS_COIN, player: 0, results: [true] }),
+  messagePreview("#13 Coin toss: tails", { type: OcgMessageType.TOSS_COIN, player: 0, results: [false] }),
   {
     label: "#13 Coin toss: opponent calls heads, tails comes up",
     run: (host) => host.animator.play([
@@ -235,26 +235,17 @@ const PREVIEWS: Preview[] = [
       { type: OcgMessageType.TOSS_COIN, player: 1, results: [false] },
     ] as unknown as OcgMessage[]),
   },
-  lpPreview("#13 Coin toss: three coins", { type: OcgMessageType.TOSS_COIN, player: 0, results: [true, false, true] }),
+  messagePreview("#13 Coin toss: three coins", { type: OcgMessageType.TOSS_COIN, player: 0, results: [true, false, true] }),
   {
     label: "#14 Die roll: random result",
     run: (host) => host.animator.play([{ type: OcgMessageType.TOSS_DICE, player: 0, results: [1 + Math.floor(Math.random() * 6)] } as OcgMessage]),
   },
-  lpPreview("#14 Die roll: two dice (6, 1)", { type: OcgMessageType.TOSS_DICE, player: 0, results: [6, 1] }),
+  messagePreview("#14 Die roll: two dice (6, 1)", { type: OcgMessageType.TOSS_DICE, player: 0, results: [6, 1] }),
 ];
 
-/** Plays a single engine message (LP changes, coin tosses, die rolls). */
-function lpPreview(label: string, msg: object): Preview {
+/** Plays a single engine message (damage, LP changes, turn banners, coin tosses, die rolls). */
+function messagePreview(label: string, msg: object): Preview {
   return { label, run: (host) => host.animator.play([msg as OcgMessage]) };
-}
-
-function damagePreview(label: string, player: number, amount: number): Preview {
-  return {
-    label,
-    async run(host) {
-      await host.animator.play([{ type: OcgMessageType.DAMAGE, player, amount } as unknown as OcgMessage]);
-    },
-  };
 }
 
 /** Puts a monster on each side (your first hand card, and a stand-in for the opponent), then one attacks. */

@@ -4,15 +4,12 @@ import { OcgLocation, OcgPosition, type OcgCardLoc } from "ocgcore-wasm";
 import { TYPE } from "../engine/cardData.ts";
 import type { CardView, PlayerView } from "../engine/DuelSession.ts";
 import type { AiView } from "./AiSeat.ts";
-import { BLANK } from "./sim/world.ts";
+import { BLANK_CODES } from "./sim/world.ts";
 
-const BLANK_CODES = new Set<number>(Object.values(BLANK));
-
-export const FACEDOWN = OcgPosition.FACEDOWN_ATTACK | OcgPosition.FACEDOWN_DEFENSE;
 export const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
 
 /** Guessed DEF of a face-down monster we can't see: GOAT decks mostly set low-DEF flip monsters. */
-export const UNKNOWN_DEF = 1300;
+const UNKNOWN_DEF = 1300;
 /**
  * The DEF a face-down monster may well have: a wall (Giant Soldier of Stone, Mystical Elf). Attacks into one go with an
  * attacker stronger than this when there is one, and not at all when bouncing off it would cost all our LP.
@@ -37,10 +34,9 @@ export function cardAt(view: AiView, loc: Pick<OcgCardLoc, "controller" | "locat
 }
 
 export const cardType = (view: AiView, code: number): number => view.cards.records.get(code)?.type ?? 0;
-export const isMonster = (view: AiView, code: number) => (cardType(view, code) & TYPE.MONSTER) !== 0;
 
 /** Stars of a monster card (0 for non-monsters). */
-export const levelOf = (view: AiView, code: number): number => (view.cards.records.get(code)?.level ?? 0) & 0xff;
+const levelOf = (view: AiView, code: number): number => (view.cards.records.get(code)?.level ?? 0) & 0xff;
 
 /** Tributes a Normal Summon of this monster needs. */
 export const tributesFor = (view: AiView, code: number): number => {
