@@ -30,7 +30,7 @@ The reference project this approach comes from is circlenline/DUELIST_KINGDOM_RO
 | `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--wa W.json] [--wb W.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses] [--stats] [--record F.jsonl]` | brain vs brain win rates over seeded duels (every deck pairing, both seat orders), on all CPU cores (worker threads); `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened inside each simulated copy, `--stats` prints passivity per side (skipped summons, empty field, unused Spells/Traps, attacks into set cards; `PassivityStats` in `match.ts`), `--record` writes each turn's starting position (as the turn player sees it) and who won, for `fit-eval` |
 | `npm run tune -- [--brain planner] [--rounds 20] [--quick 10] [--long 30] [--seed S]` | tune the AI's `Weights` by self-play: random 1-3 weight changes vs the current best, kept at ≥ 53.5% over 720 duels; writes `vendor/tune/best.json` (resumed) + `log.jsonl`; winners are copied into `DEFAULT_WEIGHTS` by hand |
 | `node tools/ai/fit-eval.ts F.jsonl [...] [--boot 20] [--fix w1,w2] [--set w=v] [--out W.json]` | fits `evaluate()`'s weights to who won ("Texel tuning": logistic regression on positions from `arena --record`, monster values are the unit; held-out duels and bootstrap error bars) |
-| `npm run ai-bench [-- --brain NAME] [-- --weights W.json] [-- --show] [-- --only NAME-PART]` | fixed positions with a known right/wrong main-phase choice, plan, chain answer or whole turn (`turn: true`: every main-phase and battle choice in order) (`tools/ai/ai-bench.ts`); every reported misplay becomes one, logged in `docs/ai-reports.md`; `known: "<phase>"` positions are misplays waiting for a planned fix (`docs/ai-rework-plan.md`) and don't fail the run; positions can place Graveyard cards (`grave()`) and script the opponent's turn (`opponentSetsThenBattles`, `opponentAttacks`) |
+| `npm run ai-bench [-- --brain NAME] [-- --weights W.json] [-- --show] [-- --only NAME-PART]` | fixed positions with a known right/wrong main-phase choice, plan, chain answer or whole turn (`turn: true`: every main-phase and battle choice in order) (`tools/ai/ai-bench.ts`, positions in `ai-bench-positions.ts`); every reported misplay becomes one, logged in `docs/ai-reports.md`; `known: "<phase>"` positions are misplays waiting for a planned fix (`docs/ai-rework-plan.md`) and don't fail the run; positions can place Graveyard cards (`grave()`) and script the opponent's turn (`opponentSetsThenBattles`, `opponentAttacks`) |
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`, then
@@ -185,12 +185,12 @@ tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helper
   seed; then rock-paper-scissors packets (`rps` hands, the winner's `order`) decide the seats. Pings every 3 s; 20 s of silence or a "bye" =
   opponent left. Room codes use letters that tiny5 can't confuse with digits. `wire.ts`: response encoding (bigints).
 - Scenes (`src/Boot.ts`, `src/overworld/`, `src/duel-screen/`, `src/deck-editor/`, `src/lobby/`). `Boot` → `Overworld` (the Tiled map from `build-tiles`, Arcade physics (scene-local
-  config), arrow keys, hold Z to run (`RUN_SPEED` 1.5x, the run frames); the player is `player` / `player-run` or `player-girl` / `player-girl-run` (`PLAYER_LOOKS`, world menu PLAYER: BOY / GIRL, `playerLook()` in `prefs.ts`); wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`); ground layers (every `ground*` layer, in map order) and wall layers (every `walls*` layer: walls, walls2...; they collide and y-sort together, a later layer drawn over an earlier one on the same base) are baked into RenderTextures once; an optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision for the y-sort (walls' own tiles collide by the tileset's `collision` property) (`bake`: live tilemap layers re-culled every tile each frame: 4.2 → 0.6 ms a frame on a desktop);
-  32px character frames (`characters.png`, by name: `frameOf`, `walkAnim`) drawn at 2x; maps link through `warp` rectangles in their `objects` layer (properties `map`,
+  config), arrow keys, hold Z to run (`RUN_SPEED` 1.5x, the run frames); the player is `player` / `player-run` or `player-girl` / `player-girl-run` (`PLAYER_LOOKS`, world menu PLAYER: BOY / GIRL, `playerLook()` in `prefs.ts`); wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls` in `sortedWalls.ts`); ground layers (every `ground*` layer, in map order) and wall layers (every `walls*` layer: walls, walls2...; they collide and y-sort together, a later layer drawn over an earlier one on the same base) are baked into RenderTextures once; an optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision for the y-sort (walls' own tiles collide by the tileset's `collision` property) (`bake`: live tilemap layers re-culled every tile each frame: 4.2 → 0.6 ms a frame on a desktop);
+  32px character frames (`characters.png`, by name: `frameOf`, `walkAnim` in `characters.ts`) drawn at 2x; maps link through `warp` rectangles in their `objects` layer (properties `map`,
   `spawn` = the arrival point's name there, `keepY` = keep the height: town and maze sit side by side, tops aligned,
   town's right edge ↔ maze's left meadow, by the entrance); a warp fades out and restarts the scene on the target map (loaded on first
   visit in `preload`), an arrival on something solid is nudged to the nearest free spot (`freeY`);
-  NPCs (`NPCS`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn to the player while talking) talk with X / Enter / Space in a
+  NPCs (`NPCS` in `npcs.ts`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn to the player while talking) talk with X / Enter / Space in a
   `DialogBox` (`src/overworld/DialogBox.ts`, tiny5 at 2x, clickable options); YES starts a duel, and the player comes back to the
   same spot (`savePosition`) with the NPC's line about the result; on touch devices a semi-transparent D-pad (diagonals,
   keeps steering when the finger slides off) and X button (`src/overworld/TouchPad.ts`), and the dialog sits between them) + `WorldMenu` (overlay scene launched by Overworld, so
@@ -204,7 +204,7 @@ tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helper
   plates on the table): the deck on the left (Main Deck 4 rows of 10,
   squeezed together past 40; Extra Deck under it), the card list where the duel's info panel sits (search box = an
   HTML input via `textInput.ts`, with an ALL / NAME toggle: card text too or names only; SORT drop-down, FILTERS (shown in the list's place: toggle buttons per group on a 5-column grid, long labels two cells, LEVEL
-  half cells in one row; `FILTER_COLUMNS = 0` = buttons as wide as their labels), 8 rows with art, scroll by wheel / drag / scrollbar).
+  half cells in one row; `FILTER_COLUMNS = 0` = buttons as wide as their labels; `filterPanel.ts`), 8 rows with art, scroll by wheel / drag / scrollbar).
   Click a listed card = add, a deck card = remove. Hovering a listed card's art shows an eye over it; clicking the art
   opens the card's details (`CardInfo`) over the list with ADD / CLOSE (Esc). Hovering a deck card (touch: holding it)
   shows its details over the list while hovered (and closes an opened card: the list is back afterwards); nothing ever
@@ -216,7 +216,7 @@ tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helper
   Before the engine starts, `DuelScene.decideFirst` plays rock-paper-scissors on the board (`src/duel-screen/RpsIntro.ts`:
   both draw ROCK/PAPER/SCISSORS, set one face-down in the middle Monster Zone, both flip, the loser's card flashes red,
   the winner gets a FIRST/SECOND dialog; a draw replays); `me` is only known after it.
-  `DuelScene` redraws the whole board from `snapshot()` after every engine step; `src/duel-screen/duelPrompts.ts`
+  `DuelScene` redraws the whole board from `snapshot()` after every engine step (`BoardView`; the phase boxes are `PhaseColumn`, the corner buttons `cornerButtons.ts`, the `&aitrace` replay line and L-key board log `aiTrace.ts`); `src/duel-screen/duelPrompts.ts`
   (`showPrompt`, through a `PromptHost`) maps each SELECT_* prompt to UI: card action menus (idle/battle), board picks
   and zone highlights (`BoardPick`), and `Modal` dialogs/card pickers for everything else. The info panel is
   `src/duel-screen/InfoPanel.ts` (the card part is `CardInfo.ts`, shared with the deck editor). The `&anims` / `&dialogs` previews are written for seat 0 = you (`previewSeats.ts` swaps seats).
@@ -314,7 +314,7 @@ tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helper
   grid's width, buttons centred under it at the bottom; otherwise text over buttons. Boards are 240px wide (408 for 6+ cards).
 - Card choices (`BoardPick.cards`, else the dialog): SELECT_CARD / TRIBUTE / UNSELECT_CARD are picked on the board when
   every candidate is a field/hand card (yellow 1px outline = choice, orange 2px = picked; `THEME.pick`), else in the
-  `Modal.picker` dialog. The prompt text is centred in the field strip (`setPrompt`); CONFIRM / CANCEL / FINISH
+  `Modal.picker` dialog. The prompt text is centred in the field strip (`PromptBand`); CONFIRM / CANCEL / FINISH
   sit stacked on a dark plate over your Extra Deck slot, with the n/max counter above them.
 - Zone choice (`BoardPick.places`): free zones in semi-transparent yellow, more opaque on hover / once picked.
 

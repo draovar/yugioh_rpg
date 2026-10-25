@@ -9,13 +9,12 @@
 import Phaser from "phaser";
 import { TYPE, type CardRecord } from "../duel/engine/cardData.ts";
 import {
-  CardList, DECK_RULES, SORT_KEYS, addProblem, countKinds, filterCount, goesToExtra, sortDeck, toggleFilter, type FilterState, type SortKey,
+  CardList, DECK_RULES, SORT_KEYS, addProblem, countKinds, filterCount, goesToExtra, sortDeck, type FilterState, type SortKey,
 } from "../duel/decks/deckRules.ts";
 import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import type { Deck } from "../duel/engine/DuelSession.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
-import { raceNames, attributeNames } from "../duel/engine/text.ts";
-import { CardInfo, spellTrapKind } from "../duel-screen/CardInfo.ts";
+import { CardInfo } from "../duel-screen/CardInfo.ts";
 import { ART_ATLAS, CardSprite } from "../duel-screen/CardSprite.ts";
 import { drawTable } from "../duel-screen/field.ts";
 import { CARD, INFO, INSET } from "../duel-screen/layout.ts";
@@ -25,41 +24,14 @@ import { createTextInput, type TextInput } from "../ui/textInput.ts";
 import { THEME, ui } from "../ui/theme.ts";
 import { TOUCH } from "../ui/touch.ts";
 import { LIST_BUTTON_H, makeListButton, makeListDropDown, type ListButton } from "../ui/widgets.ts";
+import { messageDialog, nameDialog, type Overlay } from "./dialogs.ts";
+import { createFilterPanel } from "./filterPanel.ts";
+import {
+  BAR, CLEAR_X, EXTRA_LABEL_Y, EXTRA_Y, FELT, GRID_W, GRID_X, LIST, LIST_H, MAIN_LABEL_Y, MAIN_Y, MAT, OVERLAY_DEPTH, PANEL,
+  PITCH, ROW_PITCH, ROW_W, ROW_X, SCOPE, SCROLL, SEARCH, SPLIT, STATUS_Y, TOOLS_Y,
+} from "./layout.ts";
+import { describe, eyeIcon, kindColor } from "./listRow.ts";
 
-/** The card list panel's left edge: it takes the info panel's place (and size) on the right. */
-const SPLIT = 640 - INFO.w;
-/** Top bar (a plate with the deck buttons) and the mat under it, left of the list panel. */
-const BAR = { x: 4, y: 4, w: SPLIT - 8, h: LIST_BUTTON_H + 2 * INSET.plate };
-const MAT = { x: 4, y: BAR.y + BAR.h + 4, w: SPLIT - 8, h: 360 - (BAR.y + BAR.h + 4) - 4 };
-const FELT = { x: MAT.x + INSET.plate, y: MAT.y + INSET.plate, w: MAT.w - 2 * INSET.plate, h: MAT.h - 2 * INSET.plate };
-/** Deck cards: 10 a row 1px apart (39 pitch), centred on the felt; Main Deck rows 2px apart. */
-const PITCH = CARD.w + 1;
-const GRID_W = 9 * PITCH + CARD.w;
-const GRID_X = FELT.x + Math.floor((FELT.w - GRID_W) / 2);
-const MAIN_LABEL_Y = FELT.y + 5;
-const MAIN_Y = MAIN_LABEL_Y + 10;
-const ROW_PITCH = CARD.h + 2;
-const EXTRA_LABEL_Y = MAIN_Y + 4 * ROW_PITCH + 6;
-const EXTRA_Y = EXTRA_LABEL_Y + 10;
-
-/** List panel content (inside the board's rim, like the info panel). */
-const PANEL = { x: SPLIT + INSET.board + 2, w: INFO.w - 2 * (INSET.board + 2) };
-const SEARCH = { x: PANEL.x, y: INSET.board + 2, w: PANEL.w, h: 15 };
-/** The search box's ALL / NAME toggle (inside the box, at its right end) and the clear X left of it. */
-const SCOPE = { w: 26, x: SEARCH.x + SEARCH.w - 2 - 26, y: SEARCH.y + 2 };
-const CLEAR_X = SCOPE.x - 12;
-const TOOLS_Y = SEARCH.y + SEARCH.h + 4;
-/** The list: paper with `rows` rows, a scrollbar right of it. */
-const LIST = { x: PANEL.x, y: TOOLS_Y + LIST_BUTTON_H + 4, w: PANEL.w - 6, rowH: 34, rows: 8 };
-const LIST_H = LIST.rows * LIST.rowH + 2 * INSET.paper;
-const ROW_X = LIST.x + INSET.paper, ROW_W = LIST.w - 2 * INSET.paper;
-const SCROLL = { x: LIST.x + LIST.w + 2, y: LIST.y, w: 4, h: LIST_H };
-const STATUS_Y = LIST.y + LIST_H + 5;
-
-/** Colour strip on a list row by frame (the card frames' main colours). */
-const KIND_COLOR = { normal: 0xd8b04a, effect: 0xc8692c, ritual: 0x4f78c8, fusion: 0x8a54a8, spell: 0x2a9a7a, trap: 0xb04a8a };
-const kindColor = (r: CardRecord) => r.type & TYPE.SPELL ? KIND_COLOR.spell : r.type & TYPE.TRAP ? KIND_COLOR.trap
-  : r.type & TYPE.FUSION ? KIND_COLOR.fusion : r.type & TYPE.RITUAL ? KIND_COLOR.ritual : r.type & TYPE.EFFECT ? KIND_COLOR.effect : KIND_COLOR.normal;
 /** Deck counts below the limits (the Main Deck under 40). */
 const SHORT_COLOR = 0xff8a70;
 /** A press held this long shows the card's details instead of adding/removing it (touch screens). */
@@ -68,16 +40,6 @@ const HOLD_MS = 350;
 const DRAG_PX = 6;
 const MAX_NAME = 16;
 const NEW_DECK = "\u0000new";
-const OVERLAY_DEPTH = 3000;
-/** Filter buttons on a grid of this many equal columns (long labels take two cells); 0 = each as wide as its label. */
-const FILTER_COLUMNS = 5;
-
-/**
- * Eye shown over a hovered list row's art (2x, dark outline, semi-transparent): clicking the art opens the card.
- * w = white, k = pupil, h = glint.
- */
-const EYE = ["...wwwww...", ".ww.....ww.", "w...kkk...w", "w..kkhkk..w", "w...kkk...w", ".ww.....ww.", "...wwwww..."];
-const EYE_COLOR: Record<string, number> = { w: 0xffffff, k: 0x1a1a2a, h: 0xffffff };
 
 export class DeckEditor extends Phaser.Scene {
   private engine!: Engine;
@@ -117,6 +79,11 @@ export class DeckEditor extends Phaser.Scene {
   private overlay: Phaser.GameObjects.Container | null = null;
   /** The filters, shown in the list's place (null: the list shows). */
   private filterPanel: Phaser.GameObjects.Container | null = null;
+  /** What the message and rename dialogs open (dialogs.ts). */
+  private readonly overlayHost: Overlay = {
+    open: (w, h) => this.openOverlay(w, h),
+    close: () => this.closeOverlay(),
+  };
 
   constructor() {
     super("DeckEditor");
@@ -675,131 +642,32 @@ export class DeckEditor extends Phaser.Scene {
 
   /** A message with buttons in a row; any button closes it. */
   private dialog(message: string, buttons: { label: string; onClick: () => void }[]) {
-    const w = 240, bw = 56, gap = 4;
-    const msg = text(this, 0, 0, message, { color: THEME.panel.ink, maxWidth: w - 2 * (INSET.board + 6) }).setCenterAlign();
-    const h = INSET.board + 8 + msg.height + 10 + LIST_BUTTON_H + 8 + INSET.board;
-    const { root, left, top } = this.openOverlay(w, h);
-    msg.setPosition(Math.round(left + (w - msg.width) / 2), top + INSET.board + 8);
-    root.add(msg);
-    const rowW = buttons.length * bw + (buttons.length - 1) * gap;
-    buttons.forEach((b, i) => root.add(makeListButton(this, left + Math.round((w - rowW) / 2) + i * (bw + gap), msg.y + msg.height + 10, bw, b.label,
-      () => { this.closeOverlay(); b.onClick(); })));
+    messageDialog(this, this.overlayHost, message, buttons);
   }
 
   /** Name field (typed, max 16 characters) with OK / CANCEL; Enter = OK, Esc = CANCEL. */
   private rename() {
-    const w = 200, fieldH = 15, bw = 56;
-    const h = INSET.board + 6 + 5 + 6 + fieldH + 8 + LIST_BUTTON_H + 6 + INSET.board;
-    const { root, left, top } = this.openOverlay(w, h);
-    const innerX = left + INSET.board + 6, innerW = w - 2 * (INSET.board + 6);
-    root.add(text(this, left + w / 2, top + INSET.board + 6, "DECK NAME", { color: THEME.panel.ink, originX: 0.5 }));
-    const fieldY = top + INSET.board + 6 + 5 + 6;
-    const ps = THEME.panel.paperSlice;
-    root.add(this.add.nineslice(innerX, fieldY, ui("panel-paper"), undefined, innerW, fieldH, ps, ps, ps, ps).setOrigin(0));
-    const typed = text(this, innerX + 5, fieldY + 5, "", { color: THEME.panel.paperInk });
-    const caret = text(this, innerX + 5, fieldY + 5, "_", { color: THEME.panel.paperInk });
-    root.add([typed, caret]);
-    const blink = this.time.addEvent({ delay: 450, loop: true, callback: () => caret.setVisible(!caret.visible) });
-    let value = this.deck.name;
-    const show = () => { typed.setText(value.toUpperCase()); caret.setX(typed.x + typed.width + (value ? 1 : 0)); };
-    show();
-    const done = (ok: boolean) => {
-      input.destroy();
-      blink.remove();
-      this.closeOverlay();
-      const name = value.trim().toUpperCase();
-      if (!ok || !name || name === this.deck.name) return;
+    nameDialog(this, this.overlayHost, this.deck.name, MAX_NAME, (name) => {
       this.deck.name = name;
       this.dirty = true;
       this.drawBar();
-    };
-    const input = createTextInput(this, { x: innerX, y: fieldY, w: innerW, h: fieldH }, {
-      maxLength: MAX_NAME,
-      onChange: (v) => { value = v; show(); },
-      onKey: (e) => {
-        if (e.key === "Enter") { done(true); return true; }
-        if (e.key === "Escape") { done(false); return true; }
-        return false;
-      },
     });
-    input.setValue(value);
-    input.focus();
-    const by = fieldY + fieldH + 8;
-    root.add(makeListButton(this, left + w / 2 - bw - 2, by, bw, "OK", () => done(true)));
-    root.add(makeListButton(this, left + w / 2 + 2, by, bw, "CANCEL", () => done(false)));
   }
 
   // --- Filters -------------------------------------------------------------------------------------------------
 
-  /**
-   * The filters, in the list's place (search, SORT and the match count stay, and update live): per group its name, then
-   * its options as toggle buttons, wrapping (on a grid: FILTER_COLUMNS). Nothing picked in a group = any; one-value groups
-   * (`single`: CARD, ATTRIBUTE, LEVEL, TYPE, SPELL/TRAP) keep one pick, MONSTER picks are alternatives (EFFECT or FLIP);
-   * groups combine (FIRE and LEVEL 4). RESET clears them all; DONE, the FILTERS button or Esc goes back to the list.
-   */
+  /** The filters, shown in the list's place (filterPanel.ts). */
   private openFilters() {
     this.closeFilters();
     this.hoverRow = -1;
     this.hoverArt = false;
-    const root = this.add.container(0, 0).setDepth(10);
-    this.filterPanel = root;
-    // Covers the list and its scrollbar, and swallows their clicks.
-    root.add(this.add.zone(PANEL.x, LIST.y, PANEL.w, LIST_H).setOrigin(0).setInteractive());
-    const ps = THEME.panel.paperSlice;
-    root.add(this.add.nineslice(PANEL.x, LIST.y, ui("panel-paper"), undefined, PANEL.w, LIST_H, ps, ps, ps, ps).setOrigin(0));
-    const pad = INSET.paper + 2, left = PANEL.x + pad, right = PANEL.x + PANEL.w - pad;
-    const gap = 2, pitch = LIST_BUTTON_H + 2;
-    const cell = Math.floor((right - left - (FILTER_COLUMNS - 1) * gap) / Math.max(1, FILTER_COLUMNS));
-    let y = LIST.y + pad;
-    const redraw: (() => void)[] = [];
-    for (const g of this.list.groups) {
-      root.add(text(this, left, y, g.label, { color: THEME.panel.inkSoft }));
-      y += 7;
-      // Grid: each button one cell, or two for a label too long for one; a button goes in the first line of its group
-      // with room (so a short one can fill a gap a long one left). Else buttons as wide as their labels, in order.
-      const used: number[] = [];
-      let x = left, lines = 1;
-      // A group whose labels all fit half a cell (LEVEL) gets half cells, twice as many a line, on the same columns.
-      const half = Math.floor((cell - gap) / 2);
-      const halves = g.options.every((o) => this.textWidth(o.label) + 4 <= half);
-      const unit = halves ? half : cell, columns = halves ? 2 * FILTER_COLUMNS : FILTER_COLUMNS;
-      for (const o of g.options) {
-        let bx: number, by: number, w: number;
-        if (FILTER_COLUMNS) {
-          const span = this.textWidth(o.label) + 4 > unit ? 2 : 1;
-          let line = used.findIndex((n) => n + span <= columns);
-          if (line < 0) line = used.push(0) - 1;
-          bx = left + used[line] * (unit + gap);
-          by = y + line * pitch;
-          w = span * unit + (span - 1) * gap;
-          used[line] += span;
-          lines = used.length;
-        } else {
-          w = this.textWidth(o.label) + 8;
-          if (x > left && x + w > right) { x = left; lines++; }
-          bx = x;
-          by = y + (lines - 1) * pitch;
-          x += w + gap;
-        }
-        const picked = () => this.filters.get(g.label)?.has(o.label) ?? false;
-        const button = makeListButton(this, bx, by, w, o.label, () => {
-          toggleFilter(this.filters, g, o.label);
-          for (const r of redraw) r();
-          this.refreshList(true);
-        });
-        button.setHighlighted(picked());
-        redraw.push(() => button.setHighlighted(picked()));
-        root.add(button);
-      }
-      y += lines * pitch + 3;
-    }
-    const by = LIST.y + LIST_H - pad - LIST_BUTTON_H, bw = Math.floor((right - left - 4) / 2);
-    root.add(makeListButton(this, left, by, bw, "RESET", () => {
-      this.filters = new Map();
-      for (const r of redraw) r();
-      this.refreshList(true);
-    }));
-    root.add(makeListButton(this, right - bw, by, bw, "DONE", () => this.closeFilters()));
+    this.filterPanel = createFilterPanel(this, {
+      groups: this.list.groups,
+      filters: () => this.filters,
+      changed: () => this.refreshList(true),
+      reset: () => { this.filters = new Map(); },
+      done: () => this.closeFilters(),
+    });
     this.drawTools();
   }
 
@@ -810,50 +678,4 @@ export class DeckEditor extends Phaser.Scene {
     this.drawTools();
     this.drawRows();
   }
-
-  private textWidth(s: string): number {
-    const t = text(this, 0, 0, s);
-    const w = t.width;
-    t.destroy();
-    return w;
-  }
-}
-
-/** A list row's second and third lines: "LV4 DARK SPELLCASTER" / "ATK 2500  DEF 2100", or "SPELL - QUICK-PLAY". */
-function describe(r: CardRecord): [string, string] {
-  if (r.type & TYPE.MONSTER) {
-    const stat = (v: number) => (v < 0 ? "?" : String(v));
-    return [`LV${r.level & 0xff} ${attributeNames(r.attribute)} ${raceNames(BigInt(r.race))}`, `ATK ${stat(r.atk)}  DEF ${stat(r.def)}`];
-  }
-  return [`${r.type & TYPE.SPELL ? "SPELL" : "TRAP"} - ${spellTrapKind(r.type)}`, ""];
-}
-
-/** The eye over a hovered row's art (top-left of the art at x, y): the art dimmed a little, the eye at 2x in the middle. */
-function eyeIcon(scene: Phaser.Scene, x: number, y: number): Phaser.GameObjects.Graphics {
-  const g = scene.add.graphics();
-  g.fillStyle(0x000000, 0.3).fillRect(x, y, 32, 32);
-  const ex = x + Math.floor((32 - EYE[0].length * 2) / 2), ey = y + Math.floor((32 - EYE.length * 2) / 2);
-  // Screen pixels of the 2x eye, then a 1px dark outline around them (each pixel drawn once: alpha mustn't stack).
-  const lit = new Map<string, number>();
-  EYE.forEach((row, iy) => [...row].forEach((ch, ix) => {
-    if (ch === ".") return;
-    for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) lit.set(`${ix * 2 + dx},${iy * 2 + dy}`, EYE_COLOR[ch]);
-  }));
-  const outline = new Set<string>();
-  for (const key of lit.keys()) {
-    const [px, py] = key.split(",").map(Number);
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const k = `${px + dx},${py + dy}`;
-      if (!lit.has(k)) outline.add(k);
-    }
-  }
-  for (const k of outline) {
-    const [px, py] = k.split(",").map(Number);
-    g.fillStyle(0x000000, 0.6).fillRect(ex + px, ey + py, 1, 1);
-  }
-  for (const [k, color] of lit) {
-    const [px, py] = k.split(",").map(Number);
-    g.fillStyle(color, 0.85).fillRect(ex + px, ey + py, 1, 1);
-  }
-  return g;
 }

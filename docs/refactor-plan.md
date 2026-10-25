@@ -31,7 +31,15 @@ tools/
 ```
 
 ## Phase 2: split the big files
-DuelScene, DeckEditor, Overworld, DuelAnimator, Modal, tools/ai-bench (positions as data, runner apart).
+- Overworld (456 → 305 lines): `characters.ts` (frames, walk animations), `npcs.ts` (NPC data), `sortedWalls.ts`
+  (wall y-sorting, baking).
+- DuelScene (826 → 541): `BoardView.ts` (cards, piles, hand, badges, equip links), `PhaseColumn.ts`, `PromptBand.ts`,
+  `cornerButtons.ts`, `aiTrace.ts` (`&aitrace` replay line, L-key board log).
+- DeckEditor (859 → 681): `layout.ts` (geometry), `listRow.ts` (row colours, text lines, eye icon),
+  `filterPanel.ts`, `dialogs.ts` (message and rename dialogs).
+- ai-bench (895 → 149): positions in `tools/ai/ai-bench-positions.ts`.
+- Kept whole: DuelAnimator and Modal. Each is one cohesive class whose parts share its state (sprites, hand counts,
+  tween helpers / the open dialog, cleanups, board geometry); splitting would thread that state through every function.
 
 ## Phase 3: code-simplifier per area
 engine → AI → duel screen → overworld / deck editor → tools. Remove duplication and dead code. Comments: keep the

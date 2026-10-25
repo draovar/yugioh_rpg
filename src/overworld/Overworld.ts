@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DECKS, type DeckName } from "../duel/decks/decks.ts";
+import { DECKS } from "../duel/decks/decks.ts";
 import { DialogBox } from "./DialogBox.ts";
 import { WHITE, text } from "../ui/pixel.ts";
 import { PLAYER_LOOKS, chosenDeck, playerLook } from "../ui/prefs.ts";
@@ -7,8 +7,10 @@ import { DPAD, TouchPad, X_BUTTON } from "./TouchPad.ts";
 import { TOUCH } from "../ui/touch.ts";
 import type { DuelSceneData } from "../duel-screen/DuelScene.ts";
 import type { WorldMenu } from "./WorldMenu.ts";
+import { CHARACTERS, frameOf, loadCharacters, walkAnim, type Facing } from "./characters.ts";
+import { NPCS, type NpcDef } from "./npcs.ts";
+import { bake, buildSortedWalls, depthForY } from "./sortedWalls.ts";
 
-const CHARACTERS = "overworld-characters";
 const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
 /** The map the player is on (data/maps/NAME.tmj). Starts on `&map=NAME` (e.g. `maze`), else the town. */
@@ -24,53 +26,8 @@ function loadMap(load: Phaser.Loader.LoaderPlugin, name: string) {
 /** Called from Boot: the characters and the first map. */
 export function loadOverworld(load: Phaser.Loader.LoaderPlugin) {
   loadMap(load, currentMap);
-  // Every character, from `npm run build-characters` (data/characters/); names in characters.json, picks in
-  // docs/characters.png.
-  load.spritesheet(CHARACTERS, "assets/overworld/characters.png", { frameWidth: 32, frameHeight: 32 });
-  load.json(CHARACTERS, "assets/overworld/characters.json");
+  loadCharacters(load);
 }
-
-type Facing = "down" | "side" | "up";
-const FACINGS: Facing[] = ["down", "side", "up"];
-
-/** A character's frame in characters.png: 9 per character, down / side (facing right) / up × stand, step, step. */
-function frameOf(scene: Phaser.Scene, name: string, facing: Facing, step = 0): number {
-  const index = (scene.cache.json.get(CHARACTERS) as { names: string[] }).names.indexOf(name);
-  if (index < 0) throw new Error(`no character "${name}" in characters.json`);
-  return index * 9 + FACINGS.indexOf(facing) * 3 + step;
-}
-
-/** The character's walk animation for a facing (step, stand, other step, stand), created on first use. */
-function walkAnim(scene: Phaser.Scene, name: string, facing: Facing, frameRate = 8): string {
-  const key = `${name}-walk-${facing}`;
-  if (!scene.anims.exists(key)) {
-    const frames = [1, 0, 2, 0].map((step) => ({ key: CHARACTERS, frame: frameOf(scene, name, facing, step) }));
-    scene.anims.create({ key, frames, frameRate, repeat: -1 });
-  }
-  return key;
-}
-
-interface NpcDef {
-  name: string;
-  /** Character in characters.json (docs/characters.png shows them all). */
-  sprite: string;
-  /** Where they look while nobody talks to them (default down; side = right, left = side flipped). */
-  facing?: Facing | "left";
-  x: number;
-  y: number;
-  text: string;
-  deck: DeckName;
-}
-
-// NPCs by map. Placeholder text until real dialog is written.
-const NPCS: Record<string, NpcDef[]> = {
-  overworld: [
-    { name: "Yugi", sprite: "yugi", x: 500, y: 440, text: "Hey! Do you want to duel?", deck: "yugi" },
-    { name: "Kaiba", sprite: "kaiba", x: 680, y: 440, text: "Hmph. Do you think you can beat me?", deck: "kaiba" },
-    { name: "Joey", sprite: "joey", x: 160, y: 690, text: "Yo! Wanna see my Red-Eyes?", deck: "dragonsRoar" },
-    { name: "Bonz", sprite: "bonz", x: 120, y: 150, text: "Heh heh... care for a shadow game?", deck: "zombieMadness" },
-  ],
-};
 
 const TALK_DISTANCE = 56, SPEED = 70, FADE_MS = 200;
 /** Holding Z runs: this much faster, with the look's run frames. */
@@ -131,7 +88,7 @@ export class Overworld extends Phaser.Scene {
 
     // Ground layers (ground, ground2, ground3...): no collision, always under everything.
     const grounds = map.layers.filter((l) => l.name.startsWith("ground")).map((l) => map.createLayer(l.name, tileset, 0, 0)!);
-    this.bake(grounds).setDepth(0);
+    bake(this, grounds).setDepth(0);
 
     // Optional hidden "collision" layer: every tile in it blocks, whatever it shows (a map's exact footprints).
     this.blockers = map.getLayerIndex("collision") === null ? null
@@ -141,7 +98,7 @@ export class Overworld extends Phaser.Scene {
     // y-sorted layers.
     this.walls = map.layers.filter((l) => l.name.startsWith("walls")).map((l) =>
       (map.createLayer(l.name, tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false).setCollisionByProperty({ collision: true }));
-    this.buildSortedWalls(map, tileset, this.walls);
+    buildSortedWalls(this, map, tileset, this.walls, this.blockers);
 
     // The 32px character frames are drawn at 2x. Body size/offset are in frame pixels and scale with the sprite.
     // Start: back from a duel on the same spot, through a warp at its arrival point (layer "objects"), else at the
@@ -251,7 +208,6 @@ export class Overworld extends Phaser.Scene {
     return (this.scene.get("WorldMenu") as WorldMenu).isOpen;
   }
 
-  /** Remembers where the player stands, so coming back from a duel or the lobby puts them on the same spot. */
   /** A key press, or the touch pad's: answers the open dialog, else X / Enter / Space talks to the nearest NPC. */
   private handleKey(code: string) {
     if (this.menuOpen()) return;
@@ -262,121 +218,14 @@ export class Overworld extends Phaser.Scene {
     }
   }
 
+  /** Remembers where the player stands, so coming back from a duel or the lobby puts them on the same spot. */
   savePosition(opponent?: string) {
     if (!this.player) return;
     saved = { x: Math.round(this.player.x), y: Math.round(this.player.y), facing: this.facing, flipX: this.player.flipX, opponent };
   }
 
-  /**
-   * For every wall tile, the y its "base" sits on. A tile is drawn behind a character when its base is above the
-   * character's feet.
-   *  - collision tiles use their own bottom edge
-   *  - non-collision tiles (tree tops, roofs) use the bottom of the collision tiles below them in the same column,
-   *    so a whole tree sorts by its trunk
-   *  - if there is none in that column (edge of a tree crown), the lowest collision tile of the connected group
-   *  - purely decorative groups with no collision use their own bottom edge
-   * A cell of the "collision" layer counts as a collision tile, with or without a wall tile on it (a tree whose trunk
-   * is drawn on a ground layer still sorts by it). All walls layers count together: a crown on walls2 sorts by the
-   * trunk below it on walls.
-   */
-  private wallBaseY(layers: Phaser.Tilemaps.TilemapLayer[]): Map<Phaser.Tilemaps.Tile, number> {
-    const { width: w, height: h } = layers[0].layer;
-    const tileH = layers[0].tilemap.tileHeight;
-    const tilesAt = (x: number, y: number) => layers.map((l) => l.getTileAt(x, y)).filter((t): t is Phaser.Tilemaps.Tile => !!t && t.index !== -1);
-    const blocked = (x: number, y: number) => !!this.blockers?.hasTileAt(x, y);
-    const collides = (t: Phaser.Tilemaps.Tile) => !!(t.properties as { collision?: boolean })?.collision || blocked(t.x, t.y);
-    const occupied = (x: number, y: number) => tilesAt(x, y).length > 0;
-    const solid = (x: number, y: number) => blocked(x, y) || tilesAt(x, y).some(collides);
-
-    // Groups of touching wall cells (any walls layer): the lowest collision bottom of each.
-    const groupBase = new Int32Array(w * h).fill(-1);
-    const seen = new Uint8Array(w * h);
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (seen[y * w + x] || !occupied(x, y)) continue;
-        const group: number[] = [];
-        const stack = [y * w + x];
-        seen[y * w + x] = 1;
-        let base = -1;
-        while (stack.length) {
-          const k = stack.pop()!, cx = k % w, cy = (k - cx) / w;
-          group.push(k);
-          if (solid(cx, cy)) base = Math.max(base, (cy + 1) * tileH);
-          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-            const nx = cx + dx, ny = cy + dy;
-            if (nx < 0 || ny < 0 || nx >= w || ny >= h || seen[ny * w + nx] || !occupied(nx, ny)) continue;
-            seen[ny * w + nx] = 1;
-            stack.push(ny * w + nx);
-          }
-        }
-        for (const k of group) groupBase[k] = base;
-      }
-    }
-
-    const baseYs = new Map<Phaser.Tilemaps.Tile, number>();
-    for (const layer of layers) {
-      layer.forEachTile((tile) => {
-        if (tile.index === -1) return;
-        let baseY = tile.bottom;
-        if (!collides(tile)) {
-          // Walk down the column to the first collision tile, then to the end of that run.
-          let y = tile.y + 1;
-          while (y < h && occupied(tile.x, y) && !solid(tile.x, y)) y++;
-          if (y < h && solid(tile.x, y)) {
-            while (y < h && solid(tile.x, y)) baseY = (++y) * tileH;
-          } else {
-            const group = groupBase[tile.y * w + tile.x];
-            baseY = group >= 0 ? group : tile.bottom;
-          }
-        }
-        baseYs.set(tile, baseY);
-      });
-    }
-    return baseYs;
-  }
-
-  /**
-   * Wall tiles that share a base y go into one layer, whose depth comes from the base y the same way characters get
-   * theirs from their feet. So walls, the player and NPCs all sort together. Each layer only covers its tiles' rows.
-   * Every walls layer gets its own strips (two layers can fill the same cell); a later layer is drawn over an earlier
-   * one on the same base.
-   */
-  private buildSortedWalls(map: Phaser.Tilemaps.Tilemap, tileset: Phaser.Tilemaps.Tileset, layers: Phaser.Tilemaps.TilemapLayer[]) {
-    const strips = new Map<string, { order: number; baseY: number; tiles: Phaser.Tilemaps.Tile[] }>();
-    for (const [tile, baseY] of this.wallBaseY(layers)) {
-      const order = layers.indexOf(tile.tilemapLayer as Phaser.Tilemaps.TilemapLayer), key = `${order}:${baseY}`;
-      if (!strips.has(key)) strips.set(key, { order, baseY, tiles: [] });
-      strips.get(key)!.tiles.push(tile);
-    }
-    for (const [key, { order, baseY, tiles }] of strips) {
-      const top = Math.min(...tiles.map((t) => t.y));
-      const bottom = Math.max(...tiles.map((t) => t.y));
-      const sorted = map.createBlankLayer(`walls_${key}`, tileset, 0, top * map.tileHeight, map.width, bottom - top + 1)!;
-      for (const t of tiles) sorted.putTileAt(t.index, t.x, t.y - top);
-      // -0.5 so a character standing exactly on the base is drawn in front.
-      this.bake([sorted]).setDepth(this.depthForY(baseY - 0.5) + order * 1e-7);
-    }
-  }
-
-  /**
-   * Static tile layers drawn once into a texture, which replaces them: a tilemap layer re-culls and re-submits every
-   * visible tile each frame, which kept phones busy (and hot) while nothing moved. All layers share the first's area.
-   */
-  private bake(layers: (Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer)[]): Phaser.GameObjects.RenderTexture {
-    const { x, y, width, height } = layers[0];
-    const rt = this.add.renderTexture(x, y, width, height).setOrigin(0);
-    rt.draw(layers, -x, -y).render();
-    for (const l of layers) l.destroy();
-    return rt;
-  }
-
-  /** Everything y-sorted lives in depth 2..3: lower on screen = drawn later. */
-  private depthForY(y: number) {
-    return 2 + y / 100000;
-  }
-
   private sortByFeet(sprite: Phaser.GameObjects.Sprite) {
-    sprite.setDepth(this.depthForY(sprite.getBounds().bottom));
+    sprite.setDepth(depthForY(sprite.getBounds().bottom));
   }
 
   private nearestNpc(): Phaser.Physics.Arcade.Sprite | null {
