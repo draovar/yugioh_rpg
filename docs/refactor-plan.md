@@ -42,10 +42,12 @@ tools/
   tween helpers / the open dialog, cleanups, board geometry); splitting would thread that state through every function.
 
 ## Phase 3: code-simplifier per area
-engine → AI → duel screen → overworld / deck editor → tools. Remove duplication and dead code. Comments: keep the
-"why" (engine quirks, workarounds, non-obvious rules); delete ones that restate the code, narrate history or are stale.
-Baseline diff after each area; UI areas also checked in the browser preview.
+Five parallel code-simplifier passes (engine, AI, duel screen, overworld/editor/UI, tools): duplicates folded into
+helpers, dead exports removed, nested ternaries untangled. Comments: kept the "why" (engine quirks, workarounds,
+non-obvious rules, measured results); deleted ones that restated the code, narrated history or were stale. Baseline,
+generated outputs and the browser checked afterwards.
 
 ## Phase 4: docs
-CLAUDE.md down to commands, rules, engine facts and a one-screen folder map; module details move to
-`docs/architecture.md`.
+CLAUDE.md (412 → 180 lines) keeps the folder map, commands, setup/deploy, URL options, rules, engine facts and
+licensing; module details moved to `docs/architecture.md`, the roadmap to `docs/roadmap.md`. Every backticked term
+of the old CLAUDE.md is still in one of the three.
