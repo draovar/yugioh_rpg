@@ -3,6 +3,7 @@
  "framesPerCharacter": 9,
  "names": [
   "player",
+  "player-run",
   "yugi",
   "kaiba",
   "joey",
@@ -92,7 +93,6 @@
   "dog",
   "long-brown-hair",
   "old-green-robe",
-  "blue-cap",
-  "blue-cap-b"
+  "brown-hair-purple-coat"
  ]
 }

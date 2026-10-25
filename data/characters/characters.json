@@ -3,7 +3,8 @@
   "grid": { "x": 6, "y": 4, "pitch": 35, "size": 32 },
   "background": [0, 248, 0],
   "characters": {
-    "player": [3, 6],
+    "player": [12, 27],
+    "player-run": [15, 27],
     "yugi": [0, 18],
     "kaiba": [9, 9],
     "joey": [6, 27],
@@ -103,8 +104,7 @@
     "dog": [0, 27],
     "long-brown-hair": [3, 27],
     "old-green-robe": [9, 27],
-    "blue-cap": [12, 27],
-    "blue-cap-b": [15, 27]
+    "brown-hair-purple-coat": [3, 6]
   },
   "props": {
     "brown-hair-kid": [3, 22],

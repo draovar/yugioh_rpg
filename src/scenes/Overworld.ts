@@ -41,11 +41,11 @@ function frameOf(scene: Phaser.Scene, name: string, facing: Facing, step = 0): n
 }
 
 /** The character's walk animation for a facing (step, stand, other step, stand), created on first use. */
-function walkAnim(scene: Phaser.Scene, name: string, facing: Facing): string {
+function walkAnim(scene: Phaser.Scene, name: string, facing: Facing, frameRate = 8): string {
   const key = `${name}-walk-${facing}`;
   if (!scene.anims.exists(key)) {
     const frames = [1, 0, 2, 0].map((step) => ({ key: CHARACTERS, frame: frameOf(scene, name, facing, step) }));
-    scene.anims.create({ key, frames, frameRate: 8, repeat: -1 });
+    scene.anims.create({ key, frames, frameRate, repeat: -1 });
   }
   return key;
 }
@@ -72,7 +72,9 @@ const NPCS: Record<string, NpcDef[]> = {
   ],
 };
 
-const TALK_DISTANCE = 56, SPEED = 100, FADE_MS = 200;
+const TALK_DISTANCE = 56, SPEED = 70, FADE_MS = 200;
+/** Holding Z runs: this much faster, with the "player-run" frames. */
+const RUN_SPEED = 1.5;
 
 /** Where the player stood when they left for a duel or the lobby, and who they were dueling. */
 let saved: { x: number; y: number; facing: Facing; flipX: boolean; opponent?: string } | null = null;
@@ -90,6 +92,7 @@ export class Overworld extends Phaser.Scene {
   /** The map's hidden "collision" layer, if it has one. */
   private blockers: Phaser.Tilemaps.TilemapLayer | null = null;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private runKey!: Phaser.Input.Keyboard.Key;
   /** On-screen D-pad and X on touch devices. */
   private pad: TouchPad | null = null;
   private dialog!: DialogBox;
@@ -202,6 +205,7 @@ export class Overworld extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     this.cameras.main.fadeIn(FADE_MS);
     this.cursors = this.input.keyboard!.createCursorKeys();
+    this.runKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
 
     const opponent = saved?.opponent;
     saved = null;
@@ -427,8 +431,9 @@ export class Overworld extends Phaser.Scene {
     if (this.cursors.right.isDown || this.pad?.x === 1) vx = SPEED;
     if (this.cursors.up.isDown || this.pad?.y === -1) vy = -SPEED;
     if (this.cursors.down.isDown || this.pad?.y === 1) vy = SPEED;
+    const running = this.runKey.isDown;
     this.player.setVelocity(vx, vy);
-    this.player.body.velocity.normalize().scale(SPEED); // same speed on diagonals
+    this.player.body.velocity.normalize().scale(running ? SPEED * RUN_SPEED : SPEED); // same speed on diagonals
 
     // Horizontal wins when moving diagonally.
     if (vx !== 0) {
@@ -437,7 +442,7 @@ export class Overworld extends Phaser.Scene {
     } else if (vy < 0) this.facing = "up";
     else if (vy > 0) this.facing = "down";
 
-    if (vx !== 0 || vy !== 0) this.player.play(walkAnim(this, "player", this.facing), true);
+    if (vx !== 0 || vy !== 0) this.player.play(walkAnim(this, running ? "player-run" : "player", this.facing, running ? 6 : 4), true);
     else {
       this.player.anims.stop();
       this.player.setFrame(frameOf(this, "player", this.facing));
