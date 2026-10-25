@@ -98,6 +98,19 @@ export function setRevealAiCards(on: boolean): void {
   try { localStorage.setItem(REVEAL_KEY, on ? "1" : "0"); } catch { /* storage unavailable */ }
 }
 
+const LOOK_KEY = "player.look";
+/** The player's character in the overworld: its walk and run sprites ("player" / "player-run" in characters.json). */
+export const PLAYER_LOOKS = { boy: { walk: "player", run: "player-run" }, girl: { walk: "player-girl", run: "player-girl-run" } };
+export type PlayerLook = keyof typeof PLAYER_LOOKS;
+
+export function playerLook(): PlayerLook {
+  try { return localStorage.getItem(LOOK_KEY) === "girl" ? "girl" : "boy"; } catch { return "boy"; }
+}
+
+export function setPlayerLook(look: PlayerLook): void {
+  try { localStorage.setItem(LOOK_KEY, look); } catch { /* storage unavailable */ }
+}
+
 const CHAIN_KEY = "duel.chainMode";
 export const CHAIN_MODES: ChainMode[] = ["auto", "all", "off"];
 

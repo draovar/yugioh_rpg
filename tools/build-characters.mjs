@@ -6,6 +6,8 @@
 //   public/assets/overworld/props.png + .json      – single 32x32 frames (poses, objects)
 //   public/assets/overworld/balloons.png + .json   – reaction balloons, one row per balloon, 16x16 frames
 //   docs/characters.png                            – contact sheet with every name, for picking sprites
+// Characters drawn for this game come as ready-made 96x96 sheets in data/characters/ (same 3x3 layout), named by
+// { "sheet": "file.png" } in the manifest.
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
@@ -41,6 +43,14 @@ function region(x0, y0, w, h, flip = false) {
 }
 const cell = ([c, r], flip) => region(grid.x + grid.pitch * c, grid.y + grid.pitch * r, S, S, flip);
 
+/** A frame moved dy pixels down (negative = up); rows that move out are dropped, new rows are transparent. */
+function shiftY(px, dy) {
+  if (!dy) return px;
+  const out = Buffer.alloc(px.length), row = S * 4;
+  for (let y = 0; y < S; y++) if (y - dy >= 0 && y - dy < S) px.copy(out, y * row, (y - dy) * row, (y - dy + 1) * row);
+  return out;
+}
+
 /** Cell lists per direction for one manifest entry. */
 function cellsOf(entry) {
   if (Array.isArray(entry)) entry = { at: entry };
@@ -60,15 +70,31 @@ async function pack(rows, w, h, perRow, file) {
   return raw;
 }
 
+/** The 9 frames of a ready-made 3x3 sheet (rows down / side / up). */
+async function sheetFrames(file) {
+  const { data, info } = await sharp(path.join(SRC, file)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  if (info.width !== 3 * S || info.height !== 3 * S) throw new Error(`${file}: ${info.width}x${info.height}, expected ${3 * S}x${3 * S}`);
+  const frames = [];
+  for (let r = 0; r < 3; r++) for (let k = 0; k < 3; k++) {
+    const px = Buffer.alloc(S * S * 4);
+    for (let y = 0; y < S; y++) data.copy(px, y * S * 4, ((r * S + y) * info.width + k * S) * 4, ((r * S + y) * info.width + (k + 1) * S) * 4);
+    frames.push(px);
+  }
+  return frames;
+}
+
 // Characters: 3 frames per direction; a missing step repeats the stand frame, a missing direction borrows another.
 const names = Object.keys(spec.characters);
+const sheets = Object.fromEntries(await Promise.all(names.filter((n) => spec.characters[n].sheet)
+  .map(async (n) => [n, await sheetFrames(spec.characters[n].sheet)])));
 const charRows = names.map((name) => {
+  if (sheets[name]) return sheets[name];
   const entry = cellsOf(spec.characters[name]);
   const dirs = {};
   for (const dir of DIRS) {
     const frames = (entry[dir] ?? []).map((at) => cell(at, dir === "side" && entry.flip));
     if (entry[dir] && !frames[0]) throw new Error(`${name}: ${dir} stand cell ${entry[dir][0]} is empty`);
-    if (frames.length) dirs[dir] = [0, 1, 2].map((k) => frames[k] ?? frames[0]);
+    if (frames.length) dirs[dir] = [0, 1, 2].map((k) => shiftY(frames[k] ?? frames[0], entry.nudge?.[dir]?.[k] ?? 0));
   }
   for (const dir of DIRS) if (!dirs[dir]) {
     const from = DIRS.find((d) => dirs[d]);

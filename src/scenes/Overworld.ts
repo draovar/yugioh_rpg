@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { DECKS, type DeckName } from "../duel/decks.ts";
 import { DialogBox } from "../ui/DialogBox.ts";
 import { WHITE, text } from "../ui/pixel.ts";
-import { chosenDeck } from "../ui/prefs.ts";
+import { PLAYER_LOOKS, chosenDeck, playerLook } from "../ui/prefs.ts";
 import { DPAD, TouchPad, X_BUTTON } from "../ui/TouchPad.ts";
 import { TOUCH } from "../ui/touch.ts";
 import type { DuelSceneData } from "./DuelScene.ts";
@@ -73,7 +73,7 @@ const NPCS: Record<string, NpcDef[]> = {
 };
 
 const TALK_DISTANCE = 56, SPEED = 70, FADE_MS = 200;
-/** Holding Z runs: this much faster, with the "player-run" frames. */
+/** Holding Z runs: this much faster, with the look's run frames. */
 const RUN_SPEED = 1.5;
 
 /** Where the player stood when they left for a duel or the lobby, and who they were dueling. */
@@ -98,6 +98,8 @@ export class Overworld extends Phaser.Scene {
   private dialog!: DialogBox;
   private talkHint!: Phaser.GameObjects.BitmapText;
   private facing: Facing = "down";
+  /** The player's walk and run sprites (world menu: PLAYER). */
+  private look = PLAYER_LOOKS[playerLook()];
   private duelResult: { won: boolean } | undefined;
   /** Fading out towards another map: no second warp, no movement. */
   private warping = false;
@@ -149,7 +151,8 @@ export class Overworld extends Phaser.Scene {
     const x = saved?.x ?? at?.x ?? 400;
     let y = saved?.y ?? arrival?.y ?? at?.y ?? 520;
     if (!saved) y = this.freeY(x, y);
-    this.player = this.physics.add.sprite(x, y, CHARACTERS, frameOf(this, "player", "down")).setScale(2);
+    this.look = PLAYER_LOOKS[playerLook()];
+    this.player = this.physics.add.sprite(x, y, CHARACTERS, frameOf(this, this.look.walk, "down")).setScale(2);
     this.player.body.setSize(16, 16, false).setOffset(8, 16);
     // Snapped like the (unscaled) map, which "safeAuto" would skip at 2x: no half-pixel shimmer against the ground.
     this.player.vertexRoundMode = "fullAuto";
@@ -160,7 +163,7 @@ export class Overworld extends Phaser.Scene {
       this.player.setFlipX(facing.flipX);
     }
     arrival = null;
-    this.player.setFrame(frameOf(this, "player", this.facing));
+    this.player.setFrame(frameOf(this, this.look.walk, this.facing));
     for (const walls of this.walls) this.physics.add.collider(this.player, walls);
     if (this.blockers) this.physics.add.collider(this.player, this.blockers);
     this.sortByFeet(this.player);
@@ -415,9 +418,10 @@ export class Overworld extends Phaser.Scene {
       return;
     }
     if (this.dialog.isOpen || this.menuOpen()) {
+      this.look = PLAYER_LOOKS[playerLook()];
       this.player.setVelocity(0, 0);
       this.player.anims.stop();
-      this.player.setFrame(frameOf(this, "player", this.facing));
+      this.player.setFrame(frameOf(this, this.look.walk, this.facing));
       this.talkHint.setVisible(false);
       return;
     }
@@ -442,10 +446,10 @@ export class Overworld extends Phaser.Scene {
     } else if (vy < 0) this.facing = "up";
     else if (vy > 0) this.facing = "down";
 
-    if (vx !== 0 || vy !== 0) this.player.play(walkAnim(this, running ? "player-run" : "player", this.facing, running ? 6 : 4), true);
+    if (vx !== 0 || vy !== 0) this.player.play(walkAnim(this, running ? this.look.run : this.look.walk, this.facing, running ? 6 : 4), true);
     else {
       this.player.anims.stop();
-      this.player.setFrame(frameOf(this, "player", this.facing));
+      this.player.setFrame(frameOf(this, this.look.walk, this.facing));
     }
     this.sortByFeet(this.player);
   }

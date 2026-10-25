@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { WHITE, border, text } from "../ui/pixel.ts";
-import { aiDeck, chosenDeck, deckEntries, revealAiCards, setAiDeck, setChosenDeck, setRevealAiCards } from "../ui/prefs.ts";
+import { aiDeck, chosenDeck, deckEntries, playerLook, revealAiCards, setAiDeck, setChosenDeck, setPlayerLook, setRevealAiCards } from "../ui/prefs.ts";
 import { THEME, THEMES, setTheme } from "../ui/theme.ts";
 import { enterFullscreen } from "../ui/touch.ts";
 import { makeButton, makeDropDown, type Button } from "../ui/widgets.ts";
@@ -12,7 +12,7 @@ const BUTTON_COLOR = 0x2d4a7a, PICKED_COLOR = 0x3f7a3a, ACTION_COLOR = 0x4a72b0;
  * The settings panel: centred, one row per setting; labels on the left, controls in a column from `controlX` on, all
  * `controlW` wide (a pair of buttons with the `gap` between them included).
  */
-const PANEL = { w: 230, h: 206, row: 22, controlX: 100, controlW: 120, gap: 6 };
+const PANEL = { w: 230, h: 228, row: 22, controlX: 100, controlW: 120, gap: 6 };
 const PAIR_W = (PANEL.controlW - PANEL.gap) / 2;
 
 /** The prebuilt decks and your custom decks as drop-down choices. */
@@ -20,7 +20,7 @@ const deckOptions = () => deckEntries().map((e) => ({ value: e.key, label: e.lab
 
 /**
  * Overlay on the Overworld (its own scene, so it doesn't scroll with the map camera): a MENU button at the top right
- * that opens the settings panel (also M): your deck, the quick duel's AI deck (NPCs bring their own decks), whether
+ * that opens the settings panel (also M): the player character (boy / girl), your deck, the quick duel's AI deck (NPCs bring their own decks), whether
  * the AI's hand and set cards are shown, the duel UI theme; then DECK EDITOR, MULTIPLAYER, QUICK DUEL and FULL SCREEN.
  */
 export class WorldMenu extends Phaser.Scene {
@@ -85,6 +85,8 @@ export class WorldMenu extends Phaser.Scene {
       draw();
     };
 
+    // The overworld re-reads it while the menu is open, so the player changes at once.
+    pair(row("PLAYER:"), ["BOY", "GIRL"], () => (playerLook() === "girl" ? 1 : 0), (i) => setPlayerLook(i === 1 ? "girl" : "boy"));
     add(makeDropDown(this, mid, row("YOUR DECK:"), PANEL.controlW, 14, deckOptions(), chosenDeck().key, setChosenDeck, BUTTON_COLOR, PICKED_COLOR));
     add(makeDropDown(this, mid, row("AI DECK:"), PANEL.controlW, 14, deckOptions(), aiDeck().key, setAiDeck, BUTTON_COLOR, PICKED_COLOR));
     pair(row("AI CARDS:"), ["HIDDEN", "SHOWN"], () => (revealAiCards() ? 1 : 0), (i) => setRevealAiCards(i === 1));
