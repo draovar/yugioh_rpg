@@ -20,3 +20,5 @@ public/cards/
 captures/
 # TiledMCP checkpoints (undo history for map edits made through the Tiled MCP server)
 .tiledmcp/
+# Local MCP servers (Tiled MCP, absolute paths on this machine)
+.mcp.json
