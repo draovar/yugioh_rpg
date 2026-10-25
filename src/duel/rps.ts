@@ -1,5 +1,5 @@
 // Rock-paper-scissors before a duel decides who goes first: the winner chooses first or second.
-// UI-agnostic: the duel scene plays it with cards (src/ui/duel/RpsIntro.ts) against an RpsOpponent.
+// UI-agnostic: the duel scene plays it with cards (src/duel-screen/RpsIntro.ts) against an RpsOpponent.
 
 /** 0 = rock, 1 = paper, 2 = scissors (each beats the one before it, rock beats scissors). */
 export type RpsHand = 0 | 1 | 2;

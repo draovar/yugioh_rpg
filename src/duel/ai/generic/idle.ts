@@ -9,7 +9,7 @@ import {
   SelectIdleCMDAction,
   type OcgMessage,
 } from "ocgcore-wasm";
-import { TYPE } from "../../cardData.ts";
+import { TYPE } from "../../engine/cardData.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
 import { bestAtk, cardAt, cardType, codeValue, mine, monsterStats, monsterValue, statValue, theirs, tributesFor, weightsOf } from "../board.ts";
 import { best, type BrainState, type Option } from "./common.ts";

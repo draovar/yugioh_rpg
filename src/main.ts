@@ -1,10 +1,10 @@
 import Phaser from "phaser";
-import { Boot } from "./scenes/Boot.ts";
-import { Overworld } from "./scenes/Overworld.ts";
-import { WorldMenu } from "./scenes/WorldMenu.ts";
-import { DuelScene } from "./scenes/DuelScene.ts";
-import { Lobby } from "./scenes/Lobby.ts";
-import { DeckEditor } from "./scenes/DeckEditor.ts";
+import { Boot } from "./Boot.ts";
+import { Overworld } from "./overworld/Overworld.ts";
+import { WorldMenu } from "./overworld/WorldMenu.ts";
+import { DuelScene } from "./duel-screen/DuelScene.ts";
+import { Lobby } from "./lobby/Lobby.ts";
+import { DeckEditor } from "./deck-editor/DeckEditor.ts";
 import { fullscreenOnFirstTap } from "./ui/touch.ts";
 
 /**

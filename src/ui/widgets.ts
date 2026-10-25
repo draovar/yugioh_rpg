@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import { INK, WHITE, border, text } from "./pixel.ts";
 import { THEME, ui } from "./theme.ts";
-import { LIST_BUTTON } from "./duel/layout.ts";
+import { LIST_BUTTON } from "../duel-screen/layout.ts";
 
 export interface Button extends Phaser.GameObjects.Container {
   setEnabled(on: boolean): this;

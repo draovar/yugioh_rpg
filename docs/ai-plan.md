@@ -11,7 +11,7 @@ its best card to a cost. M2's card table is aimed at exactly these.
 
 ## 1. Where we start
 
-- `src/duel/autoBot.ts`: always picks the first legal option (summons index 0, attacks index 0, chains at 50%...).
+- `src/duel/ai/autoBot.ts`: always picks the first legal option (summons index 0, attacks index 0, chains at 50%...).
   Stays as the fallback and as the "level 0" sparring partner for measurements.
 - `DuelController` calls `autoRespond(prompt)` for the AI seat after `aiDelayMs` (450 ms). It already tracks
   `turn` / `turnPlayer` / `phase` and the pending `HINT_SELECTMSG` (only for the human so far).
@@ -277,9 +277,9 @@ after Scapegoat) and replan at once when a planned move is refused. The planner 
 
 ## 8. How we test it
 
-- **Arena** (`tools/arena.ts`): N seeded duels per pairing, both seat orders, all decks. Reports win rate, avg turns,
+- **Arena** (`tools/ai/arena.ts`): N seeded duels per pairing, both seat orders, all decks. Reports win rate, avg turns,
   decisions/s. Every milestone's claim is a number from here.
-- **Bench** (`tools/ai-bench.ts`): fixed positions (built like `devSetups`) with the expected or forbidden choice,
+- **Bench** (`tools/ai/ai-bench.ts`): fixed positions (built like `devSetups`) with the expected or forbidden choice,
   e.g. "2 attackers + Mirror Force set → activate", "opponent has 3 set backrow → don't overextend",
   "lethal on board → attack, don't set". Each misplay found in play becomes a position.
 - `smoke` / `smoke-p2p` stay green; P2P is unaffected (the AI never plays a lockstep duel).

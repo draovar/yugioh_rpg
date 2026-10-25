@@ -11,7 +11,7 @@ import {
   type OcgMessage,
   type OcgResponse,
 } from "ocgcore-wasm";
-import { DuelSession, type FieldSnapshot } from "./DuelSession.ts";
+import { DuelSession, type FieldSnapshot } from "./engine/DuelSession.ts";
 import { AiSeat, type AiPlayer } from "./ai/AiSeat.ts";
 import { autoBotBrain } from "./ai/brains.ts";
 

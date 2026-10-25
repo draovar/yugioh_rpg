@@ -1,7 +1,7 @@
 // Duel-screen UI themes (runewood, hologram). Positions and sizes are global (layout.ts: INSET,
 // LIST_BUTTON); a theme only changes the look:
 //   - template: "mat" (a framed playmat, Runewood) or "open" (zones straight on the table, Hologram)
-//   - sprites for a fixed set of roles (tools/import-ui.mjs copies them from the UI pack into
+//   - sprites for a fixed set of roles (tools/art/import-ui.mjs copies them from the UI pack into
 //     public/assets/ui/<theme>/<role>.png; Boot loads them as `ui-<role>`), described by the nine-slice
 //     insets and button-face text offsets measured from them
 //   - the UI colours and the table pattern
@@ -85,7 +85,7 @@ export interface Theme {
 
 /**
  * Runewood (Crusenho's Complete UI Essential Pack, CC BY 4.0): light and dark wood, cream paper.
- * Insets are from the sprites' pixel rows (see tools/import-ui.mjs for the files).
+ * Insets are from the sprites' pixel rows (see tools/art/import-ui.mjs for the files).
  */
 const RUNEWOOD: Theme = {
   name: "runewood",
@@ -126,7 +126,7 @@ const RUNEWOOD: Theme = {
 /**
  * Hologram (same pack): dark navy panels with 2px cyan outlines, bevelled buttons that turn solid light cyan
  * when current/hovered. Light cyan text on navy; a dark navy table with a deep teal mat. Insets from the
- * trimmed sprites (tools/import-ui.mjs).
+ * trimmed sprites (tools/art/import-ui.mjs).
  */
 const HOLOGRAM: Theme = {
   name: "hologram",
@@ -189,7 +189,7 @@ const THEME_KEY = "theme";
  */
 export const THEME: Theme = { ...chooseTheme() };
 
-/** Queues the current theme's UI sprites (public/assets/ui/<theme>/, from tools/import-ui.mjs). */
+/** Queues the current theme's UI sprites (public/assets/ui/<theme>/, from tools/art/import-ui.mjs). */
 export function loadThemeSprites(load: Phaser.Loader.LoaderPlugin): void {
   for (const role of UI_ROLES) load.image(ui(role), `assets/ui/${THEME.name}/${role}.png`);
 }

@@ -4,7 +4,7 @@ import { defineConfig, type Plugin } from "vite";
 
 /**
  * Dev-only: lets the game save captured frames (POST /__capture?name=<clip>&i=<frame>, body = PNG)
- * into captures/<clip>/ so tools/make-gif.mjs can turn them into a GIF. See src/dev/capture.ts.
+ * into captures/<clip>/ so tools/art/make-gif.mjs can turn them into a GIF. See src/dev/capture.ts.
  */
 function captureEndpoint(): Plugin {
   const root = path.resolve(import.meta.dirname, "captures");

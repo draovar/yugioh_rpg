@@ -1,5 +1,5 @@
 // The available brains by name (arena, URL options, later trainer profiles).
-import { autoRespond } from "../autoBot.ts";
+import { autoRespond } from "./autoBot.ts";
 import type { Brain } from "./AiSeat.ts";
 import { createGenericBrain } from "./generic/index.ts";
 import { Simulator, type SimEngine } from "./sim/simulator.ts";

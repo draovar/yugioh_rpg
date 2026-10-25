@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import createCore, { OcgMessageType } from "ocgcore-wasm";
 import type { AiSeat } from "../../src/duel/ai/AiSeat.ts";
-import { CardDb, type CardRecord } from "../../src/duel/cardData.ts";
-import { DuelSession, type DuelSeed, type Deck, type StepResult } from "../../src/duel/DuelSession.ts";
+import { CardDb, type CardRecord } from "../../src/duel/engine/cardData.ts";
+import { DuelSession, type DuelSeed, type Deck, type StepResult } from "../../src/duel/engine/DuelSession.ts";
 
 const DATA = path.resolve(import.meta.dirname, "../../public/data");
 const records: CardRecord[] = JSON.parse(readFileSync(path.join(DATA, "cards.json"), "utf-8"));

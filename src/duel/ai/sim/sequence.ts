@@ -16,10 +16,10 @@ import {
   type OcgMessage,
   type OcgResponse,
 } from "ocgcore-wasm";
-import { autoRespond } from "../../autoBot.ts";
-import type { CardDb } from "../../cardData.ts";
-import type { FieldSnapshot, PlayerView } from "../../DuelSession.ts";
-import { fnv1a } from "../../hash.ts";
+import { autoRespond } from "../autoBot.ts";
+import type { CardDb } from "../../engine/cardData.ts";
+import type { FieldSnapshot, PlayerView } from "../../engine/DuelSession.ts";
+import { fnv1a } from "../../engine/hash.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
 import { DEFAULT_WEIGHTS, evaluate, lpValue } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";

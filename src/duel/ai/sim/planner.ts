@@ -18,8 +18,8 @@ import {
   SelectIdleCMDAction,
   type OcgMessage,
 } from "ocgcore-wasm";
-import type { FieldSnapshot } from "../../DuelSession.ts";
-import { mulberry32 } from "../../rng.ts";
+import type { FieldSnapshot } from "../../engine/DuelSession.ts";
+import { mulberry32 } from "../../engine/rng.ts";
 import type { AiView } from "../AiSeat.ts";
 import { boardDigest, nextSteps, type PickTarget, type PlanStep } from "./sequence.ts";
 import type { Simulator } from "./simulator.ts";

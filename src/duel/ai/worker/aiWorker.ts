@@ -1,8 +1,8 @@
 // The AI's Web Worker: an AiSeat with its own engine (for its simulations), fed redacted messages and masked boards by
 // AiWorkerClient. Thinking here keeps the game's frames smooth, and between decisions the worker fills its brain's
 // pool of prepared copies on its own. Messages are handled strictly in order (init loads the engine first).
-import type { FieldSnapshot } from "../../DuelSession.ts";
-import { loadEngine } from "../../loadEngine.ts";
+import type { FieldSnapshot } from "../../engine/DuelSession.ts";
+import { loadEngine } from "../../engine/loadEngine.ts";
 import { AiSeat } from "../AiSeat.ts";
 import { BRAINS } from "../brains.ts";
 import type { TraceEntry } from "../trace.ts";

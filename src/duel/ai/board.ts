@@ -1,8 +1,8 @@
 // Reading the board for the AI: finding cards, estimating what hidden ones are, valuing cards and whole boards.
 // Values are in rough "cards" (1 = an average card); `evaluate` compares both sides in the same unit.
 import { OcgLocation, OcgPosition, type OcgCardLoc } from "ocgcore-wasm";
-import { TYPE } from "../cardData.ts";
-import type { CardView, PlayerView } from "../DuelSession.ts";
+import { TYPE } from "../engine/cardData.ts";
+import type { CardView, PlayerView } from "../engine/DuelSession.ts";
 import type { AiView } from "./AiSeat.ts";
 import { BLANK } from "./sim/world.ts";
 
@@ -68,7 +68,7 @@ export function monsterStats(c: CardView): { atk: number; def: number; known: bo
 /**
  * How the AI values things, in "cards" (1 = an average card). Every value judgement goes through these numbers: the
  * board score that simulations compare, battle outcomes, which cards to pick. Defaults were picked by hand, except the
- * LP curve and the hand cards: those were fitted to who won (tools/fit-eval.ts on 5000 generic and 320 planner duels,
+ * LP curve and the hand cards: those were fitted to who won (tools/ai/fit-eval.ts on 5000 generic and 320 planner duels,
  * 2026-10-15; docs/ai-rework-plan.md phase 2). A fit on 1460 more planner duels (phase 3) confirmed the Spell/Trap
  * values. `npm run tune` searches by self-play, trainer styles (M4) can shift them.
  */

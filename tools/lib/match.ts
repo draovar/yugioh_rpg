@@ -9,9 +9,9 @@ import { AiSeat } from "../../src/duel/ai/AiSeat.ts";
 import type { Weights } from "../../src/duel/ai/board.ts";
 import { BRAINS, type BrainContext, type BrainName } from "../../src/duel/ai/brains.ts";
 import { formatTrace } from "../../src/duel/ai/trace.ts";
-import { TYPE } from "../../src/duel/cardData.ts";
-import type { DuelSession, FieldSnapshot } from "../../src/duel/DuelSession.ts";
-import { DECKS, type DeckName } from "../../src/duel/decks.ts";
+import { TYPE } from "../../src/duel/engine/cardData.ts";
+import type { DuelSession, FieldSnapshot } from "../../src/duel/engine/DuelSession.ts";
+import { DECKS, type DeckName } from "../../src/duel/decks/decks.ts";
 import { cards, core, newDuel, readScript, runDuel, seedFrom } from "./engine.ts";
 
 /**
@@ -43,7 +43,7 @@ export interface MatchSettings {
   lp?: number;
   /** Print every decision (single thread only). */
   trace?: boolean;
-  /** Keep each turn's starting position (`Result.positions`), for fitting the evaluation (tools/fit-eval.ts). */
+  /** Keep each turn's starting position (`Result.positions`), for fitting the evaluation (tools/ai/fit-eval.ts). */
   record?: boolean;
 }
 

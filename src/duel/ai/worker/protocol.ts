@@ -1,7 +1,7 @@
 // Messages between the game (main thread) and the AI's Web Worker. The worker only ever receives what the AI's seat
 // may see: messages already redacted and the board already masked on the main thread.
 import type { OcgMessage, OcgResponse } from "ocgcore-wasm";
-import type { DuelSeed, FieldSnapshot } from "../../DuelSession.ts";
+import type { DuelSeed, FieldSnapshot } from "../../engine/DuelSession.ts";
 import type { BrainName } from "../brains.ts";
 import type { TraceEntry } from "../trace.ts";
 

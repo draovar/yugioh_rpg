@@ -127,7 +127,7 @@ win-chance average is not the cause (plain averaging measured the same); lowerin
 for both brains and brings worlds to par. Unused Spells/Traps (~180 per 100 turns) didn't move in any run: same cause
 for Spells/Traps in hand (`handSpell` 1.3 ≥ a set card or a 1-for-1 trade).
 
-**The fix: weights fitted to who won** (`tools/fit-eval.ts`, "Texel tuning"). `arena --record` keeps each turn's
+**The fix: weights fitted to who won** (`tools/ai/fit-eval.ts`, "Texel tuning"). `arena --record` keeps each turn's
 starting position as the turn player saw it and whether they won; a logistic regression finds the weights (monster
 values = the unit) that predict the winner best, checked on held-out duels, error bars by bootstrap over duels.
 Data: 72k positions from 5000 generic-vs-generic duels, 5.6k from 320 planner-vs-planner duels.
@@ -172,7 +172,7 @@ weights are settled at their current values, and the hand-picked `openField`, `s
 
 Data: 1460 new planner-vs-planner duels with the phase 2 weights (960 with the 4 decks, seeds from 5001, and 500 with
 all 5 decks including Goat Control, seeds from 7001; 23k positions), plus phase 2's 320 planner and 5000 generic duels.
-Fits: `node tools/fit-eval.ts FILES --set lpHalf=10000 --fix defFactor,token,continuous,equip,faceUpSpell,deckLowPenalty`,
+Fits: `node tools/ai/fit-eval.ts FILES --set lpHalf=10000 --fix defFactor,token,continuous,equip,faceUpSpell,deckLowPenalty`,
 40 bootstrap samples.
 
 - **The current weights are already at the data's optimum**: on held-out duels the fitted weights predict the winner
@@ -199,7 +199,7 @@ Fits: `node tools/fit-eval.ts FILES --set lpHalf=10000 --fix defFactor,token,con
 - **`stuckMonster`** is the one weight the data pins down: 0.36 ± 0.13 (planner) and 0.48 ± 0.06 (generic) vs 0.75.
   `stuckMonster2` disagrees (0.70 ± 0.10 vs 0.25 ± 0.07) and stays at 0.5. `lpScale` came out 9.5 ± 1.2 on planner
   duels (generic 11.9 ± 0.7) and stays at 12.
-- `tools/fit-eval.ts`: `setTrapStep` is now clamped at ≥ 0 between relinearisations (a negative step ran away: held-out
+- `tools/ai/fit-eval.ts`: `setTrapStep` is now clamped at ≥ 0 between relinearisations (a negative step ran away: held-out
   loss 0.996 on the generic data). `ai-bench` takes `--weights W.json` to bench candidate weights.
 
 Arena (each candidate as A against the defaults as B, 736 duels, 4 decks, seeds from 1, `--stats`). The **null run**

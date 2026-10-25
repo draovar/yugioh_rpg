@@ -12,7 +12,7 @@ import {
   type OcgResponse,
   type SelectFieldPlace,
 } from "ocgcore-wasm";
-import type { CardDb } from "../cardData.ts";
+import type { CardDb } from "../engine/cardData.ts";
 
 /** One option the brain weighed, with its score (higher = better). */
 export interface ScoredOption {

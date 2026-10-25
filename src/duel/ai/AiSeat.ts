@@ -2,10 +2,10 @@
 // seat's memory, reads the board as the seat sees it, and hands a brain only that (an AiView). Brains never get the
 // session or raw messages, so they can't see hidden cards by accident.
 import type { OcgMessage, OcgResponse } from "ocgcore-wasm";
-import type { CardDb } from "../cardData.ts";
-import type { DuelSeed, FieldSnapshot } from "../DuelSession.ts";
-import { autoRespond } from "../autoBot.ts";
-import { mulberry32 } from "../rng.ts";
+import type { CardDb } from "../engine/cardData.ts";
+import type { DuelSeed, FieldSnapshot } from "../engine/DuelSession.ts";
+import { autoRespond } from "./autoBot.ts";
+import { mulberry32 } from "../engine/rng.ts";
 import type { Weights } from "./board.ts";
 import { AiMemory } from "./memory.ts";
 import { redact } from "./redact.ts";

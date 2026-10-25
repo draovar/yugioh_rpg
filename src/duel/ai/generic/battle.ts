@@ -9,7 +9,7 @@ import {
   type OcgCardLoc,
   type OcgMessage,
 } from "ocgcore-wasm";
-import type { CardView } from "../../DuelSession.ts";
+import type { CardView } from "../../engine/DuelSession.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
 import { WALL_DEF, cardAt, damageCost, mine, monsterStats, monsterValue, theirs, weightsOf } from "../board.ts";
 import { attackKey, best, sameLoc, type BrainState, type Option } from "./common.ts";

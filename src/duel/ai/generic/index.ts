@@ -3,7 +3,7 @@
 // answers the opponent's moves by replaying them there, and judges single main-phase activations there when no plan
 // can be made.
 import { OcgMessageType, OcgResponseType, SelectBattleCMDAction, type OcgMessage } from "ocgcore-wasm";
-import { autoRespond, pickSum, pickTributes } from "../../autoBot.ts";
+import { autoRespond, pickSum, pickTributes } from "../autoBot.ts";
 import type { AiView, Brain, Decision } from "../AiSeat.ts";
 import { pickAttackTarget, decideBattle } from "./battle.ts";
 import { decideChain } from "./chain.ts";

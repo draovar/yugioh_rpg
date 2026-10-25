@@ -3,7 +3,7 @@
 // moment as its moment (a trap's trigger event, or a timing hint like "the opponent's End Phase"). The generic brain
 // responds only to the opponent (their summon, attack, activation, or their End Phase) and only at such moments.
 import { OcgLocation, OcgMessageType, OcgPhase, OcgResponseType, type OcgMessage } from "ocgcore-wasm";
-import { TYPE } from "../../cardData.ts";
+import { TYPE } from "../../engine/cardData.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
 import { cardAt, cardType, mine, monsterStats, weightsOf } from "../board.ts";
 import { best, type BrainState, type Option } from "./common.ts";

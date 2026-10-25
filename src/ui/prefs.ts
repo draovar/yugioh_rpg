@@ -1,9 +1,9 @@
 // Per-browser preferences (localStorage). Storage can be unavailable (private mode, blocked site data):
 // reads fall back to the default, writes are skipped.
 import type { ChainMode } from "../duel/DuelController.ts";
-import { DECK_RULES } from "../duel/deckEditor.ts";
-import { DECKS, type DeckName } from "../duel/decks.ts";
-import type { Deck } from "../duel/DuelSession.ts";
+import { DECK_RULES } from "../duel/decks/deckRules.ts";
+import { DECKS, type DeckName } from "../duel/decks/decks.ts";
+import type { Deck } from "../duel/engine/DuelSession.ts";
 
 const DECK_KEY = "deck";
 

@@ -20,8 +20,8 @@ import {
   type OcgMessage,
   type OcgResponse,
 } from "ocgcore-wasm";
-import { autoRespond, pickTributes } from "../../autoBot.ts";
-import type { Deck, StartCard } from "../../DuelSession.ts";
+import { autoRespond, pickTributes } from "../autoBot.ts";
+import type { Deck, StartCard } from "../../engine/DuelSession.ts";
 import { AiSeat, type AiView } from "../AiSeat.ts";
 import { evaluate, tributesFor } from "../board.ts";
 import { createGenericBrain } from "../generic/index.ts";

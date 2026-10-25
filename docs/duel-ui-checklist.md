@@ -4,7 +4,7 @@ Every prompt and overlay the duel screen shows, with its current look and how to
 card pool (`data/pool.json`). Tick **Tested** once you've seen it in a real duel.
 
 Style: **Runewood** = the finished look (the Hologram theme reskins the same layout). The prompts are set up in
-`src/scenes/duelPrompts.ts`; on-board choices in `src/ui/duel/BoardPick.ts`.
+`src/duel-screen/duelPrompts.ts`; on-board choices in `src/duel-screen/BoardPick.ts`.
 
 To see any of #3–#17 without setting it up in a duel, open `/?duel&dialogs` and pick it from the dropdown
 (top-left). It uses sample cards; your answer goes to the duel log instead of the engine.

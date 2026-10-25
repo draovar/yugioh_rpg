@@ -12,7 +12,7 @@
 import { Peer, type DataConnection, type PeerError } from "peerjs";
 import type { OcgResponse } from "ocgcore-wasm";
 import type { RemotePeer } from "../duel/DuelController.ts";
-import { randomSeed, type Deck, type DuelSeed as Seed } from "../duel/DuelSession.ts";
+import { randomSeed, type Deck, type DuelSeed as Seed } from "../duel/engine/DuelSession.ts";
 import type { RpsHand, RpsOpponent } from "../duel/rps.ts";
 import { decodeResponse, encodeResponse } from "./wire.ts";
 

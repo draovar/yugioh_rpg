@@ -3,7 +3,7 @@
 // masked here, before they're posted. A local AiSeat shadows the worker (same messages, so the same memory); if the
 // worker can't start or fails on a prompt, that shadow answers instead, on the main thread like before.
 import type { OcgMessage, OcgResponse } from "ocgcore-wasm";
-import type { DuelSession } from "../../DuelSession.ts";
+import type { DuelSession } from "../../engine/DuelSession.ts";
 import { AiSeat, type AiPlayer } from "../AiSeat.ts";
 import { BRAINS, type BrainName } from "../brains.ts";
 import { redact } from "../redact.ts";

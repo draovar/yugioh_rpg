@@ -3,9 +3,9 @@
 // no effects, so a copy never knows more than the AI does. The AI's own Deck is its decklist minus the cards it can
 // see (it knows what's left, not the order). The AI is always team 0 in the copy.
 import { OcgLocation, OcgPosition } from "ocgcore-wasm";
-import { CardDb, TYPE, type CardRecord } from "../../cardData.ts";
-import type { CardView, Deck, PlayerView, StartCard } from "../../DuelSession.ts";
-import { shuffle } from "../../rng.ts";
+import { CardDb, TYPE, type CardRecord } from "../../engine/cardData.ts";
+import type { CardView, Deck, PlayerView, StartCard } from "../../engine/DuelSession.ts";
+import { shuffle } from "../../engine/rng.ts";
 import type { AiView } from "../AiSeat.ts";
 
 /** Stand-in passcodes (no real card uses them). */

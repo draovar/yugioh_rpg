@@ -1,7 +1,7 @@
 // The smaller prompts: battle position, card / attribute / type declarations.
 import { OcgMessageType, OcgPhase, OcgPosition, OcgResponseType, type OcgMessage, type OcgResponse } from "ocgcore-wasm";
-import { TYPE } from "../../cardData.ts";
-import { declarableCards } from "../../autoBot.ts";
+import { TYPE } from "../../engine/cardData.ts";
+import { declarableCards } from "../autoBot.ts";
 import type { AiView, Decision } from "../AiSeat.ts";
 import { DEFENSE, bestAtk, codeValue, mine, theirs } from "../board.ts";
 

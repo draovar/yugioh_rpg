@@ -1,5 +1,5 @@
 {
-  "_doc": "Layout of reshef-sheet.png for tools/build-characters.mjs. A character is [col, row] = the top-left cell of a regular 3x3 block (rows down / side / up, frames stand / step / step), or an object: { at, rows } for a block with another row order, or { down, side, up } cell lists. Empty cells repeat the stand frame. flip: true = its side view faces left in the sheet. nudge: { down: [0, -1, -1] } moves single frames up (negative) or down by pixels. { sheet: file.png } = a ready-made 96x96 sheet in this folder, same layout (characters drawn for this game). Names are free to change (they are the sprite ids in the game).",
+  "_doc": "Layout of reshef-sheet.png for tools/art/build-characters.mjs. A character is [col, row] = the top-left cell of a regular 3x3 block (rows down / side / up, frames stand / step / step), or an object: { at, rows } for a block with another row order, or { down, side, up } cell lists. Empty cells repeat the stand frame. flip: true = its side view faces left in the sheet. nudge: { down: [0, -1, -1] } moves single frames up (negative) or down by pixels. { sheet: file.png } = a ready-made 96x96 sheet in this folder, same layout (characters drawn for this game). Names are free to change (they are the sprite ids in the game).",
   "grid": { "x": 6, "y": 4, "pitch": 35, "size": 32 },
   "background": [0, 248, 0],
   "characters": {

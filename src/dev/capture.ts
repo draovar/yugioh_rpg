@@ -1,6 +1,6 @@
 // Dev-only frame capture: pauses Phaser's own loop and steps the game at a fixed frame rate,
 // saving every frame through the dev server (see vite.config.ts), so animations can be recorded
-// smoothly even when the browser tab is hidden. Turn the frames into a GIF with tools/make-gif.mjs.
+// smoothly even when the browser tab is hidden. Turn the frames into a GIF with tools/art/make-gif.mjs.
 //
 // From the browser console (dev build):
 //   await captureClip(game, "draw", 2.5, () => pressSomething())
