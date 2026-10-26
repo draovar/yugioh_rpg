@@ -10,6 +10,7 @@ import type { WorldMenu } from "./WorldMenu.ts";
 import { CHARACTERS, frameOf, loadCharacters, walkAnim, type Facing } from "./characters.ts";
 import { NPCS, type NpcDef } from "./npcs.ts";
 import { bake, buildSortedWalls, depthForY } from "./sortedWalls.ts";
+import { Ambushes, loadAmbushes } from "./ambush.ts";
 
 const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
@@ -27,6 +28,7 @@ function loadMap(load: Phaser.Loader.LoaderPlugin, name: string) {
 export function loadOverworld(load: Phaser.Loader.LoaderPlugin) {
   loadMap(load, currentMap);
   loadCharacters(load);
+  loadAmbushes(load);
 }
 
 const TALK_DISTANCE = 56, SPEED = 70, FADE_MS = 200;
@@ -62,6 +64,8 @@ export class Overworld extends Phaser.Scene {
   private warping = false;
   /** Chips (placeholder: nothing earns or spends them yet). */
   private chips = 2;
+  /** Random hedge ambushes (maps with AMBUSHERS). */
+  private ambushes: Ambushes | null = null;
 
   constructor() {
     super({ key: "Overworld", physics: { default: "arcade", arcade: {} } });
@@ -79,6 +83,7 @@ export class Overworld extends Phaser.Scene {
 
   create() {
     this.scene.launch("WorldMenu");
+    if (import.meta.env.DEV) (window as unknown as { overworld: Overworld }).overworld = this;
     if (!this.cache.tilemap.exists(mapKey(currentMap))) {
       text(this, 320, 170, "NO MAP: RUN NPM RUN BUILD-TILES (NEEDS VENDOR/PAID)", { color: WHITE, originX: 0.5 });
       return;
@@ -137,6 +142,15 @@ export class Overworld extends Phaser.Scene {
       this.sortByFeet(npc);
     }
     this.physics.add.collider(this.player, this.npcs);
+
+    this.ambushes = new Ambushes(this, currentMap, this.walls, this.blockers, {
+      turnPlayer: (facing, flipX) => {
+        this.facing = facing;
+        this.player.setFrame(frameOf(this, this.look.walk, facing)).setFlipX(flipX);
+      },
+      // Placeholder until ambush duels exist: they say their line, then leap back into the hedge.
+      challenge: (def, npc, retreat) => this.dialog.open(def.name, def.text, ["OK"], retreat, this.player),
+    });
 
     // Warps: rectangles named "warp" (layer "objects") with properties map (target map) and spawn (the point to
     // arrive at there); keepY keeps the player's height, for maps placed side by side with their tops aligned.
@@ -267,6 +281,11 @@ export class Overworld extends Phaser.Scene {
       this.player.setVelocity(0, 0);
       return;
     }
+    if (this.ambushes?.busy && !this.dialog.isOpen) {
+      this.player.setVelocity(0, 0);
+      this.talkHint.setVisible(false);
+      return;
+    }
     if (this.dialog.isOpen || this.menuOpen()) {
       this.look = PLAYER_LOOKS[playerLook()];
       this.player.setVelocity(0, 0);
@@ -302,5 +321,6 @@ export class Overworld extends Phaser.Scene {
       this.player.setFrame(frameOf(this, this.look.walk, this.facing));
     }
     this.sortByFeet(this.player);
+    if (vx !== 0 || vy !== 0) this.ambushes?.walk(this.player, this.player.body.speed * this.game.loop.delta / 1000, this.facing);
   }
 }

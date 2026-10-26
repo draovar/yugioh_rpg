@@ -44,7 +44,7 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
 | `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled, external tileset) → `public/maps/<name>.png` + `.json` (needs `vendor/paid/`) |
 | `node tools/maps/hedge-maze.mjs data/maps/maze-layout.json data/maps/maze.tmj` | maze layout → hedge maze map; **overwrites** the .tmj (Tiled edits lost), then `build-tiles` |
-| `npm run build-characters` | overworld sprites from `data/characters/` (per `characters.json`) → `public/assets/overworld/` + the contact sheet `docs/characters.png` |
+| `npm run build-characters` | overworld sprites from `data/characters/` (per `characters.json`) → `public/assets/overworld/` + the contact sheet `docs/characters.png`, then the hedge ambush sheets (`tools/art/build-ambush.mjs`) |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/art/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/art/build-tiny5-font.mjs`) |
@@ -92,6 +92,7 @@ Dev:
   sample cards (answers are only logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`).
 - `&theme=NAME` picks the UI theme (`runewood`, `hologram`).
 - `&map=NAME` starts on another map instead of the overworld (`maze`; the player starts at its `spawn` point object).
+- `&ambush` makes the first maze hedge ambush happen at the first spot that fits (walk along a hedge).
 - `&touch` shows the overworld's touch controls on a desktop (phones get them automatically).
 - `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
   Use it for automated browser testing; a hidden pane still throttles timers to ~1 fps, so animations look choppy in

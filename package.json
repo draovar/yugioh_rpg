@@ -23,7 +23,7 @@
     "build-art": "node tools/art/build-art.mjs",
     "build-palette": "node tools/art/build-palette.mjs",
     "build-tiles": "node tools/maps/build-tiles.mjs",
-    "build-characters": "node tools/art/build-characters.mjs"
+    "build-characters": "node tools/art/build-characters.mjs && node tools/art/build-ambush.mjs"
   },
   "dependencies": {
     "ocgcore-wasm": "^0.1.2",

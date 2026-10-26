@@ -22,3 +22,16 @@ export const NPCS: Record<string, NpcDef[]> = {
     { name: "Bonz", sprite: "bonz", x: 120, y: 150, text: "Heh heh... care for a shadow game?", deck: "zombieMadness" },
   ],
 };
+
+/** An NPC who jumps out of a hedge at random (ambush.ts) and challenges the player. */
+export interface AmbushDef {
+  name: string;
+  /** Character in characters.json, also listed in its "ambush" (tools/art/build-ambush.mjs draws the jump out). */
+  sprite: string;
+  text: string;
+}
+
+// Hedge ambushers by map. Placeholder name and text.
+export const AMBUSHERS: Record<string, AmbushDef[]> = {
+  maze: [{ name: "Hedge Hopper", sprite: "black-hair-purple", text: "Gotcha! Nobody gets through my maze without a duel!" }],
+};

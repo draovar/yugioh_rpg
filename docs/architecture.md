@@ -10,7 +10,7 @@ src/duel/              engine layer, no Phaser: DuelController, rps
   decks/               decks (prebuilt), deckRules (deck editor rules + card list), cardSearch
   ai/                  the opponent AI (+ autoBot, boardText)
 src/net/               peer-to-peer networking, no Phaser
-src/overworld/         Overworld scene, WorldMenu, DialogBox, TouchPad, characters, npcs, sortedWalls
+src/overworld/         Overworld scene, WorldMenu, DialogBox, TouchPad, characters, npcs, ambush, sortedWalls
 src/duel-screen/       DuelScene, duelPrompts and the duel UI (cards, modal, info panel, animator, field, layout)
 src/deck-editor/       DeckEditor scene, its layout, list rows, filter panel, dialogs
 src/lobby/             multiplayer Lobby scene
@@ -170,6 +170,14 @@ passes the `NetDuel` to `Duel`.
 - NPCs (`NPCS` in `npcs.ts`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn
   to the player while talking) talk with X / Enter / Space in a `DialogBox` (tiny5 at 2x, clickable options); YES
   starts a duel, and the player comes back to the same spot (`savePosition`) with the NPC's line about the result.
+- Hedge ambushes (`ambush.ts`, `AMBUSHERS` in `npcs.ts` per map): every tile walked in the maze has a 1/150
+  chance to ready an ambush (about 35 s of walking; none for 2450 px, ~35 s, after one; `&ambush`: the first one is
+  ready at once). At the next spot that fits, recognised by the hedge tiles' `sheetId`: walking sideways, the hedge face
+  ahead (3 face tiles wide) shakes, a dark hollow with eyes opens in it, the NPC pushes their head out and leaps in
+  front of the player; walking up or down, a vertical hedge beside the path ahead (3 tiles of its side) shakes and the
+  NPC leaps out of it sideways onto the path, 64 px ahead (frames from `build-ambush`, leaf particles, the "!" balloon
+  over the player). The scene keeps the player still while `busy`.
+  Placeholder until ambush duels exist: the NPC says their line, then leaps back into the hedge.
 - Touch devices: a semi-transparent D-pad (diagonals, keeps steering when the finger slides off) and X button
   (`TouchPad.ts`), with the dialog between them. `TOUCH` in `src/ui/touch.ts` = coarse pointer (`&touch` forces it).
 - `WorldMenu`: overlay scene launched by Overworld (so it doesn't scroll). MENU (M) button top right opens the settings
@@ -322,9 +330,13 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     32x32 frames per character: down / side (facing right) / up × stand, step, step), `props.png`+`.json`,
     `balloons.png`+`.json` (16x16 reaction balloons: heart, dots, exclaim, anger, sweat, question), and the contact
     sheet `docs/characters.png` with every name.
+  - `build-ambush` (run by `build-characters`): for each name in characters.json's `ambush` list, a row of 10 32x32
+    frames drawn from that character's down and side frames → `public/assets/overworld/ambush/<name>.png`: a dark
+    hollow in the hedge face, eyes in it (2), head out through the leaves, crouch, leap, land, 2 leaves (particles), a
+    sideways leap. Leaves use the hedge face's greens; no pixels come from the paid tileset.
 - `maps/`: `build-tiles` (Tiled map + its external tileset `data/maps/modern-exteriors.tsj`, whose image is the paid
   sheet in `vendor/paid/` → `public/maps/<name>.png` with only the tiles the map uses + `<name>.json` with tile ids
-  remapped).
+  remapped; each tile keeps its id in the full sheet as the `sheetId` tile property).
   - `hedge-maze.mjs`: maze layout (walls per grid line, extracted from the owner's maze picture) → hedge maze map:
     hedges auto-tiled from the sheet's hedge ring (flowered hedges after each fork of the right path, a subtle hint),
     meadows left/right, pine forests above/below (the only way across is the maze), ground decorations, the hidden

@@ -68,8 +68,14 @@ async function pack(name) {
       return gid === 0 ? 0 : (remap.get(gid) | (raw & FLIP_BITS)) >>> 0;
     });
   }
-  // Custom tile properties (collision) for the tiles we kept.
-  const tiles = (set.tiles ?? []).filter((t) => remap.has(t.id + set.firstgid)).map((t) => ({ ...t, id: remap.get(t.id + set.firstgid) - 1 }));
+  // Custom tile properties (collision) for the tiles we kept, plus `sheetId`: the tile's id in the full tileset, so
+  // game code can tell tiles apart by what they show (the hedge faces hedge ambushes come out of).
+  const custom = new Map((set.tiles ?? []).map((t) => [t.id, t]));
+  const tiles = [...remap].map(([oldGid, newGid]) => {
+    const t = custom.get(oldGid - set.firstgid);
+    const properties = [...(t?.properties ?? []), { name: "sheetId", type: "int", value: oldGid - set.firstgid }];
+    return { ...t, id: newGid - 1, properties };
+  });
   const { type, version, tiledversion, ...embedded } = set;
   map.tilesets[0] = { ...embedded, firstgid: 1, image: `${name}.png`, columns: COLUMNS, tilecount: remap.size,
     imagewidth: width, imageheight: height, margin: 0, spacing: 0, tiles };

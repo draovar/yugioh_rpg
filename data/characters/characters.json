@@ -130,6 +130,7 @@
     "banana": [25, 27],
     "outline-white": [24, 28]
   },
+  "ambush": ["black-hair-purple"],
   "balloons": {
     "_doc": "Reaction balloons: green boxes in this area (x, y, w, h), read left to right per row; each run of boxes is one balloon's frames, named in that order.",
     "area": [636, 1019, 336, 40],
