@@ -56,10 +56,17 @@ Then NPCs get decks built from it.
   had their LV3 throw itself away and the AI expected the threat to go by itself. Copy gap to fix before picking it.
   The bench's do-nothing opponent now declines optional triggers (it had said yes to that LV3).
 
-### 3. Data and art at full size
+### 3. Data and art at full size ✅ (2026-10-26, phone check after the next deploy)
 
-- `build-data`, `fetch-art` (~2,900 downloads, ~10 min; CI caches `vendor/art`), `build-art`.
-- Check boot time in the browser and on the phone, and that the deck editor stays smooth with 2,841 cards.
+- `fetch-art`: 2,306 new artworks, ~45 min (about 1.2 s each, mostly the image host's latency); `vendor/art` is
+  321 MB. CI caches it, so only the first deploy pays that once. `build-art`: 95 s.
+- `build-art` now writes lossless 8-bit indexed PNGs (`tools/lib/indexed-png.mjs`; sharp's palette output shifts
+  colours): art32 atlas 1024x2880, 2.31 → 1.74 MB; art128 33 → 25 MB (2,879 files, loaded one at a time).
+- Boot downloads ~7.5 MB, ~2.6 MB on the wire (Pages gzips JSON): atlas 1.74 MB, `scripts.json` 4.2 MB (620 KB
+  gzipped), `cards.json` 1.1 MB (200 KB), `art32.json` 465 KB (23 KB). Locally every file loads in < 30 ms.
+  If phones feel slow: load the atlas and engine data at the first duel / deck editor instead of at boot.
+- Deck editor with 2,842 cards (browser): search 1.2-1.7 ms per keystroke (card-text search too), scrolling 0.3 ms
+  (it only draws the visible rows). Atlas checked in the browser: all 2,879 frames, pixels as built.
 
 ### 4. Engine check of every card (random-deck mode for `smoke`)
 

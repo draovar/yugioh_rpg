@@ -7,6 +7,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { remap } from "../lib/palette.mjs";
 import { ART_STYLE, boost, readGpl } from "../lib/art-style.mjs";
+import { indexedPng } from "../lib/indexed-png.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const SRC = path.join(ROOT, "vendor/art");
@@ -15,13 +16,13 @@ const PALETTE = readGpl(path.join(ROOT, "data/palette.gpl"));
 const pool = JSON.parse(readFileSync(path.join(ROOT, "public/data/cards.json"), "utf-8")).map((c) => c.code);
 mkdirSync(path.join(OUT, "art128"), { recursive: true });
 
-/** Resize + boost + map to the shared palette; returns a PNG buffer. */
+/** Resize + boost + map to the shared palette; returns raw RGBA pixels. */
 async function renderArt(file, style) {
   const { size } = style;
   const px = await boost(sharp(file).resize(size, size, { fit: "cover", position: "centre", kernel: "lanczos3" }), style)
     .removeAlpha().raw().toBuffer();
   remap(px, size, size, PALETTE, style.dither);
-  return sharp(px, { raw: { width: size, height: size, channels: 3 } }).png().toBuffer();
+  return sharp(px, { raw: { width: size, height: size, channels: 3 } }).ensureAlpha().raw().toBuffer();
 }
 
 const available = pool.filter((code) => existsSync(path.join(SRC, `${code}.jpg`)));
@@ -35,12 +36,14 @@ const frames = {};
 for (const [i, code] of available.entries()) {
   const src = path.join(SRC, `${code}.jpg`);
   const x = (i % PER_ROW) * T, y = Math.floor(i / PER_ROW) * T;
-  tiles.push({ input: await renderArt(src, ART_STYLE.small), left: x, top: y });
+  tiles.push({ input: await renderArt(src, ART_STYLE.small), raw: { width: T, height: T, channels: 4 }, left: x, top: y });
   frames[String(code)] = { frame: { x, y, w: T, h: T }, rotated: false, trimmed: false, spriteSourceSize: { x: 0, y: 0, w: T, h: T }, sourceSize: { w: T, h: T } };
-  writeFileSync(path.join(OUT, "art128", `${code}.png`), await renderArt(src, ART_STYLE.large));
+  const L = ART_STYLE.large.size;
+  writeFileSync(path.join(OUT, "art128", `${code}.png`), indexedPng(await renderArt(src, ART_STYLE.large), L, L));
 }
-await sharp({ create: { width: PER_ROW * T, height: rows * T, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-  .composite(tiles).png().toFile(path.join(OUT, "art32.png"));
+const atlas = await sharp({ create: { width: PER_ROW * T, height: rows * T, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+  .composite(tiles).raw().toBuffer();
+writeFileSync(path.join(OUT, "art32.png"), indexedPng(atlas, PER_ROW * T, rows * T));
 writeFileSync(path.join(OUT, "art32.json"), JSON.stringify({ frames, meta: { image: "art32.png", size: { w: PER_ROW * T, h: rows * T }, scale: "1" } }));
 
 console.log(`art: ${available.length} cards -> art32 atlas + art128 (${PALETTE.length}-colour palette)`);

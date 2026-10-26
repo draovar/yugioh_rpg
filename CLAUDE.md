@@ -128,7 +128,8 @@ Dev:
 - Card art uses ONE shared 48-colour palette, `data/palette.gpl` (GIMP palette; editable in GIMP, reusable for other
   art; preview `docs/palette.png`). It is frozen: adding cards never changes it. Style knobs (boost, dither, sizes)
   live in `tools/lib/art-style.mjs`; quantisation is our own k-means/Oklab code in `tools/lib/palette.mjs`
-  (sharp's `palette`/`colours` PNG option silently does nothing in this build — don't rely on it).
+  (sharp's `palette`/`colours` PNG option doesn't keep our colours: libimagequant shifts them — card art is written by
+  `tools/lib/indexed-png.mjs`, lossless 8-bit indexed).
 - Fonts: `tiny5` (our own 3x5, UI + ATK/DEF) and `nerds3` (3x3 Font for Nerds by Norwegian Ink, card names —
   no license found; kept by the owner's choice (non-commercial), don't re-raise). TTFs are converted to BMFont by sampling glyph outlines.
 
@@ -180,7 +181,7 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
 
 ## Now
 
-Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-2 (pool generator, hand-picked
-older card versions) done, next is phase 3 (full-size data + art). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
+Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-3 (pool generator, hand-picked
+older card versions, full-size data + art) done, next is phase 4 (random-deck smoke). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
 `docs/ai-reports.md`, only clear bugs are fixed right away. Overworld: trainer line-of-sight challenges next.
 RPG loop: card collection, rewards/boosters, story, bosses, saving. Full list: `docs/roadmap.md`.

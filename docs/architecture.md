@@ -319,7 +319,7 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
 - `lib/engine.ts`: shared core + card data loader, `newDuel`, `runDuel` (AI vs AI to the end), `seedFrom(n)` (four
   64-bit seed words from one number). `lib/match.ts`: brain vs brain matches on worker threads (`matchJobs`,
   `runMatch`, `winRate`, `PassivityStats`; also the workers' entry), used by arena and tune. `lib/args.ts`: `--name
-  value` option parsing. `lib/palette.mjs` / `art-style.mjs` / `bmfont.mjs`: art quantisation, style knobs, BMFont output.
+  value` option parsing. `lib/palette.mjs` / `art-style.mjs` / `bmfont.mjs` / `indexed-png.mjs`: art quantisation, style knobs, BMFont output, lossless indexed PNG output (card art).
 - `data/`: `fetch-data` (CardScripts at the pinned commit + BabelCDB), `build-pool` (TCG products up to the cutoff
   from YGOPRODeck set lists, mapped to BabelCDB passcodes (an alias with the same name is an alt art, one with another
   name a card of its own, e.g. Harpie Lady 1), ± `pool-exceptions.json` by name → `data/pool.json`), `build-data` (pool → `public/data/*.json`, modern versions except the GOAT / pre-errata ones `card-versions.json` picks, under the real passcodes,
