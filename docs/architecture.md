@@ -177,7 +177,8 @@ passes the `NetDuel` to `Duel`.
   front of the player; walking up or down, a vertical hedge beside the path ahead (3 tiles of its side) shakes and the
   NPC leaps out of it sideways onto the path, 64 px ahead (frames from `build-ambush`, leaf particles, the "!" balloon
   over the player). The scene keeps the player still while `busy`.
-  Placeholder until ambush duels exist: the NPC says their line, then leaps back into the hedge.
+  The ambusher is picked at random from the map's list. Placeholder until ambush duels exist: the NPC says their
+  line, then leaps back into the hedge.
 - Touch devices: a semi-transparent D-pad (diagonals, keeps steering when the finger slides off) and X button
   (`TouchPad.ts`), with the dialog between them. `TOUCH` in `src/ui/touch.ts` = coarse pointer (`&touch` forces it).
 - `WorldMenu`: overlay scene launched by Overworld (so it doesn't scroll). MENU (M) button top right opens the settings
@@ -326,7 +327,8 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   - `build-characters`: `data/characters/reshef-sheet.png` (every Reshef of Destruction character, green cells on a
     purple grid) sliced per `data/characters/characters.json` (name → 3x3 block or explicit cells per direction,
     `nudge` = move single frames by pixels; `{ "sheet": "x.png" }` = a ready-made 96x96 sheet in the same layout, drawn
-    for this game: `player-girl`, `player-girl-run`) → `public/assets/overworld/characters.png`+`.json` (one row of 9
+    for this game: `player-girl`, `player-girl-run`; `{ "recolor": base, "hair": [...], "shirt": [...] }` = the base
+    with its hair / shirt colour ramps from `recolors` swapped: the `hopper-*` ambushers) → `public/assets/overworld/characters.png`+`.json` (one row of 9
     32x32 frames per character: down / side (facing right) / up × stand, step, step), `props.png`+`.json`,
     `balloons.png`+`.json` (16x16 reaction balloons: heart, dots, exclaim, anger, sweat, question), and the contact
     sheet `docs/characters.png` with every name.

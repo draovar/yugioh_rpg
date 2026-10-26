@@ -89,6 +89,7 @@ const sheets = Object.fromEntries(await Promise.all(names.filter((n) => spec.cha
   .map(async (n) => [n, await sheetFrames(spec.characters[n].sheet)])));
 const charRows = names.map((name) => {
   if (sheets[name]) return sheets[name];
+  if (spec.characters[name].recolor) return null; // below, once the base character's frames exist
   const entry = cellsOf(spec.characters[name]);
   const dirs = {};
   for (const dir of DIRS) {
@@ -102,6 +103,39 @@ const charRows = names.map((name) => {
     dirs[dir] = dirs[from];
   }
   return DIRS.flatMap((dir) => dirs[dir]);
+});
+
+/**
+ * Recoloured variants: { recolor: base, hair: [dark, mid, light], shirt: [dark, mid, light] } swaps the base's ramps
+ * (spec.recolors[base]) for new ones. The shirt ramp is swapped everywhere. The hair ramp only in the head (rows above
+ * the first shirt pixel), never next to white (eyes), and its darkest colour (also the outline) only where all four
+ * neighbours are hair too, so outlines and pupils stay.
+ */
+const key = ([r, g, b]) => (r << 16) | (g << 8) | b;
+function recolor(frames, ramps, entry) {
+  const hair = new Map(ramps.hair.map((c, i) => [key(c), entry.hair?.[i]]));
+  const shirt = new Map(ramps.shirt.map((c, i) => [key(c), entry.shirt?.[i]]));
+  const outline = key(ramps.hair[0]), white = key([240, 240, 240]);
+  return frames.map((src) => {
+    const px = Buffer.from(src);
+    const at = (x, y) => (x < 0 || y < 0 || x >= S || y >= S || !src[(y * S + x) * 4 + 3] ? -1 : key(src.subarray((y * S + x) * 4)));
+    let neck = S;
+    for (let y = 0; y < S && neck === S; y++) for (let x = 0; x < S; x++) if (shirt.has(at(x, y))) { neck = y; break; }
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const c = at(x, y), around = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)];
+      let to = shirt.get(c);
+      if (!to && y < neck && hair.has(c) && !around.includes(white) && (c !== outline || around.every((n) => hair.has(n)))) to = hair.get(c);
+      if (to) px.set(to, (y * S + x) * 4);
+    }
+    return px;
+  });
+}
+names.forEach((name, i) => {
+  const entry = spec.characters[name];
+  if (!entry.recolor) return;
+  const base = charRows[names.indexOf(entry.recolor)], ramps = spec.recolors?.[entry.recolor];
+  if (!base || !ramps) throw new Error(`${name}: recolor needs "${entry.recolor}" in characters and recolors`);
+  charRows[i] = recolor(base, ramps, entry);
 });
 await pack(charRows, S, S, 9, path.join(OUT, "characters.png"));
 writeFileSync(path.join(OUT, "characters.json"), JSON.stringify({ frameSize: S, framesPerCharacter: 9, names }, null, 1) + "\n");
