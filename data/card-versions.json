@@ -1,0 +1,5 @@
+{
+  "_comment": "Pool cards that use an older version instead of today's card (tools/data/build-data.mjs). Card names as in BabelCDB; the value says why. 'goat': CardScripts goat/ (the GOAT format's version), 'pre-errata': CardScripts pre-errata/ (the first printing). Everything else plays its modern version; the banlist (data/banlist.json) is edited to match.",
+  "goat": {},
+  "pre-errata": {}
+}

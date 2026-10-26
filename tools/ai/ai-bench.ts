@@ -103,6 +103,7 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
       // Otherwise the opponent never does anything: passes chains, ends its turn, answers anything else with the first legal option.
       duel.respond(prompt.type === OcgMessageType.SELECT_CHAIN && !prompt.forced ? { type: OcgResponseType.SELECT_CHAIN, index: null }
         : prompt.type === OcgMessageType.SELECT_IDLECMD ? { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null }
+        : prompt.type === OcgMessageType.SELECT_EFFECTYN ? { type: OcgResponseType.SELECT_EFFECTYN, yes: false }
         : autoRespond(prompt, () => 0, cards));
       continue;
     }

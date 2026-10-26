@@ -28,10 +28,8 @@ Then NPCs get decks built from it.
 - `scripts.json` 4.2 MB (600 KB gzipped), `cards.json` 1.1 MB (200 KB gzipped): loading everything at boot is fine.
 - `art32` atlas 1024x2880 (fits a 4096 texture limit); `art128` about 2,900 files, loaded on demand.
 - Sixth Sense (in the Goat deck) was first released in the TCG in 2013: it is only in the pool as an exception.
-- **GOAT / pre-errata scripts are never loaded today.** They live under their own codes in BabelCDB
-  `goat-entries.cdb` (e.g. 504700000 "Skull Dice (GOAT)", aliasing the real card), while `build-data` looks scripts
-  up by the real passcode. So 36 current pool cards (Sangan, Witch of the Black Forest, Scapegoat...) play with
-  today's errata. Full pool: 191 cards have a GOAT version, 49 a pre-errata one.
+- GOAT / pre-errata scripts live under codes of their own in BabelCDB `goat-entries.cdb` / `cards-unofficial.cdb`
+  (e.g. 504700000 "Skull Dice (GOAT)", aliasing the real card), so looking scripts up by passcode never finds them.
 
 ## Phases
 
@@ -42,11 +40,21 @@ Then NPCs get decks built from it.
   plus/minus `data/pool-exceptions.json` (by card name, with a reason).
 - Writes `data/pool.json` (still the file everything else reads, committed so builds need no network).
 
-### 2. Era-correct card versions
+### 2. Card versions ✅ (2026-10-26)
 
-- `build-data` uses a card's GOAT version when one exists, else its pre-errata version, else the official one,
-  under the real passcode (script + text + effect strings), so decks keep the real codes.
-- Changes how 36 current cards play: rerun `smoke`, `smoke-p2p`, `test-ai`, `ai-bench`.
+- **Modern versions by default** (user's choice after comparing: today's text is clearer and the scripts the most
+  tested); the banlist is edited to match (phase 6). Hand-picked cards play an older version instead:
+  `data/card-versions.json` lists them by name under `goat` or `pre-errata`, with a reason. `build-data` gives a picked
+  card that version's script, text and type under the real passcode, so decks keep the real codes; stats stay official.
+  It fails on an unknown name, a card outside the pool or one without that version. Empty for now.
+- 232 pool cards have an older version (191 GOAT, 47 pre-errata, 6 both). Most GOAT ones only differ in wording;
+  real differences: no once-per-turn on Sangan / Witch of the Black Forest, Ring of Destruction (pre-errata: any
+  monster, any turn, both players take damage), Crush Card Virus (pre-errata: checks draws for 3 turns), Sinister
+  Serpent (pre-errata: back every Standby Phase).
+- Tried with every older version on: one `ai-bench` position failed. Armed Dragon LV3's GOAT version can be activated
+  with no LV5 to summon (it just sends itself to the GY), so the AI's copies (whose opponent Deck is blank stand-ins)
+  had their LV3 throw itself away and the AI expected the threat to go by itself. Copy gap to fix before picking it.
+  The bench's do-nothing opponent now declines optional triggers (it had said yes to that LV3).
 
 ### 3. Data and art at full size
 
@@ -67,7 +75,8 @@ told apart on the badge (62 cards use counters).
 
 ### 6. Banlist
 
-- `data/banlist.json`: the May 2008 TCG list.
+- `data/banlist.json`: the May 2008 TCG list, edited for the modern card versions (e.g. Witch / Sangan are once per
+  turn now) and for any older version picked in `card-versions.json`.
 - `deckRules` enforces it (deck editor, deck validation); `smoke` checks the prebuilt decks against it.
 
 ### 7. NPC decks as data files
@@ -82,6 +91,4 @@ waits for that check.
 
 ## Open
 
-- Errata preference: GOAT version first, pre-errata as fallback (proposed; GOAT versions reflect 2005 text, a few
-  cards changed again by 2008).
 - Sixth Sense: kept as an exception for the Goat deck for now; keep it or drop it from the deck.
