@@ -1,0 +1,7 @@
+{
+  "_comment": "Hand-picked changes to the generated card pool (tools/data/build-pool.mjs). Card names as in BabelCDB; the value says why.",
+  "add": {
+    "Sixth Sense": "used by the Goat deck; first TCG release 2013"
+  },
+  "remove": {}
+}

@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "fetch-data": "node tools/data/fetch-data.mjs",
+    "build-pool": "node tools/data/build-pool.mjs",
     "build-data": "node tools/data/build-data.mjs",
     "check-cards": "node tools/data/check-cards.mjs",
     "smoke": "node tools/test/smoke-duel.ts",

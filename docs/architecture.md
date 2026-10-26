@@ -17,7 +17,7 @@ src/lobby/             multiplayer Lobby scene
 src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
 tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helpers
-data/                  pool.json (the card pool's source of truth), maps, characters, palette
+data/                  pool.json (the card pool, generated) + pool-exceptions.json, maps, characters, palette
 vendor/                Project Ignis repos, art downloads, paid assets (gitignored)
 ```
 
@@ -320,7 +320,9 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   64-bit seed words from one number). `lib/match.ts`: brain vs brain matches on worker threads (`matchJobs`,
   `runMatch`, `winRate`, `PassivityStats`; also the workers' entry), used by arena and tune. `lib/args.ts`: `--name
   value` option parsing. `lib/palette.mjs` / `art-style.mjs` / `bmfont.mjs`: art quantisation, style knobs, BMFont output.
-- `data/`: `fetch-data` (CardScripts at the pinned commit + BabelCDB), `build-data` (pool → `public/data/*.json`,
+- `data/`: `fetch-data` (CardScripts at the pinned commit + BabelCDB), `build-pool` (TCG products up to the cutoff
+  from YGOPRODeck set lists, mapped to BabelCDB passcodes (an alias with the same name is an alt art, one with another
+  name a card of its own, e.g. Harpie Lady 1), ± `pool-exceptions.json` by name → `data/pool.json`), `build-data` (pool → `public/data/*.json`,
   plus the tokens pool scripts create), `check-cards`.
 - `art/`: `fetch-art` / `build-art` (YGOPRODeck crops → the shared palette, `art32` atlas + `art128`), `build-palette`,
   `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `make-gif`.

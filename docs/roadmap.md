@@ -12,6 +12,8 @@
    Auto-answered prompts (SORT_CHAIN, RPS) wait until a card batch
    needs them (none came up in 150 bot duels with the current pool).
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
+   Full pool (`docs/card-pool-plan.md`): every TCG card up to Premium Pack 2 (2,842 cards). ✅ Phase 1: `build-pool`.
+   Next: GOAT / pre-errata versions, full-size data + art, random-deck smoke, UI checks, May 2008 banlist, NPC decks as data.
    ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).
    Starter decks: ✅ Kaiba Evolution (first Ritual: Paladin of White Dragon), ✅ Yugi Evolution.
    Structure decks: ✅ Zombie Madness, ✅ Dragon's Roar.
