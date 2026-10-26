@@ -15,8 +15,8 @@ const EXCLAIM = [12, 13, 14, 15, 16];
  * 1/150 at walking speed (~4.4 tiles a second) = about 35 s.
  */
 const CHANCE = 1 / 150;
-/** Walking distance (px) after an ambush before the next can get ready: 2450 = about 35 s at walking speed. */
-const COOLDOWN = 2450;
+/** Walking distance (px) after an ambush before the next can get ready: 2100 = about 30 s at walking speed. */
+const COOLDOWN = 2100;
 /** `&ambush` (dev): the first ambush on a map is ready at once; later ones as usual. */
 const FORCE = new URLSearchParams(location.search).has("ambush");
 const TILE = 16;

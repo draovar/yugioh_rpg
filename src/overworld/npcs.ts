@@ -35,9 +35,9 @@ export interface AmbushDef {
 export const AMBUSHERS: Record<string, AmbushDef[]> = {
   // One of them at random each time: the same kid in 2 hair x 2 shirt colours (characters.json "recolors").
   maze: [
-    { name: "Hedge Hopper", sprite: "black-hair-purple", text: "Gotcha! Nobody gets through my maze without a duel!" },
-    { name: "Bramble", sprite: "hopper-black-blue", text: "Surprise! I've been waiting in these bushes all day!" },
+    { name: "Rowan", sprite: "black-hair-purple", text: "Gotcha! Nobody gets through my maze without a duel!" },
+    { name: "Bramble", sprite: "hopper-black-green", text: "Surprise! I've been waiting in these bushes all day!" },
     { name: "Briar", sprite: "hopper-red-purple", text: "Ha! You walked right into my hedge. Time to duel!" },
-    { name: "Thorn", sprite: "hopper-red-blue", text: "Nobody spots me until it's too late. Duel me!" },
+    { name: "Thorn", sprite: "hopper-red-green", text: "Nobody spots me until it's too late. Duel me!" },
   ],
 };

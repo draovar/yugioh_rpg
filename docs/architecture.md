@@ -171,7 +171,7 @@ passes the `NetDuel` to `Duel`.
   to the player while talking) talk with X / Enter / Space in a `DialogBox` (tiny5 at 2x, clickable options); YES
   starts a duel, and the player comes back to the same spot (`savePosition`) with the NPC's line about the result.
 - Hedge ambushes (`ambush.ts`, `AMBUSHERS` in `npcs.ts` per map): every tile walked in the maze has a 1/150
-  chance to ready an ambush (about 35 s of walking; none for 2450 px, ~35 s, after one; `&ambush`: the first one is
+  chance to ready an ambush (about 35 s of walking; none for 2100 px, ~30 s, after one; `&ambush`: the first one is
   ready at once). At the next spot that fits, recognised by the hedge tiles' `sheetId`: walking sideways, the hedge face
   ahead (3 face tiles wide) shakes, a dark hollow with eyes opens in it, the NPC pushes their head out and leaps in
   front of the player; walking up or down, a vertical hedge beside the path ahead (3 tiles of its side) shakes and the

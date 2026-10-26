@@ -108,9 +108,9 @@
     "old-green-robe": [9, 27],
     "brown-hair-purple-coat": [3, 6],
 
-    "hopper-black-blue": { "recolor": "black-hair-purple", "shirt": [[32, 48, 120], [48, 88, 200], [104, 152, 248]] },
+    "hopper-black-green": { "recolor": "black-hair-purple", "shirt": [[40, 112, 32], [88, 184, 48], [168, 232, 96]] },
     "hopper-red-purple": { "recolor": "black-hair-purple", "hair": [[104, 24, 32], [176, 48, 48], [232, 112, 88]] },
-    "hopper-red-blue": { "recolor": "black-hair-purple", "hair": [[104, 24, 32], [176, 48, 48], [232, 112, 88]], "shirt": [[32, 48, 120], [48, 88, 200], [104, 152, 248]] }
+    "hopper-red-green": { "recolor": "black-hair-purple", "hair": [[104, 24, 32], [176, 48, 48], [232, 112, 88]], "shirt": [[40, 112, 32], [88, 184, 48], [168, 232, 96]] }
   },
   "recolors": {
     "_doc": "Colour ramps (dark, mid, light) of characters that recoloured variants start from.",
@@ -138,7 +138,7 @@
     "banana": [25, 27],
     "outline-white": [24, 28]
   },
-  "ambush": ["black-hair-purple", "hopper-black-blue", "hopper-red-purple", "hopper-red-blue"],
+  "ambush": ["black-hair-purple", "hopper-black-green", "hopper-red-purple", "hopper-red-green"],
   "balloons": {
     "_doc": "Reaction balloons: green boxes in this area (x, y, w, h), read left to right per row; each run of boxes is one balloon's frames, named in that order.",
     "area": [636, 1019, 336, 40],
