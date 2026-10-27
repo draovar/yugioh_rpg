@@ -17,8 +17,13 @@ const EXCLAIM = [12, 13, 14, 15, 16];
 const CHANCE = 1 / 150;
 /** Walking distance (px) after an ambush before the next can get ready: 2100 = about 30 s at walking speed. */
 const COOLDOWN = 2100;
-/** `&ambush` (dev): the first ambush on a map is ready at once; later ones as usual. */
-const FORCE = new URLSearchParams(location.search).has("ambush");
+/** `&ambush` (dev): the first ambush is ready at once; later ones as usual. */
+let force = new URLSearchParams(location.search).has("ambush");
+/**
+ * The ambusher whose duel the player left for: the scene restarts after the duel, and they stand there again until the
+ * result dialog closes, then leap back into the hedge.
+ */
+let afterDuel: { def: AmbushDef; spot: Spot; x: number; y: number; frame: string; flipX: boolean; depth: number } | null = null;
 const TILE = 16;
 /** How far ahead of the player (px) the ambusher comes out: walking sideways, walking up or down (sprites are tall). */
 const AHEAD = 48, AHEAD_VERTICAL = 64;
@@ -61,7 +66,10 @@ interface Spot {
 export interface AmbushHooks {
   /** Turns the player (the scene keeps its facing). */
   turnPlayer(facing: Facing, flipX: boolean): void;
-  /** The ambusher has landed in front of the player; call `retreat` to send them back into the hedge. */
+  /**
+   * The ambusher has landed in front of the player; call `retreat` to send them back into the hedge, or
+   * `leaveForDuel` before starting their duel.
+   */
   challenge(def: AmbushDef, npc: Phaser.GameObjects.Sprite, retreat: () => void): void;
 }
 
@@ -82,7 +90,9 @@ export class Ambushes {
   private walked = 0;
   private cooldown = 0;
   /** An ambush is ready: it happens at the next spot that fits. */
-  private ready = FORCE;
+  private ready = force;
+  /** The ambusher standing in front of the player (between `challenge` and `retreat`). */
+  private current: { def: AmbushDef; spot: Spot; npc: Phaser.GameObjects.Sprite } | null = null;
 
   constructor(scene: Phaser.Scene, map: string, walls: Phaser.Tilemaps.TilemapLayer[],
     blockers: Phaser.Tilemaps.TilemapLayer | null, hooks: AmbushHooks) {
@@ -91,6 +101,30 @@ export class Ambushes {
     this.walls = walls;
     this.blockers = blockers;
     this.hooks = hooks;
+  }
+
+  /** The ambusher's duel starts (the scene restarts afterwards): remember them for `backFromDuel`. */
+  leaveForDuel() {
+    if (!this.current) return;
+    const { def, spot, npc } = this.current;
+    afterDuel = { def, spot, x: npc.x, y: npc.y, frame: npc.frame.name, flipX: npc.flipX, depth: npc.depth };
+  }
+
+  /**
+   * Back from an ambusher's duel: they stand where they were (the player is kept still) and the returned function
+   * sends them back into the hedge; null if the duel wasn't an ambush.
+   */
+  backFromDuel(): (() => void) | null {
+    const back = afterDuel;
+    afterDuel = null;
+    if (!back || !this.defs.length) return null;
+    this.busy = true;
+    const key = sheetKey(back.def.sprite);
+    const npc = this.scene.add.sprite(back.x, back.y, CHARACTERS, back.frame).setOrigin(0.5, 1).setScale(2)
+      .setFlipX(back.flipX).setDepth(back.depth);
+    npc.vertexRoundMode = "fullAuto";
+    const { leaves } = this.leaves(key, back.spot);
+    return () => void this.retreat(npc, back.spot, key, leaves);
   }
 
   /** Called every frame the player walks `distance` px; may start an ambush. */
@@ -104,7 +138,7 @@ export class Ambushes {
     if (!this.ready) return;
     const spot = facing === "side" ? this.frontSpot(player) : this.sideSpot(player, facing);
     if (!spot) return;
-    this.ready = false;
+    this.ready = force = false;
     const def = Phaser.Utils.Array.GetRandom(this.defs);
     void (spot.kind === "front" ? this.playFront(def, spot, player) : this.playSide(def, spot, player, facing));
   }
@@ -253,6 +287,7 @@ export class Ambushes {
     npc.setTexture(CHARACTERS, frameOf(scene, def.sprite, "side")).setFlipX(fromLeft);
     this.hooks.turnPlayer("side", !fromLeft);
     await this.wait(250);
+    this.current = { def, spot, npc };
     this.hooks.challenge(def, npc, () => void this.retreat(npc, spot, key, leaves));
   }
 
@@ -279,6 +314,7 @@ export class Ambushes {
     npc.setTexture(CHARACTERS, frameOf(scene, def.sprite, facing === "up" ? "down" : "up")).setFlipX(false);
     this.exclaim(player);
     await this.wait(700);
+    this.current = { def, spot, npc };
     this.hooks.challenge(def, npc, () => void this.retreat(npc, spot, key, leaves));
   }
 
@@ -297,6 +333,7 @@ export class Ambushes {
     leaves.explode(10, spot.from.x, spot.from.y - 20);
     await this.wait(spot.kind === "front" ? 200 : 0);
     npc.destroy();
+    this.current = null;
     await this.wait(800);
     leaves.destroy();
     this.cooldown = COOLDOWN;

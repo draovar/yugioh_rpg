@@ -29,15 +29,20 @@ export interface AmbushDef {
   /** Character in characters.json, also listed in its "ambush" (tools/art/build-ambush.mjs draws the jump out). */
   sprite: string;
   text: string;
+  /** Decks they duel with: one of them at random each time. */
+  decks: DeckName[];
 }
+
+/** The maze's early-game decks, shared by all its ambushers. */
+const MAZE_DECKS: DeckName[] = ["plants", "insects"];
 
 // Hedge ambushers by map. Placeholder name and text.
 export const AMBUSHERS: Record<string, AmbushDef[]> = {
   // One of them at random each time: the same kid in 2 hair x 2 shirt colours (characters.json "recolors").
   maze: [
-    { name: "Rowan", sprite: "black-hair-purple", text: "Gotcha! Nobody gets through my maze without a duel!" },
-    { name: "Bramble", sprite: "hopper-black-green", text: "Surprise! I've been waiting in these bushes all day!" },
-    { name: "Briar", sprite: "hopper-red-purple", text: "Ha! You walked right into my hedge. Time to duel!" },
-    { name: "Thorn", sprite: "hopper-red-green", text: "Nobody spots me until it's too late. Duel me!" },
+    { name: "Rowan", sprite: "black-hair-purple", text: "Gotcha! Nobody gets through my maze without a duel!", decks: MAZE_DECKS },
+    { name: "Bramble", sprite: "hopper-black-green", text: "Surprise! I've been waiting in these bushes all day!", decks: MAZE_DECKS },
+    { name: "Briar", sprite: "hopper-red-purple", text: "Ha! You walked right into my hedge. Time to duel!", decks: MAZE_DECKS },
+    { name: "Thorn", sprite: "hopper-red-green", text: "Nobody spots me until it's too late. Duel me!", decks: MAZE_DECKS },
   ],
 };

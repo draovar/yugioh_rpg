@@ -183,8 +183,10 @@ passes the `NetDuel` to `Duel`.
   front of the player; walking up or down, a vertical hedge beside the path ahead (3 tiles of its side) shakes and the
   NPC leaps out of it sideways onto the path, 64 px ahead (frames from `build-ambush`, leaf particles, the "!" balloon
   over the player). The scene keeps the player still while `busy`.
-  The ambusher is picked at random from the map's list. Placeholder until ambush duels exist: the NPC says their
-  line, then leaps back into the hedge.
+  The ambusher is picked at random from the map's list. They say their line (OK only, no way out), then a duel starts
+  with one of their `decks` at random (the maze: Plants or Insects). `leaveForDuel` remembers them across the scene
+  restart: back from the duel they stand there again (`backFromDuel`) until their result line is closed, then leap
+  back into the hedge (`retreat`, which also starts the cooldown). `&ambush` forces only the first ambush of the session.
 - Touch devices: a semi-transparent D-pad (diagonals, keeps steering when the finger slides off) and X button
   (`TouchPad.ts`), with the dialog between them. `TOUCH` in `src/ui/touch.ts` = coarse pointer (`&touch` forces it).
 - `WorldMenu`: overlay scene launched by Overworld (so it doesn't scroll). MENU (M) button top right opens the settings

@@ -5,8 +5,8 @@ const BG = 0x10102a, NAME = 0xffd75e, OPTION_OFF = 0x8888aa;
 const MARGIN = 8, PAD = 10, H = 76, SCALE = 2;
 
 /**
- * Overworld dialog box: speaker name, text and options (Yes / No, or just OK). It sits at the bottom of the camera's
- * view, or at the top when it would cover `avoid` (the player). Left/Right picks an option, X / Enter / Space
+ * Overworld dialog box: speaker name, text and options (Yes / No, or just OK). It always sits at the bottom of the
+ * camera's view. Left/Right picks an option, X / Enter / Space
  * confirms, or click one. The scene forwards key codes to `handleKey()` while the box is open (also the touch pad's).
  * `insets` keeps it clear of on-screen controls at the bottom corners (the touch pad).
  */
@@ -32,7 +32,7 @@ export class DialogBox {
   }
 
   /** `onChoice(option)` runs after the box closes. */
-  open(name: string, body: string, options: string[], onChoice: (option: string) => void, avoid?: Phaser.GameObjects.Sprite) {
+  open(name: string, body: string, options: string[], onChoice: (option: string) => void) {
     for (const o of this.items) o.destroy();
     const w = this.camera.width - this.insets.left - this.insets.right;
     const bg = this.scene.add.graphics().fillStyle(BG, 0.92).fillRect(0, 0, w, H);
@@ -57,9 +57,7 @@ export class DialogBox {
     this.onChoice = onChoice;
     this.selected = 0;
     this.updateCursor();
-    const bottom = this.camera.height - H - MARGIN;
-    const avoidBottom = avoid ? avoid.getBounds().bottom - this.camera.worldView.y : 0;
-    this.container.setPosition(this.camera.x + this.insets.left, this.camera.y + (avoidBottom > bottom ? MARGIN : bottom)).setVisible(true);
+    this.container.setPosition(this.camera.x + this.insets.left, this.camera.y + this.camera.height - H - MARGIN).setVisible(true);
     this.isOpen = true;
   }
 

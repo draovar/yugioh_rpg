@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DECKS } from "../duel/decks/decks.ts";
+import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import { DialogBox } from "./DialogBox.ts";
 import { WHITE, text } from "../ui/pixel.ts";
 import { PLAYER_LOOKS, chosenDeck, playerLook } from "../ui/prefs.ts";
@@ -148,8 +148,11 @@ export class Overworld extends Phaser.Scene {
         this.facing = facing;
         this.player.setFrame(frameOf(this, this.look.walk, facing)).setFlipX(flipX);
       },
-      // Placeholder until ambush duels exist: they say their line, then leap back into the hedge.
-      challenge: (def, npc, retreat) => this.dialog.open(def.name, def.text, ["OK"], retreat, this.player),
+      // No way out: they say their line, then the duel starts with one of their decks at random.
+      challenge: (def) => this.dialog.open(def.name, def.text, ["OK"], () => {
+        this.ambushes!.leaveForDuel();
+        this.startDuel(def.name, Phaser.Utils.Array.GetRandom(def.decks));
+      }),
     });
 
     // Warps: rectangles named "warp" (layer "objects") with properties map (target map) and spawn (the point to
@@ -183,12 +186,12 @@ export class Overworld extends Phaser.Scene {
 
     const opponent = saved?.opponent;
     saved = null;
+    // An ambusher stays until their line about the result is closed, then leaps back into the hedge.
+    const ambusherLeaves = this.ambushes.backFromDuel() ?? (() => {});
     if (this.duelResult && opponent) {
       const won = this.duelResult.won;
-      // A frame later: the camera only moves to the player on the first render, and the box avoids the player.
-      this.time.delayedCall(0, () => this.dialog.open(opponent, won ? "Not bad... you got me this time." : "Better luck next time!",
-        ["OK"], () => {}, this.player));
-    }
+      this.dialog.open(opponent, won ? "Not bad... you got me this time." : "Better luck next time!", ["OK"], ambusherLeaves);
+    } else ambusherLeaves();
   }
 
   /** Fades out and starts the target map at its arrival point. */
@@ -267,12 +270,16 @@ export class Overworld extends Phaser.Scene {
     else this.face(npc, dy > 0 ? "down" : "up");
     this.dialog.open(def.name, def.text, ["Yes", "No"], (choice) => {
       this.face(npc, def.facing ?? "down");
-      if (choice !== "Yes") return;
-      this.savePosition(def.name);
-      const data: DuelSceneData = { opponentName: def.name, playerDeck: chosenDeck().deck, opponentDeck: DECKS[def.deck].deck };
-      this.scene.stop("WorldMenu");
-      this.scene.start("Duel", data);
-    }, this.player);
+      if (choice === "Yes") this.startDuel(def.name, def.deck);
+    });
+  }
+
+  /** A duel against `opponent` with that deck; afterwards the player is back on this spot. */
+  private startDuel(opponent: string, deck: DeckName) {
+    this.savePosition(opponent);
+    const data: DuelSceneData = { opponentName: opponent, playerDeck: chosenDeck().deck, opponentDeck: DECKS[deck].deck };
+    this.scene.stop("WorldMenu");
+    this.scene.start("Duel", data);
   }
 
   update() {
