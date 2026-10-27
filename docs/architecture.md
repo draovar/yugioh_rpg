@@ -14,7 +14,7 @@ src/overworld/         Overworld scene, WorldMenu, DialogBox, TouchPad, characte
 src/duel-screen/       DuelScene, duelPrompts and the duel UI (cards, modal, info panel, animator, field, layout)
 src/deck-editor/       DeckEditor scene, its layout, list rows, filter panel, dialogs
 src/lobby/             multiplayer Lobby scene
-src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch
+src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
 tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helpers
 data/                  pool.json (the card pool, generated) + pool-exceptions.json, card-versions.json (older versions), banlist.json, maps, characters, palette
@@ -314,6 +314,13 @@ table). Geometry in `layout.ts`.
 drop-downs), `theme.ts` (see Themes above), `prefs.ts` (everything saved in localStorage), `textInput.ts` (text entry
 in the canvas: an invisible HTML input over the drawn field for phone keyboards and paste; it pauses Phaser's global
 key capture while it exists; card search, lobby room code, deck names), `touch.ts`.
+
+`Transition.ts`: the scene switch between the overworld and duels (both ways, also a duel back to the Lobby). A scene
+Boot launches once and keeps on top: `transitionTo(from, key, data)` flips card backs (`CARD_BACK`, a 17x7 grid)
+in, diagonal by diagonal from the top-left, until they cover the screen, starts `key` underneath, and flips them
+away in the same order once that scene is created. While it plays
+(`transitioning(game)`) a full-screen zone takes all clicks and the overworld ignores keys and keeps the player still
+(and skips its usual fade-in). It is in the `&anims` dropdown.
 
 Phones: the page is `100dvh` tall (100vh = the height without the browser bar, which pushed the canvas under it) and
 the zoom may go below 1x so the whole screen fits; the first tap goes full screen (`fullscreenOnFirstTap`, Android /

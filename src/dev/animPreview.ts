@@ -6,6 +6,7 @@ import { OcgLocation, OcgMessageType, OcgPosition, type OcgMessage } from "ocgco
 import { REASON, type FieldSnapshot } from "../duel/engine/DuelSession.ts";
 import type { DuelAnimator } from "../duel-screen/DuelAnimator.ts";
 import { swapSeats } from "./previewSeats.ts";
+import { transitionTo } from "../ui/Transition.ts";
 
 /** What the preview needs from the duel scene. */
 export interface PreviewHost {
@@ -26,6 +27,10 @@ interface Preview {
 const pause = (host: PreviewHost, ms: number) => new Promise((r) => host.scene.time.delayedCall(ms, r));
 
 const PREVIEWS: Preview[] = [
+  {
+    label: "Transition: card wave (duel start / end)",
+    run: (host) => transitionTo(host.scene, ""),
+  },
   {
     label: "#1 Draw: opening hand",
     async run(host, snap) {

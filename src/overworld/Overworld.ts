@@ -11,6 +11,7 @@ import { CHARACTERS, frameOf, loadCharacters, walkAnim, type Facing } from "./ch
 import { NPCS, type NpcDef } from "./npcs.ts";
 import { bake, buildSortedWalls, depthForY } from "./sortedWalls.ts";
 import { Ambushes, loadAmbushes } from "./ambush.ts";
+import { transitionTo, transitioning } from "../ui/Transition.ts";
 
 const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
@@ -180,7 +181,8 @@ export class Overworld extends Phaser.Scene {
     // half-pixel scrolls the baked wall strips then leave 1px seams.
     this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels).startFollow(this.player, true);
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
-    this.cameras.main.fadeIn(FADE_MS);
+    // Coming back from a duel the card wave uncovers the map instead.
+    if (!transitioning(this.game)) this.cameras.main.fadeIn(FADE_MS);
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.runKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
 
@@ -227,7 +229,7 @@ export class Overworld extends Phaser.Scene {
 
   /** A key press, or the touch pad's: answers the open dialog, else X / Enter / Space talks to the nearest NPC. */
   private handleKey(code: string) {
-    if (this.menuOpen()) return;
+    if (this.menuOpen() || transitioning(this.game)) return;
     if (this.dialog.isOpen) this.dialog.handleKey(code);
     else if (code === "KeyX" || code === "Enter" || code === "Space") {
       const npc = this.nearestNpc();
@@ -274,17 +276,16 @@ export class Overworld extends Phaser.Scene {
     });
   }
 
-  /** A duel against `opponent` with that deck; afterwards the player is back on this spot. */
+  /** A duel against `opponent` with that deck, behind the card-wave transition; afterwards the player is back here. */
   private startDuel(opponent: string, deck: DeckName) {
     this.savePosition(opponent);
     const data: DuelSceneData = { opponentName: opponent, playerDeck: chosenDeck().deck, opponentDeck: DECKS[deck].deck };
-    this.scene.stop("WorldMenu");
-    this.scene.start("Duel", data);
+    void transitionTo(this, "Duel", data, { onCovered: () => this.scene.stop("WorldMenu") });
   }
 
   update() {
     if (!this.player) return;
-    if (this.warping) {
+    if (this.warping || transitioning(this.game)) {
       this.player.setVelocity(0, 0);
       return;
     }

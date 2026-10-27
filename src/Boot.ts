@@ -49,6 +49,8 @@ export class Boot extends Phaser.Scene {
         if (first === "opp") goFirst = false;
         else if (first === "you" || seed !== undefined) goFirst = true;
         const ai = params.get("ai") ?? "";
+        // Card-wave transitions between scenes (ui/Transition.ts): runs on top for the whole game.
+        this.scene.launch("Transition");
         // Invite link from a multiplayer host: ?join=CODE (dropped from the address so a reload doesn't rejoin).
         const join = params.get("join");
         if (join) {

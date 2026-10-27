@@ -29,6 +29,7 @@ import { BoardPick } from "./BoardPick.ts";
 import { drawField } from "./field.ts";
 import { CARD, FIELD_CENTER, cardKey } from "./layout.ts";
 import { installAnimPreview } from "../dev/animPreview.ts";
+import { transitionTo } from "../ui/Transition.ts";
 import { installDialogPreview } from "../dev/dialogPreview.ts";
 import { showPrompt, type PhaseAction, type PromptHost } from "./duelPrompts.ts";
 import { withDevSetup } from "../dev/devSetups.ts";
@@ -368,7 +369,8 @@ export class DuelScene extends Phaser.Scene {
   private onEnd(winner: number | null, reason: number | null) {
     this.ended = true;
     this.clearInteraction();
-    this.endDialog(winner, reason, () => this.scene.start(this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === this.me } }));
+    this.endDialog(winner, reason, () =>
+      void transitionTo(this, this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === this.me } }));
   }
 
   /**
@@ -383,7 +385,7 @@ export class DuelScene extends Phaser.Scene {
     this.clearInteraction();
     const duelResult = won === undefined ? undefined : { won };
     this.modal.dialog(message.toUpperCase(), [
-      { label: "CONTINUE", onClick: () => this.scene.start(this.sceneData.returnScene ?? "Overworld", duelResult && { duelResult }) },
+      { label: "CONTINUE", onClick: () => void transitionTo(this, this.sceneData.returnScene ?? "Overworld", duelResult && { duelResult }) },
     ]);
   }
 
