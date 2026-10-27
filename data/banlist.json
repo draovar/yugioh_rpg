@@ -134,6 +134,46 @@
     "Exchange of the Spirit": {
       "to": "limited",
       "why": "Modern version: both players need 15+ cards in the GY, and only 1 per Duel."
+    },
+    "Sangan": {
+      "to": "semiLimited",
+      "why": "Modern version: once per turn, and the searched card's name can't be used that turn (the same errata as Witch of the Black Forest, the weaker card)."
+    },
+    "Crush Card Virus": {
+      "to": "semiLimited",
+      "why": "Modern version: checks the hand and field once and destroys at most 3 cards from the Deck; no longer checks draws for 3 turns."
+    },
+    "Dark Magician of Chaos": {
+      "to": "semiLimited",
+      "why": "Modern version: the Spell comes back in the End Phase instead of on summon, once per turn."
+    },
+    "Destiny HERO - Disk Commander": {
+      "to": "semiLimited",
+      "why": "Modern version: can't be revived the turn it's sent to the GY, and draws only once per Duel."
+    },
+    "Light and Darkness Dragon": {
+      "to": "unlimited",
+      "why": "Modern version: negates only once per Chain."
+    },
+    "Breaker the Magical Warrior": {
+      "to": "limited",
+      "why": "Owner's choice for this game (no errata)."
+    },
+    "Magician of Faith": {
+      "to": "limited",
+      "why": "Owner's choice for this game (no errata)."
+    },
+    "Dark Hole": {
+      "to": "limited",
+      "why": "Owner's choice for this game (no errata)."
+    },
+    "Snatch Steal": {
+      "to": "limited",
+      "why": "Owner's choice for this game (no errata)."
+    },
+    "Call of the Haunted": {
+      "to": "limited",
+      "why": "Owner's choice for this game (no errata)."
     }
   }
 }

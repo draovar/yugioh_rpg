@@ -141,8 +141,11 @@ Progress:
 - `data/banlist.json`: the May 2008 TCG list as published (39 Forbidden, 55 Limited, 13 Semi-Limited; copied from
   Yugipedia "May 2008 Lists"), by name, plus `changes` with a reason each. Changed for the modern versions (user's
   picks): Witch of the Black Forest, Ring of Destruction, Sinister Serpent, Makyura the Destructor, Exchange of the
-  Spirit Forbidden → Limited. Sangan, Crush Card Virus, Chaos Emperor Dragon, Dark Magician of Chaos keep their
-  status. Last Turn is on the list but not in the pool. Revisit when `card-versions.json` picks an older version.
+  Spirit Forbidden → Limited; Sangan, Crush Card Virus, Dark Magician of Chaos, Destiny HERO - Disk Commander
+  Limited → Semi-Limited; Light and Darkness Dragon off the list (once per Chain now). Chaos Emperor Dragon and
+  Imperial Order stay Forbidden despite their errata. Owner's choice, no errata: Breaker the Magical Warrior,
+  Magician of Faith, Dark Hole, Snatch Steal, Call of the Haunted Forbidden → Limited. The other older versions only differ in wording, or are
+  anime/manga versions rather than the 2008 card. Last Turn is on the list but not in the pool. Revisit when `card-versions.json` picks an older version.
 - `build-data` resolves the names (fails on an unknown name or a card on two lists) and writes `limit` (0/1/2) into
   each listed card's record. `deckRules.copiesAllowed` / `addProblem` enforce it in the deck editor ("FORBIDDEN",
   "LIMITED (1)"); `deckProblems` adds `banlistProblems` for any deck that isn't exactly a prebuilt one.
