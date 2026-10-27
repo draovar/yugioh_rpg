@@ -1,0 +1,167 @@
+{
+ "maps": [
+  {
+   "fileName": "desert-west.tmj",
+   "x": 3840,
+   "y": 1920,
+   "width": 5120,
+   "height": 5760
+  },
+  {
+   "fileName": "desert-north.tmj",
+   "x": 8960,
+   "y": 0,
+   "width": 5120,
+   "height": 3520
+  },
+  {
+   "fileName": "desert-east.tmj",
+   "x": 8960,
+   "y": 3520,
+   "width": 5120,
+   "height": 3520
+  },
+  {
+   "fileName": "north-pass.tmj",
+   "x": 14080,
+   "y": 0,
+   "width": 5120,
+   "height": 2560
+  },
+  {
+   "fileName": "big-mountain.tmj",
+   "x": 14080,
+   "y": 2560,
+   "width": 5120,
+   "height": 5760
+  },
+  {
+   "fileName": "north-meadow.tmj",
+   "x": 19200,
+   "y": 0,
+   "width": 4800,
+   "height": 4480
+  },
+  {
+   "fileName": "city-north.tmj",
+   "x": 24000,
+   "y": 0,
+   "width": 4800,
+   "height": 4480
+  },
+  {
+   "fileName": "main-city.tmj",
+   "x": 24000,
+   "y": 4480,
+   "width": 4800,
+   "height": 4480
+  },
+  {
+   "fileName": "junction.tmj",
+   "x": 19200,
+   "y": 4480,
+   "width": 4800,
+   "height": 4480
+  },
+  {
+   "fileName": "west-coast.tmj",
+   "x": 3840,
+   "y": 7680,
+   "width": 5120,
+   "height": 2560
+  },
+  {
+   "fileName": "harbour-city.tmj",
+   "x": 3840,
+   "y": 10240,
+   "width": 5120,
+   "height": 3840
+  },
+  {
+   "fileName": "islands.tmj",
+   "x": 0,
+   "y": 11200,
+   "width": 3840,
+   "height": 5760
+  },
+  {
+   "fileName": "castle.tmj",
+   "x": 8960,
+   "y": 7040,
+   "width": 5120,
+   "height": 4160
+  },
+  {
+   "fileName": "bay-east.tmj",
+   "x": 8960,
+   "y": 11200,
+   "width": 5120,
+   "height": 4800
+  },
+  {
+   "fileName": "east-north.tmj",
+   "x": 18880,
+   "y": 8960,
+   "width": 6080,
+   "height": 4480
+  },
+  {
+   "fileName": "east-south.tmj",
+   "x": 18880,
+   "y": 13440,
+   "width": 6080,
+   "height": 4800
+  },
+  {
+   "fileName": "south-east.tmj",
+   "x": 18880,
+   "y": 18240,
+   "width": 6080,
+   "height": 4160
+  },
+  {
+   "fileName": "forest-west.tmj",
+   "x": 3840,
+   "y": 14080,
+   "width": 5120,
+   "height": 6080
+  },
+  {
+   "fileName": "forest-southwest.tmj",
+   "x": 3840,
+   "y": 20160,
+   "width": 5120,
+   "height": 6080
+  },
+  {
+   "fileName": "forest-north.tmj",
+   "x": 8960,
+   "y": 16000,
+   "width": 5120,
+   "height": 4160
+  },
+  {
+   "fileName": "forest-south.tmj",
+   "x": 8960,
+   "y": 20160,
+   "width": 5120,
+   "height": 6080
+  },
+  {
+   "fileName": "forest-east.tmj",
+   "x": 14080,
+   "y": 20160,
+   "width": 4800,
+   "height": 4800
+  },
+  {
+   "fileName": "range-foot.tmj",
+   "x": 16000,
+   "y": 16640,
+   "width": 2880,
+   "height": 3520
+  }
+ ],
+ "onlyShowAdjacentMaps": false,
+ "type": "world"
+}

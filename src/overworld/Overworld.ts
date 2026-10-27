@@ -15,8 +15,11 @@ import { transitionTo, transitioning } from "../ui/Transition.ts";
 
 const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
-/** The map the player is on (data/maps/NAME.tmj). Starts on `&map=NAME` (e.g. `maze`), else the town. */
-let currentMap = new URLSearchParams(location.search).get("map")?.replace(/[^\w-]/g, "") || "overworld";
+/**
+ * The map the player is on (data/maps/NAME.tmj). Starts on `&map=NAME` (e.g. `maze`), else in the island's main city
+ * (the map with its `spawn`, as generate-world reports it).
+ */
+let currentMap = new URLSearchParams(location.search).get("map")?.replace(/[^\w-]/g, "") || "main-city";
 
 /** A map and its tiles, from `npm run build-tiles` (public/maps/, gitignored). Loaded once, on first visit. */
 function loadMap(load: Phaser.Loader.LoaderPlugin, name: string) {
@@ -25,9 +28,14 @@ function loadMap(load: Phaser.Loader.LoaderPlugin, name: string) {
   load.image(tilesKey(name), `maps/${name}.png`);
 }
 
-/** Called from Boot: the characters and the first map. */
+/** A map's place in a Tiled world (data/maps/*.world, exported by build-tiles): its rectangle there, in pixels. */
+type Placement = { world: string; x: number; y: number; width: number; height: number };
+const placements = (cache: Phaser.Cache.CacheManager) => (cache.json.get("worlds") ?? {}) as Record<string, Placement>;
+
+/** Called from Boot: the characters, the world placements and the first map. */
 export function loadOverworld(load: Phaser.Loader.LoaderPlugin) {
   loadMap(load, currentMap);
+  load.json("worlds", "maps/worlds.json");
   loadCharacters(load);
   loadAmbushes(load);
 }
@@ -40,8 +48,11 @@ const RUN_SPEED = 1.5;
 
 /** Where the player stood when they left for a duel or the lobby, and who they were dueling. */
 let saved: { x: number; y: number; facing: Facing; flipX: boolean; opponent?: string } | null = null;
-/** Set when walking through a warp: the point to arrive at, and the height to keep (maps placed side by side). */
-let arrival: { spawn: string; y?: number; facing: Facing; flipX: boolean } | null = null;
+/**
+ * Set when walking through a warp: the point to arrive at, and the height to keep (maps placed side by side). Walking
+ * across the edge into a neighbouring map of the same world gives the exact spot there instead (`x` and `y`).
+ */
+let arrival: { spawn?: string; x?: number; y?: number; facing: Facing; flipX: boolean } | null = null;
 
 /**
  * The overworld: a Tiled map, the player (arrow keys) and NPCs to talk to (X). Saying yes to an NPC starts a duel
@@ -71,6 +82,9 @@ export class Overworld extends Phaser.Scene {
   private chips = 2;
   /** Random hedge ambushes (maps with AMBUSHERS). */
   private ambushes: Ambushes | null = null;
+  /** The map's place in its world (null: a map on its own). */
+  private placement: Placement | null = null;
+  private mapSize = { width: 0, height: 0 };
 
   constructor() {
     super({ key: "Overworld", physics: { default: "arcade", arcade: {} } });
@@ -81,7 +95,7 @@ export class Overworld extends Phaser.Scene {
     this.warping = false;
   }
 
-  /** A map visited for the first time (through a warp) loads here. */
+  /** A map visited for the first time (through a warp or a world edge) loads here. */
   preload() {
     loadMap(this.load, currentMap);
   }
@@ -98,7 +112,7 @@ export class Overworld extends Phaser.Scene {
 
     // Ground layers (ground, ground2, ground3...): no collision, always under everything.
     const grounds = map.layers.filter((l) => l.name.startsWith("ground")).map((l) => map.createLayer(l.name, tileset, 0, 0)!);
-    bake(this, grounds).setDepth(0);
+    bake(this, grounds, 0);
 
     // Optional hidden "collision" layer: every tile in it blocks, whatever it shows (a map's exact footprints).
     this.blockers = map.getLayerIndex("collision") === null ? null
@@ -110,20 +124,26 @@ export class Overworld extends Phaser.Scene {
       (map.createLayer(l.name, tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false).setCollisionByProperty({ collision: true }));
     buildSortedWalls(this, map, tileset, this.walls, this.blockers);
 
+    // Maps placed side by side in a world: walking past an edge goes on in the neighbouring map (crossEdge).
+    this.placement = placements(this.cache)[currentMap] ?? null;
+    this.mapSize = { width: map.widthInPixels, height: map.heightInPixels };
+
     // The 32px character frames are drawn at 2x. Body size/offset are in frame pixels and scale with the sprite.
     // Start: back from a duel on the same spot, through a warp at its arrival point (layer "objects"), else at the
     // map's point named "spawn".
     const point = (name: string) => map.findObject("objects", (o) => o.name === name);
-    const at = arrival ? point(arrival.spawn) : point("spawn");
-    const x = saved?.x ?? at?.x ?? 400;
+    const at = arrival?.spawn ? point(arrival.spawn) : arrival ? null : point("spawn");
+    const x = saved?.x ?? arrival?.x ?? at?.x ?? 400;
     let y = saved?.y ?? arrival?.y ?? at?.y ?? 520;
-    if (!saved) y = this.freeY(x, y);
+    const crossed = arrival?.x !== undefined;
+    if (!saved && !crossed) y = this.freeY(x, y);
     this.look = PLAYER_LOOKS[playerLook()];
     this.player = this.physics.add.sprite(x, y, CHARACTERS, frameOf(this, this.look.walk, "down")).setScale(2);
     this.player.body.setSize(16, 16, false).setOffset(8, 16);
     // Snapped like the (unscaled) map, which "safeAuto" would skip at 2x: no half-pixel shimmer against the ground.
     this.player.vertexRoundMode = "fullAuto";
-    this.player.setCollideWorldBounds(true);
+    // In a world the player may step past the edges (crossEdge keeps them in where no map follows).
+    this.player.setCollideWorldBounds(!this.placement);
     const facing = saved ?? arrival;
     if (facing) {
       this.facing = facing.facing;
@@ -209,17 +229,47 @@ export class Overworld extends Phaser.Scene {
     } else ambusherLeaves();
   }
 
-  /** Fades out and starts the target map at its arrival point. */
+  /** Warps to the target map's arrival point. */
   private warp(mapName: string, spawn: string, keepY: boolean) {
+    this.goTo(mapName, { spawn, y: keepY ? Math.round(this.player.y) : undefined, facing: this.facing, flipX: this.player.flipX });
+  }
+
+  /** Fades out and starts another map where `to` says. */
+  private goTo(mapName: string, to: NonNullable<typeof arrival>) {
     if (this.warping) return;
     this.warping = true;
     this.player.setVelocity(0, 0);
-    arrival = { spawn, y: keepY ? Math.round(this.player.y) : undefined, facing: this.facing, flipX: this.player.flipX };
+    arrival = to;
     this.cameras.main.fadeOut(FADE_MS);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
       currentMap = mapName;
       this.scene.restart();
     });
+  }
+
+  /**
+   * Once the player's feet box is centred past this map's edge, the map of the world there takes over, the player on
+   * the same spot of the world (like a warp, with a fade). Where no map follows (open sea), they're kept in.
+   */
+  private crossEdge() {
+    const me = this.placement;
+    if (!me || this.warping) return;
+    // From the sprite, like the arrival below (the body is a physics step ahead in update()): its feet box centre.
+    const x = this.player.x, y = this.player.y + this.player.body.halfHeight;
+    if (x >= 0 && y >= 0 && x < this.mapSize.width && y < this.mapSize.height) return;
+    const wx = x + me.x, wy = y + me.y;
+    const next = Object.entries(placements(this.cache)).find(([, p]) => p.world === me.world
+      && wx >= p.x && wy >= p.y && wx < p.x + p.width && wy < p.y + p.height);
+    if (!next) {
+      const body = this.player.body;
+      this.player.setPosition(Phaser.Math.Clamp(x, 0, this.mapSize.width - 1), Phaser.Math.Clamp(y, 0, this.mapSize.height - 1) - body.halfHeight);
+      body.updateFromGameObject();
+      return;
+    }
+    const [name, p] = next;
+    // Not rounded: the feet stay just past the edge, inside the new map (rounded, they could land on its edge and
+    // count as outside it, sending the player straight back).
+    this.goTo(name, { x: this.player.x + me.x - p.x, y: this.player.y + me.y - p.y, facing: this.facing, flipX: this.player.flipX });
   }
 
   /**
@@ -353,6 +403,7 @@ export class Overworld extends Phaser.Scene {
       this.player.setFrame(frameOf(this, this.look.walk, this.facing));
     }
     this.sortByFeet(this.player);
+    this.crossEdge();
     if (vx !== 0 || vy !== 0) this.ambushes?.walk(this.player, this.player.body.speed * this.game.loop.delta / 1000, this.facing);
   }
 }

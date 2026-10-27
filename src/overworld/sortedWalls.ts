@@ -5,21 +5,28 @@ export function depthForY(y: number) {
   return 2 + y / 100000;
 }
 
+/** The largest side of one baked texture: phones may not hold textures over 4096 px (a big map takes several). */
+const CHUNK = 2048;
+
 /**
- * Static tile layers drawn once into a texture, which replaces them: a tilemap layer re-culls and re-submits every
- * visible tile each frame, which kept phones busy (and hot) while nothing moved. All layers share the first's area.
+ * Static tile layers drawn once into textures (pieces of at most CHUNK px), which replace them: a tilemap layer re-culls
+ * and re-submits every visible tile each frame, which kept phones busy (and hot) while nothing moved. All layers share
+ * the first's area.
  */
-export function bake(scene: Phaser.Scene, layers: (Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer)[]): Phaser.GameObjects.RenderTexture {
+export function bake(scene: Phaser.Scene, layers: (Phaser.Tilemaps.TilemapLayer | Phaser.Tilemaps.TilemapGPULayer)[], depth: number) {
   const { x, y, width, height } = layers[0];
-  const rt = scene.add.renderTexture(x, y, width, height).setOrigin(0);
-  rt.draw(layers, -x, -y).render();
+  for (let cy = 0; cy < height; cy += CHUNK) {
+    for (let cx = 0; cx < width; cx += CHUNK) {
+      scene.add.renderTexture(x + cx, y + cy, Math.min(CHUNK, width - cx), Math.min(CHUNK, height - cy))
+        .setOrigin(0).setDepth(depth).draw(layers, -x - cx, -y - cy).render();
+    }
+  }
   for (const l of layers) l.destroy();
-  return rt;
 }
 
 /**
  * Wall tiles that share a base y go into one layer, whose depth comes from the base y the same way characters get
- * theirs from their feet. So walls, the player and NPCs all sort together. Each layer only covers its tiles' rows.
+ * theirs from their feet. So walls, the player and NPCs all sort together. Each layer only covers its tiles' rows and columns.
  * Every walls layer gets its own strips (two layers can fill the same cell); a later layer is drawn over an earlier
  * one on the same base.
  */
@@ -32,12 +39,12 @@ export function buildSortedWalls(scene: Phaser.Scene, map: Phaser.Tilemaps.Tilem
     strips.get(key)!.tiles.push(tile);
   }
   for (const [key, { order, baseY, tiles }] of strips) {
-    const top = Math.min(...tiles.map((t) => t.y));
-    const bottom = Math.max(...tiles.map((t) => t.y));
-    const sorted = map.createBlankLayer(`walls_${key}`, tileset, 0, top * map.tileHeight, map.width, bottom - top + 1)!;
-    for (const t of tiles) sorted.putTileAt(t.index, t.x, t.y - top);
+    const top = Math.min(...tiles.map((t) => t.y)), bottom = Math.max(...tiles.map((t) => t.y));
+    const left = Math.min(...tiles.map((t) => t.x)), right = Math.max(...tiles.map((t) => t.x));
+    const sorted = map.createBlankLayer(`walls_${key}`, tileset, left * map.tileWidth, top * map.tileHeight, right - left + 1, bottom - top + 1)!;
+    for (const t of tiles) sorted.putTileAt(t.index, t.x - left, t.y - top);
     // -0.5 so a character standing exactly on the base is drawn in front.
-    bake(scene, [sorted]).setDepth(depthForY(baseY - 0.5) + order * 1e-7);
+    bake(scene, [sorted], depthForY(baseY - 0.5) + order * 1e-7);
   }
 }
 

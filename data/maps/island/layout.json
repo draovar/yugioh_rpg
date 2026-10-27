@@ -1,0 +1,45 @@
+{
+  "blockout": "blockout.png",
+  "world": "../island.world",
+  "legend": {
+    "sea": [40, 90, 200],
+    "grass": [80, 170, 70],
+    "mountain": [140, 100, 70],
+    "forest": [25, 90, 30],
+    "desert": [230, 210, 120],
+    "city": [150, 150, 150],
+    "harbour": [90, 120, 160],
+    "road": [200, 170, 120]
+  },
+  "maps": {
+    "desert-west": [240, 120, 320, 360],
+    "desert-north": [560, 0, 320, 220],
+    "desert-east": [560, 220, 320, 220],
+    "north-pass": [880, 0, 320, 160],
+    "big-mountain": [880, 160, 320, 360],
+    "north-meadow": [1200, 0, 300, 280],
+    "city-north": [1500, 0, 300, 280],
+    "main-city": [1500, 280, 300, 280],
+    "junction": [1200, 280, 300, 280],
+    "west-coast": [240, 480, 320, 160],
+    "harbour-city": [240, 640, 320, 240],
+    "islands": [0, 700, 240, 360],
+    "castle": [560, 440, 320, 260],
+    "bay-east": [560, 700, 320, 300],
+    "east-north": [1180, 560, 380, 280],
+    "east-south": [1180, 840, 380, 300],
+    "south-east": [1180, 1140, 380, 260],
+    "forest-west": [240, 880, 320, 380],
+    "forest-southwest": [240, 1260, 320, 380],
+    "forest-north": [560, 1000, 320, 260],
+    "forest-south": [560, 1260, 320, 380],
+    "forest-east": [880, 1260, 300, 300],
+    "range-foot": [1000, 1040, 180, 220]
+  },
+  "spawn": [1650, 380],
+  "areas": [
+    { "note": "Main city (start)", "at": [1650, 380] },
+    { "note": "Harbour city", "at": [350, 760] },
+    { "note": "Castle, maze in its yard", "at": [800, 600] }
+  ]
+}

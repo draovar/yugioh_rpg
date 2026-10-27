@@ -8,6 +8,7 @@
 // vendor/paid is a clone of the private Draovar/yugioh_rpg-assets repo (the deploy checks it out with a deploy key).
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { gunzipSync, inflateSync } from "node:zlib";
 import sharp from "sharp";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
@@ -46,6 +47,16 @@ async function pack(name) {
   if (sets.some((s) => s.tilewidth !== tw || s.tileheight !== th)) throw new Error(`${name}: tilesets of different tile sizes`);
   const setOf = (gid) => sets.findLast((s) => s.firstgid <= gid);
   const layers = map.layers.filter((l) => l.type === "tilelayer");
+  // Layers Tiled stores as base64 (zlib / gzip compressed or not) become plain arrays: Phaser reads no compression.
+  for (const layer of layers) {
+    if (layer.encoding !== "base64") continue;
+    const raw = Buffer.from(layer.data, "base64");
+    const bytes = layer.compression === "zlib" ? inflateSync(raw) : layer.compression === "gzip" ? gunzipSync(raw)
+      : layer.compression ? (() => { throw new Error(`${name}/${layer.name}: ${layer.compression} compression not supported`); })() : raw;
+    layer.data = Array.from(new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4));
+    delete layer.encoding;
+    delete layer.compression;
+  }
 
   // old gid → new gid, in order of first use
   const remap = new Map();
@@ -95,3 +106,17 @@ async function pack(name) {
 }
 
 for (const file of readdirSync(MAPS).filter((f) => f.endsWith(".tmj"))) await pack(path.basename(file, ".tmj"));
+
+// Tiled worlds (data/maps/*.world: maps placed side by side) → public/maps/worlds.json, map name → its world and its
+// rectangle in that world (pixels). The overworld walks across their edges into each other.
+const placed = {};
+for (const file of readdirSync(MAPS).filter((f) => f.endsWith(".world"))) {
+  const world = path.basename(file, ".world");
+  for (const m of JSON.parse(readFileSync(path.join(MAPS, file), "utf-8")).maps) {
+    const name = path.basename(m.fileName, ".tmj");
+    if (placed[name]) throw new Error(`${name} is in two worlds (${placed[name].world}, ${world})`);
+    placed[name] = { world, x: m.x, y: m.y, width: m.width, height: m.height };
+  }
+}
+writeFileSync(path.join(OUT, "worlds.json"), JSON.stringify(placed));
+if (Object.keys(placed).length) console.log(`worlds: ${Object.keys(placed).length} placed maps → public/maps/worlds.json`);

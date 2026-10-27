@@ -165,14 +165,21 @@ passes the `NetDuel` to `Duel`.
 - Map layers: ground layers (every `ground*` layer, in map order) and wall layers (every `walls*` layer: walls,
   walls2...; they collide and y-sort together, a later layer drawn over an earlier one on the same base) are baked into
   RenderTextures once (`bake` in `sortedWalls.ts`: live tilemap layers re-culled every tile each frame, 4.2 → 0.6 ms a
-  frame on a desktop). Wall tiles are redrawn in layers y-sorted with the characters by their base row
-  (`buildSortedWalls`). An optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision
+  frame on a desktop), in pieces of at most 2048 px (phones may not hold textures over 4096 px; the main city is
+  4800x4480). Wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`;
+  each strip covers only its tiles' rows and columns). An optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision
   for the y-sort (walls' own tiles collide by the tileset's `collision` property).
 - Warps: maps link through `warp` rectangles in their `objects` layer (properties `map`, `spawn` = the arrival point's
   name there, `keepY` = keep the height: town and maze sit side by side, tops aligned, town's right edge ↔ maze's left
   meadow, by the entrance); a warp fades out and restarts the scene on the target map (loaded on first visit in
   `preload`); an arrival on something solid is nudged to the nearest free spot (`freeY`). `&map=NAME` starts on another
-  map at its `spawn` point.
+  map at its `spawn` point (default: `main-city`).
+- Worlds: maps placed side by side in a Tiled world (`data/maps/island.world` → `public/maps/worlds.json`, map name →
+  world + rectangle in pixels) need no warps between them. The camera stays inside the map as everywhere; once the
+  player's feet box centre (from the sprite: the body is a physics step ahead in `update`) passes the edge, `crossEdge`
+  fades over to the map of the world there, the player on the same spot of the world (unrounded, so they don't land on
+  its edge and bounce back). The player doesn't collide with a world map's bounds; where no map follows (open sea, left
+  out of the grid) `crossEdge` keeps them in.
 - Signs: `sign` rectangles in the `objects` layer (properties `text`, `title` = the dialog's header, "SIGN" if empty)
   over any tile, the art stays a normal tile. Read only while facing them (`facedSign`: a point `READ_REACH` px in
   front of the feet box must be inside the rectangle) with X / Enter / Space; the X hint shows over the sign, and a
@@ -362,9 +369,28 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
 - `maps/`: `build-tiles` (Tiled map + its external tilesets, whose images are paid sheets in `vendor/paid/` →
   `public/maps/<name>.png` with only the tiles the map uses, from all its tilesets + `<name>.json` with one tileset
   "world" and tile ids remapped; each tile keeps its tileset's name and its id there as the `sheet` / `sheetId` tile
-  properties). Two tileset families: `data/maps/modern-exteriors.tsj` (the complete LimeZu sheet, name "world": the town
-  and the maze) and `data/maps/tilesets/<theme>.tsj` (the pack's 24 theme sheets, for new maps; they lack some of the
-  complete sheet's tiles, e.g. its plain grass, so the old maps were not converted).
+  properties; layers Tiled stores base64 / zlib-compressed become plain arrays, Phaser reads no compression), plus
+  `public/maps/worlds.json` from `data/maps/*.world`. Two tileset families: `data/maps/modern-exteriors.tsj` (the
+  complete LimeZu sheet, name "world": the town and the maze) and `data/maps/tilesets/<theme>.tsj` (the pack's 24 theme
+  sheets, drawn at 16 px so each 32 px piece is 2x2 tiles, for new maps; they lack some of the complete sheet's tiles,
+  e.g. its plain grass, so the old maps were not converted).
+  - `generate-world.mjs data/maps/island/layout.json [--only NAME] [--force]`: world template from a blockout picture
+    (`data/maps/island/blockout.png`, 1 px = 1 tile, 1868x1688: traced from the owner's `sketch.png`, then made 4x as
+    wide with smoothed coasts and roads redrawn as 1 px lines; colours in the layout's legend: sea, grass, desert,
+    forest, mountain, city, harbour, road) cut into the layout's named `maps`: 23 rectangles laid out along the terrain
+    (desert-west, big-mountain, main-city, castle, forest-south...; 180x220 to 380x380 tiles, not overlapping; the
+    mountain range's core and other land no map covers are left out, walking into it stops at the edge). An optional
+    `grid` (cell size, `minSide`) fills everything else with `<name>-<col>-<row>` cells instead (a cell a named map
+    covers in part is cut into rectangles `-a`, `-b`...; a named map grows to a grid line within `minSide` of its
+    edge, never shrinks); maps of open sea are left out → `data/maps/<name>.tmj` (layers base64 + zlib, a few KB each) + `island.world`.
+    Terrain on a grid of 2-tile cells: each terrain is a layer of edge pieces picked by which cell corners it covers
+    (`edgeSet` finds the pieces in the sheets by their corner pixels), stacked water < sand < grass < rocky ground
+    (mountains) < dirt (roads, drawn only over grass) < plain sidewalk (city zones, placeholders). Pines fill forests
+    (rows on walls/walls2/walls3 so crowns overlap), a few trees on grass, rocks on mountains and sand; trunks, water and
+    mountains go into the `collision` layer. Props come from a seeded hash over the whole world; one on a map edge is
+    split between both maps. The layout's `areas` (world tile points) label the paved zone there with `area`
+    rectangles (property `note`) in every map it reaches; `spawn` goes on the paved tile nearest its point, and the run
+    prints the start map. A scaffold: existing maps are kept unless `--force`.
   - `build-theme-tilesets.mjs`: the pack's ME_Theme_Sorter sheets → `vendor/paid/themes/` + one `.tsj` each (existing
     ones kept unless `--force`; new ones get `collision` where the same art has it in modern-exteriors.tsj).
   - `build-tile-catalog.mjs`: the pack's named Singles (one PNG per object) matched pixel for pixel into the theme

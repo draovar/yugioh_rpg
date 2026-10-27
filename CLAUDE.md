@@ -46,6 +46,7 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled, external tilesets) → `public/maps/<name>.png` + `.json` (needs `vendor/paid/`) |
 | `node tools/maps/build-theme-tilesets.mjs [folder]` | the pack's theme sheets (ME_Theme_Sorter) → `vendor/paid/themes/` + `data/maps/tilesets/<theme>.tsj`, the tilesets for new maps (existing .tsj kept unless `--force`) |
 | `node tools/maps/build-tile-catalog.mjs [folder]` | the pack's named Singles → `data/maps/tile-catalog.json` (object name → tileset + tile rectangle; grep it) |
+| `node tools/maps/generate-world.mjs data/maps/island/layout.json [--only NAME] [--force]` | blockout picture (1 px = 1 tile) → the island's maps (rectangles named in `data/maps/island/layout.json`, along the terrain: `main-city`, `desert-west`...) + `data/maps/island.world` (terrain, roads, trees, collision); existing maps kept unless `--force` (Tiled edits lost), then `build-tiles` |
 | `node tools/maps/hedge-maze.mjs data/maps/maze-layout.json data/maps/maze.tmj` | maze layout → hedge maze map; **overwrites** the .tmj (Tiled edits lost), then `build-tiles` |
 | `npm run build-characters` | overworld sprites from `data/characters/` (per `characters.json`) → `public/assets/overworld/` + the contact sheet `docs/characters.png`, then the hedge ambush sheets (`tools/art/build-ambush.mjs`) |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
@@ -95,7 +96,8 @@ Dev:
 - `&anims` adds a dropdown (top-left) to replay single animations; `&dialogs` adds one that opens every prompt UI with
   sample cards (answers are only logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`).
 - `&theme=NAME` picks the UI theme (`runewood`, `hologram`).
-- `&map=NAME` starts on another map instead of the overworld (`maze`; the player starts at its `spawn` point object).
+- `&map=NAME` starts on another map instead of the island's main city (`main-city`): `overworld` = the old town, `maze`,
+  or any island map (`castle`, `forest-south`... see `data/maps/island/layout.json`); the player starts at its `spawn` point object, else at 400,520.
 - `&ambush` makes the first maze hedge ambush happen at the first spot that fits (walk along a hedge).
 - `&touch` shows the overworld's touch controls on a desktop (phones get them automatically).
 - `&timeout` keeps the game loop running when the tab/pane is hidden (rAF pauses there, which freezes the duel).
