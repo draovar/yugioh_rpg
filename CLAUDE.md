@@ -50,6 +50,7 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `node tools/art/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/art/build-tiny5-font.mjs`) |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession` (bots in `AiSeat`s); fails on RETRY/crash |
+| `npm run smoke-random [-- --passes N] [-- --seed S] [-- --duel K] [-- --unplayed F]` | the whole pool dealt into random decks, bot vs bot on all cores; fails on RETRY/crash/hang/new `[ocgcore]` error, reports how many cards got played |
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |
 | `npm run arena -- [--a B1] [--b B2] [--n N] [--decks ...] [--seed S] [--wa W.json] [--wb W.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses] [--stats] [--record F.jsonl]` | brain vs brain win rates over seeded duels, on all CPU cores (flags: `docs/architecture.md`, Tools) |
 | `npm run tune -- [--brain planner] [--rounds 20] [--quick 10] [--long 30] [--seed S]` | tune the AI's `Weights` by self-play; writes `vendor/tune/`; winners are copied into `DEFAULT_WEIGHTS` by hand |
@@ -181,7 +182,7 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
 
 ## Now
 
-Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-3 (pool generator, hand-picked
-older card versions, full-size data + art) done, next is phase 4 (random-deck smoke). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
+Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-4 (pool generator, hand-picked
+older card versions, full-size data + art, random-deck smoke) done, next is phase 5 (UI checks for untested mechanics). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
 `docs/ai-reports.md`, only clear bugs are fixed right away. Overworld: trainer line-of-sight challenges next.
 RPG loop: card collection, rewards/boosters, story, bosses, saving. Full list: `docs/roadmap.md`.

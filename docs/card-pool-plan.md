@@ -68,10 +68,23 @@ Then NPCs get decks built from it.
 - Deck editor with 2,842 cards (browser): search 1.2-1.7 ms per keystroke (card-text search too), scrolling 0.3 ms
   (it only draws the visible rows). Atlas checked in the browser: all 2,879 frames, pixels as built.
 
-### 4. Engine check of every card (random-deck mode for `smoke`)
+### 4. Engine check of every card ✅ (`npm run smoke-random`)
 
-- Bot vs bot duels with random legal 40-card decks drawn from the whole pool, many seeds, so every card gets played.
-- Any RETRY, crash or `[ocgcore]` error points at a card: fix it, or put it on a "broken" list no deck may use.
+- `tools/test/smoke-random.ts`: each pass shuffles the pool into decks (20 different cards x2 + 15 Fusions), autoBot vs
+  autoBot, on all cores (one duel per worker at a time; a duel with no engine answer in 60 s kills its worker and
+  counts as a hang). Fails on RETRY, crash, a duel that never ends, a hang or a new `[ocgcore]` error, naming the
+  cards that acted last; `--duel K` replays one duel, `--unplayed FILE` lists the cards that never acted.
+- Results: 200 passes (13,800 duels, 130 s on 8 threads): 0 failures; 2,456 of 2,841 cards (86%) summoned or
+  activated. The rest are cards random decks can't set up (archetype support, Nomi / Ritual monsters, Fusion
+  materials, combo pieces): untested rather than broken, phase 5 and NPC decks cover them.
+- Found and fixed: autoBot finished SELECT_UNSELECT_CARD short of `min` (Panther Warrior's attack tribute, retried
+  forever); "yes" to the same optional effect over and over (Manticore of Darkness reviving itself) is now capped at
+  20 per card per turn in `AiSeat` (any brain).
+- Broken, removed from the pool (`pool-exceptions.json` "remove"): **Last Turn**. ocgcore-wasm 0.1.2 loops forever inside
+  `duelProcess` after its forced attack when both monsters die in battle and the turn reaches Main Phase 2 (the only
+  pool card using `Duel.ForceAttack`). Recheck on an ocgcore-wasm update.
+- Known, accepted script error (`KNOWN_ERRORS` in the script): Steel Scorpion copied by Phantom of Chaos reads the
+  copy's deleted effects at the End Phase; the check just fails, the duel goes on.
 
 ### 5. UI checks for untested mechanics
 

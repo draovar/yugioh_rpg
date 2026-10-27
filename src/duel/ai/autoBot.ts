@@ -94,7 +94,8 @@ export function autoRespond(m: OcgMessage, rng: () => number = Math.random, card
     case OcgMessageType.SELECT_TRIBUTE:
       return { type: OcgResponseType.SELECT_TRIBUTE, indicies: pickTributes(m.selects, firstN(m.selects.length), m.min) };
     case OcgMessageType.SELECT_UNSELECT_CARD:
-      return { type: OcgResponseType.SELECT_UNSELECT_CARD, index: m.can_finish || !m.select_cards.length ? null : 0 };
+      // Pick up to `min` first: finishing short of it cancels (Panther Warrior's attack tribute, retried forever).
+      return { type: OcgResponseType.SELECT_UNSELECT_CARD, index: m.select_cards.length && (!m.can_finish || m.unselect_cards.length < m.min) ? 0 : null };
     case OcgMessageType.SELECT_POSITION: {
       const pos = ([OcgPosition.FACEUP_ATTACK, OcgPosition.FACEDOWN_ATTACK, OcgPosition.FACEUP_DEFENSE, OcgPosition.FACEDOWN_DEFENSE] as const)
         .find((p) => m.positions & p)!;

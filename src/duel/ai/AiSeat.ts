@@ -1,7 +1,7 @@
 // The AI player in one seat. It is the only AI code that touches the engine: it redacts every engine step into the
 // seat's memory, reads the board as the seat sees it, and hands a brain only that (an AiView). Brains never get the
 // session or raw messages, so they can't see hidden cards by accident.
-import type { OcgMessage, OcgResponse } from "ocgcore-wasm";
+import { OcgMessageType, OcgResponseType, type OcgMessage, type OcgResponse } from "ocgcore-wasm";
 import type { CardDb } from "../engine/cardData.ts";
 import type { DuelSeed, FieldSnapshot } from "../engine/DuelSession.ts";
 import { autoRespond } from "./autoBot.ts";
@@ -10,6 +10,9 @@ import type { Weights } from "./board.ts";
 import { AiMemory } from "./memory.ts";
 import { redact } from "./redact.ts";
 import { describeChoice, promptName, type ScoredOption, type TraceEntry } from "./trace.ts";
+
+/** How often the AI accepts the same card's optional effect in one turn before it declines (see `decide`). */
+const LOOP_LIMIT = 20;
 
 /** Everything a brain may know when it decides. */
 export interface AiView {
@@ -86,6 +89,8 @@ export class AiSeat implements AiPlayer {
   private readonly rng: () => number;
   private readonly strict: boolean;
   private readonly onTrace?: (entry: TraceEntry) => void;
+  /** Optional effects accepted this turn, per card code (the loop guard in `decide`). */
+  private accepted = { turn: -1, counts: new Map<number, number>() };
 
   constructor(opts: AiSeatOptions) {
     this.seat = opts.seat;
@@ -131,6 +136,14 @@ export class AiSeat implements AiPlayer {
       if (this.strict) throw e;
       console.error(`AI (${this.brain.name}) failed, falling back to autoBot:`, e);
       decision = { response: autoRespond(prompt, this.rng, this.duel.cards), reason: `fallback after error: ${String(e)}` };
+    }
+    // Some optional effects can repeat forever if always accepted (two Manticore of Darkness reviving each other in
+    // the End Phase): a player stops the loop, so the AI does too.
+    if (prompt.type === OcgMessageType.SELECT_EFFECTYN && decision.response.type === OcgResponseType.SELECT_EFFECTYN && decision.response.yes) {
+      if (this.accepted.turn !== this.memory.turn) this.accepted = { turn: this.memory.turn, counts: new Map() };
+      const n = (this.accepted.counts.get(prompt.code) ?? 0) + 1;
+      this.accepted.counts.set(prompt.code, n);
+      if (n > LOOP_LIMIT) decision = { response: { type: OcgResponseType.SELECT_EFFECTYN, yes: false }, reason: `used ${LOOP_LIMIT} times this turn: stopping a loop` };
     }
     this.onTrace?.({
       seat: this.seat, brain: this.brain.name, turn: this.memory.turn, phase: this.memory.phase, prompt: promptName(prompt),

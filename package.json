@@ -14,6 +14,7 @@
     "build-data": "node tools/data/build-data.mjs",
     "check-cards": "node tools/data/check-cards.mjs",
     "smoke": "node tools/test/smoke-duel.ts",
+    "smoke-random": "node tools/test/smoke-random.ts",
     "smoke-p2p": "node tools/test/smoke-p2p.ts",
     "arena": "node tools/ai/arena.ts",
     "test-ai": "node tools/ai/test-ai.ts",

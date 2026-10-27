@@ -70,6 +70,8 @@ Plan and milestones: `docs/ai-plan.md`; current work: `docs/ai-rework-plan.md`; 
   for a `Brain`, which returns a `Decision` (response + reason + scored options). Brains never get the session or raw
   messages, and are built with a `BrainContext` holding the rules engine (`core`, `cards`, `readScript`), never the
   duel. A boss that peeks at your hand would be an explicit `AiSeat` option, never a brain reading the session.
+  `decide()` also caps "yes" to the same optional effect at 20 per card per turn (`LOOP_LIMIT`: a brain that always
+  accepts would loop a self-reviving card like Manticore of Darkness forever).
 - `trace.ts` turns decisions into lines (`&aitrace`, `arena --trace`); `boardText.ts` prints the whole board (the
   L key with `&aitrace`).
 - `brains.ts`: brains by name. `generic` (card data alone, fast), `planner` (the default, `DEFAULT_BRAIN`: generic + a
@@ -363,7 +365,8 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     script the opponent's turn (`opponentSetsThenBattles`, `opponentAttacks`).
   - `test-ai`: the AI can't see hidden cards: hand-made `redact()` cases + N real duels.
 - `test/`: `smoke-duel` (bot-vs-bot duels through `DuelSession`, every deck pairing, deck legality), `smoke-p2p`
-  (lockstep duels on an in-memory link).
+  (lockstep duels on an in-memory link), `smoke-random` (the pool shuffled into random decks, autoBot duels on worker
+  threads with a hang timeout; known script errors in its `KNOWN_ERRORS`; see `docs/card-pool-plan.md` phase 4).
 - `patch-ocgcore.mjs`: npm `postinstall` fix for ocgcore-wasm's message parser (see CLAUDE.md, Engine facts).
 
 ## Maps and the Tiled MCP server

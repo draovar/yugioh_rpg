@@ -3,5 +3,7 @@
   "add": {
     "Sixth Sense": "used by the Goat deck; first TCG release 2013"
   },
-  "remove": {}
+  "remove": {
+    "Last Turn": "ocgcore-wasm 0.1.2 hangs (endless loop inside duelProcess) after its forced attack when both monsters die in battle and the turn moves on to Main Phase 2"
+  }
 }
