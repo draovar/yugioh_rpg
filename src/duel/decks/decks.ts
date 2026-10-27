@@ -1,7 +1,7 @@
 // Prebuilt decks (NPCs, the AI, starting points in the deck editor). Every card must be in data/pool.json (the smoke tests check).
 import { TYPE, type CardDb } from "../engine/cardData.ts";
 import type { Deck } from "../engine/DuelSession.ts";
-import { DECK_RULES } from "./deckRules.ts";
+import { DECK_RULES, copiesAllowed } from "./deckRules.ts";
 
 /** Passcodes of the cards the decks use, by name. */
 const C = {
@@ -187,19 +187,44 @@ export function deckNameOf(deck: Deck): DeckName | null {
   return (Object.keys(DECKS) as DeckName[]).find((name) => DECKS[name].deck === deck) ?? null;
 }
 
-/** Why a deck isn't legal: 40-60 main, up to 15 extra, max 3 copies, every card known (tokens excluded). */
+/**
+ * Why a deck isn't legal: 40-60 main, up to 15 extra, max 3 copies, every card known (tokens excluded), and the
+ * banlist (`banlistProblems`), except for a prebuilt deck: those keep their cards.
+ */
 export function deckProblems(deck: Deck, cards: CardDb): string[] {
   const out: string[] = [];
   const main = deck.main, extra = deck.extra ?? [];
   if (main.length < DECK_RULES.mainMin || main.length > DECK_RULES.mainMax) out.push(`main deck has ${main.length} cards`);
   if (extra.length > DECK_RULES.extraMax) out.push(`extra deck has ${extra.length} cards`);
-  const counts = new Map<number, number>();
-  for (const code of [...main, ...extra]) counts.set(code, (counts.get(code) ?? 0) + 1);
-  for (const [code, n] of counts) {
+  for (const [code, n] of copyCounts(deck)) {
     const r = cards.records.get(code);
     if (!r) out.push(`unknown card ${code}`);
     else if (r.type & TYPE.TOKEN) out.push(`${r.name} is a token`);
     if (n > DECK_RULES.copies) out.push(`${r?.name ?? code} x${n}`);
   }
+  return isPrebuilt(deck) ? out : [...out, ...banlistProblems(deck, cards)];
+}
+
+/** Cards over their banlist limit (data/banlist.json): forbidden ones, or too many copies of a limited one. */
+export function banlistProblems(deck: Deck, cards: CardDb): string[] {
+  const out: string[] = [];
+  for (const [code, n] of copyCounts(deck)) {
+    const r = cards.records.get(code);
+    if (!r || n <= copiesAllowed(r)) continue;
+    out.push(r.limit === 0 ? `${r.name} is forbidden` : `${r.name} x${n} (${copiesAllowed(r)} allowed)`);
+  }
   return out;
+}
+
+function copyCounts(deck: Deck): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const code of [...deck.main, ...(deck.extra ?? [])]) counts.set(code, (counts.get(code) ?? 0) + 1);
+  return counts;
+}
+
+/** Whether `deck` holds exactly the cards of a prebuilt deck (as received from a peer, too). */
+function isPrebuilt(deck: Deck): boolean {
+  const key = (d: Deck) => [[...d.main].sort().join(), [...(d.extra ?? [])].sort().join()].join("|");
+  const k = key(deck);
+  return Object.values(DECKS).some((d) => key(d.deck) === k);
 }

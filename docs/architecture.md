@@ -17,7 +17,7 @@ src/lobby/             multiplayer Lobby scene
 src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
 tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helpers
-data/                  pool.json (the card pool, generated) + pool-exceptions.json, card-versions.json (older versions), maps, characters, palette
+data/                  pool.json (the card pool, generated) + pool-exceptions.json, card-versions.json (older versions), banlist.json, maps, characters, palette
 vendor/                Project Ignis repos, art downloads, paid assets (gitignored)
 ```
 
@@ -52,9 +52,10 @@ No Phaser imports: runs unchanged in Node (tools) and the browser.
 - `decks/decks.ts`: prebuilt decks (NPCs, the AI, the deck editor's LOAD): `yugi`, `kaiba`, `goat` + Extra Decks;
   starter decks `kaibaEvolution`, `yugiEvolution` (the Evolution starter decks with the owner's swaps); structure
   decks `zombieMadness` (as printed), `dragonsRoar` (owner's swaps). `deckProblems()` = legality check (40-60 main,
-  ≤15 extra, ≤3 copies, no tokens, all in the pool).
-- `decks/deckRules.ts`: the deck editor's rules and card list: `DECK_RULES`, `addProblem` (3 copies, 60 main, 15
-  extra; Fusions go to the Extra Deck), `CardList.find` (every word in the name or, after the name matches, in the
+  ≤15 extra, ≤3 copies, no tokens, all in the pool, and `banlistProblems()` unless the deck is exactly a prebuilt
+  one: prebuilt decks keep their banned cards; `smoke` only lists them).
+- `decks/deckRules.ts`: the deck editor's rules and card list: `DECK_RULES`, `addProblem` (3 copies or the card's banlist
+  `limit` via `copiesAllowed`, 60 main, 15 extra; Fusions go to the Extra Deck), `CardList.find` (every word in the name or, after the name matches, in the
   card text; filters; sort TYPE / NAME / LEVEL / ATK / DEF), filter groups (CARD, MONSTER, ATTRIBUTE, LEVEL, TYPE,
   SPELL/TRAP; only options some pool card has; one-value groups (`single`: all but MONSTER) keep one pick
   (`toggleFilter`), MONSTER picks are alternatives, groups combine), `sortDeck` (how the deck is laid out).
@@ -296,7 +297,7 @@ table). Geometry in `layout.ts`.
 - Right, where the duel's info panel sits: the card list. Search box = an HTML input via `textInput.ts`, with an ALL /
   NAME toggle (card text too or names only); SORT drop-down; FILTERS (`filterPanel.ts`, shown in the list's place:
   toggle buttons per group on a 5-column grid, long labels two cells, LEVEL half cells in one row; `FILTER_COLUMNS = 0`
-  = buttons as wide as their labels); 8 rows with art (`listRow.ts`: frame-colour strip, text lines, the eye icon),
+  = buttons as wide as their labels); 8 rows with art (`listRow.ts`: frame-colour strip, text lines, the eye icon, the banlist badge `limitBadge`),
   scroll by wheel / drag / scrollbar.
 - Click a listed card = add, a deck card = remove. Hovering a listed card's art shows an eye over it; clicking the art
   opens the card's details (`CardInfo`) over the list with ADD / CLOSE (Esc). Hovering a deck card (touch: holding it)
@@ -328,7 +329,7 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
 - `data/`: `fetch-data` (CardScripts at the pinned commit + BabelCDB), `build-pool` (TCG products up to the cutoff
   from YGOPRODeck set lists, mapped to BabelCDB passcodes (an alias with the same name is an alt art, one with another
   name a card of its own, e.g. Harpie Lady 1), ± `pool-exceptions.json` by name → `data/pool.json`), `build-data` (pool → `public/data/*.json`, modern versions except the GOAT / pre-errata ones `card-versions.json` picks, under the real passcodes,
-  plus the tokens pool scripts create), `check-cards`.
+  plus the tokens pool scripts create; `data/banlist.json` → each card's `limit` in `cards.json`), `check-cards`.
 - `art/`: `fetch-art` / `build-art` (YGOPRODeck crops → the shared palette, `art32` atlas + `art128`), `build-palette`,
   `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `make-gif`.
   - `build-characters`: `data/characters/reshef-sheet.png` (every Reshef of Destruction character, green cells on a

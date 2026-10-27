@@ -27,6 +27,8 @@ export interface CardRecord {
   desc: string;
   /** str1..str16 – effect descriptions, referenced as aux.Stringid(code, n). */
   strings: string[];
+  /** Banlist (data/banlist.json): copies allowed in a deck, 0 = Forbidden, 1 = Limited, 2 = Semi-Limited; unset = 3. */
+  limit?: number;
 }
 
 function toOcgCardData(r: CardRecord): OcgCardData {

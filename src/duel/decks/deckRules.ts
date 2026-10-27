@@ -5,8 +5,16 @@ import { normalize } from "./cardSearch.ts";
 import type { Deck } from "../engine/DuelSession.ts";
 import { ATTRIBUTES, RACES } from "../engine/text.ts";
 
-/** Deck size and copy limits (the same as `deckProblems` checks). */
+/** Deck size and copy limits (the same as `deckProblems` checks); the banlist lowers `copies` per card (`limit`). */
 export const DECK_RULES = { mainMin: 40, mainMax: 60, extraMax: 15, copies: 3 };
+
+/** Copies of `r` a deck may hold: the banlist's limit, else `DECK_RULES.copies`. */
+export const copiesAllowed = (r: CardRecord) => r.limit ?? DECK_RULES.copies;
+
+/** The banlist status shown for a card: "FORBIDDEN", "LIMITED", "SEMI-LIMITED", or null when unlisted. */
+export function limitLabel(r: CardRecord): string | null {
+  return r.limit === undefined ? null : ["FORBIDDEN", "LIMITED", "SEMI-LIMITED"][r.limit];
+}
 
 /** Fusion (and Synchro) monsters go to the Extra Deck, everything else to the Main Deck. */
 export const goesToExtra = (r: CardRecord) => (r.type & (TYPE.FUSION | TYPE.SYNCHRO)) !== 0;
@@ -21,7 +29,9 @@ const ST_KINDS = TYPE.QUICKPLAY | TYPE.CONTINUOUS | TYPE.EQUIP | TYPE.FIELD | TY
 export function addProblem(deck: Deck, r: CardRecord, cards: CardDb): string | null {
   const name = r.alias || r.code;
   const copies = [...deck.main, ...(deck.extra ?? [])].filter((c) => (cards.records.get(c)?.alias || c) === name).length;
-  if (copies >= DECK_RULES.copies) return `${DECK_RULES.copies} COPIES MAX`;
+  const allowed = copiesAllowed(r);
+  if (allowed === 0) return "FORBIDDEN";
+  if (copies >= allowed) return allowed < DECK_RULES.copies ? `${limitLabel(r)} (${allowed})` : `${allowed} COPIES MAX`;
   if (goesToExtra(r)) return (deck.extra?.length ?? 0) >= DECK_RULES.extraMax ? `EXTRA DECK FULL (${DECK_RULES.extraMax})` : null;
   return deck.main.length >= DECK_RULES.mainMax ? `MAIN DECK FULL (${DECK_RULES.mainMax})` : null;
 }

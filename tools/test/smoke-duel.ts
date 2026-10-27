@@ -1,10 +1,10 @@
 // Headless sanity check: plays N full GOAT-format duels between two auto-bots
 // through the same DuelSession + data files the browser game uses, cycling through every pairing of the
-// prebuilt decks (decks.ts), after checking that each deck is legal. The bots play through AiSeat, like the game's AI.
+// prebuilt decks (decks.ts), after checking that each deck is legal (the banlist only listed: prebuilt decks are exempt). The bots play through AiSeat, like the game's AI.
 // Usage: npm run smoke [-- <duels>]     (needs `npm run build-data` first)
 import { AiSeat } from "../../src/duel/ai/AiSeat.ts";
 import { autoBotBrain } from "../../src/duel/ai/brains.ts";
-import { DECKS, deckProblems, type DeckName } from "../../src/duel/decks/decks.ts";
+import { DECKS, banlistProblems, deckProblems, type DeckName } from "../../src/duel/decks/decks.ts";
 import { cards, newDuel, runDuel } from "../lib/engine.ts";
 
 const names = Object.keys(DECKS) as DeckName[];
@@ -12,6 +12,9 @@ let bad = false;
 for (const name of names) {
   const problems = deckProblems(DECKS[name].deck, cards);
   if (problems.length) { bad = true; console.error(`deck ${name}: ${problems.join("; ")}`); }
+  // Prebuilt decks are exempt from the banlist: listed for information only.
+  const banned = banlistProblems(DECKS[name].deck, cards);
+  if (banned.length) console.log(`deck ${name} (banlist, allowed for prebuilt decks): ${banned.join("; ")}`);
 }
 if (bad) process.exit(1);
 // Every ordered pairing (both players can go first), then around again.

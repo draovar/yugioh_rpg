@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { TYPE, type CardRecord } from "../duel/engine/cardData.ts";
 import { attributeNames, raceNames } from "../duel/engine/text.ts";
 import { spellTrapKind } from "../duel-screen/CardInfo.ts";
+import { INK, WHITE, text } from "../ui/pixel.ts";
 
 /** Colour strip on a list row by frame (the card frames' main colours). */
 const KIND_COLOR = { normal: 0xd8b04a, effect: 0xc8692c, ritual: 0x4f78c8, fusion: 0x8a54a8, spell: 0x2a9a7a, trap: 0xb04a8a };
@@ -58,4 +59,21 @@ export function eyeIcon(scene: Phaser.Scene, x: number, y: number): Phaser.GameO
     g.fillStyle(color, 0.85).fillRect(ex + px, ey + py, 1, 1);
   }
   return g;
+}
+
+/** Banlist badge colours by limit: Forbidden red, Limited orange, Semi-Limited yellow (card info, not themed). */
+const LIMIT_COLOR = [0xd62020, 0xe07a1f, 0xe8c547];
+/** A 9x9 disc, as [y, first x, last x] spans: the dark rim, then the colour inside it. */
+const DISC_RIM = [[0, 2, 6], [1, 1, 7], [2, 0, 8], [3, 0, 8], [4, 0, 8], [5, 0, 8], [6, 0, 8], [7, 1, 7], [8, 2, 6]];
+const DISC_FILL = [[1, 2, 6], [2, 1, 7], [3, 1, 7], [4, 1, 7], [5, 1, 7], [6, 1, 7], [7, 2, 6]];
+
+/** The banlist mark on a list row's art (its top-left at x, y): the copies allowed (0/1/2) in a coloured disc, like the printed icon. */
+export function limitBadge(scene: Phaser.Scene, x: number, y: number, limit: number): Phaser.GameObjects.Container {
+  const g = scene.add.graphics();
+  g.fillStyle(INK);
+  for (const [dy, x0, x1] of DISC_RIM) g.fillRect(x + x0, y + dy, x1 - x0 + 1, 1);
+  g.fillStyle(LIMIT_COLOR[limit]);
+  for (const [dy, x0, x1] of DISC_FILL) g.fillRect(x + x0, y + dy, x1 - x0 + 1, 1);
+  const digit = text(scene, x + 3, y + 2, String(limit), { color: limit === 2 ? INK : WHITE });
+  return scene.add.container(0, 0, [g, digit]);
 }

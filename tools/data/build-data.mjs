@@ -1,5 +1,6 @@
 // Builds the browser-side game data from the vendored Project Ignis repos:
-//   public/data/cards.json   – stats + text for every card in data/pool.json, plus the tokens they create
+//   public/data/cards.json   – stats + text for every card in data/pool.json, plus the tokens they create, and each
+//                              card's banlist limit (data/banlist.json)
 //   public/data/scripts.json – { fileName: luaSource } for engine utility scripts + pool card scripts
 //   public/data/strings.json – { system: { id: text }, counter: { type: name }, victory: { reason: text } } from EDOPro's strings.conf
 // Run `npm run fetch-data` first.
@@ -65,6 +66,35 @@ for (const code of pool) {
   cards.push(v ? { ...record(r), type: Number(v.row.type), desc: v.row.desc, strings: strings(v.row) } : record(r));
 }
 
+// Banlist: the published lists plus this game's changes, by name. A limit of 0/1/2 copies goes into the card's
+// record (`limit`); unlisted cards have none (3). Listed cards outside the pool (Last Turn) are skipped.
+const banlist = JSON.parse(readFileSync(path.join(ROOT, "data/banlist.json"), "utf-8"));
+const LIMITS = { forbidden: 0, limited: 1, semiLimited: 2, unlimited: 3 };
+const status = new Map(); // name -> list
+for (const list of ["forbidden", "limited", "semiLimited"]) {
+  for (const name of banlist[list]) {
+    if (status.has(name)) throw new Error(`banlist.json: "${name}" is on two lists`);
+    status.set(name, list);
+  }
+}
+for (const [name, change] of Object.entries(banlist.changes)) {
+  if (!(change.to in LIMITS)) throw new Error(`banlist.json: "${name}" changes to unknown list "${change.to}"`);
+  if (!change.why) throw new Error(`banlist.json: the change to "${name}" says no why`);
+  if (status.get(name) === change.to || (!status.has(name) && change.to === "unlimited")) {
+    throw new Error(`banlist.json: "${name}" is already ${change.to}`);
+  }
+  status.set(name, change.to);
+}
+const byName = new Map(cards.map((c) => [c.name, c]));
+const notInPool = [];
+for (const [name, list] of status) {
+  const card = byName.get(name);
+  if (!card) {
+    if (!db.prepare("SELECT 1 FROM texts WHERE name = ?").get(name)) throw new Error(`banlist.json: no card named "${name}" in cards.cdb`);
+    notInPool.push(name);
+  } else if (LIMITS[list] < 3) card.limit = LIMITS[list];
+}
+
 const scripts = {};
 for (const f of readdirSync(SCRIPTS)) if (f.endsWith(".lua")) scripts[f] = readFileSync(path.join(SCRIPTS, f), "utf-8");
 const noScript = [];
@@ -115,5 +145,7 @@ writeFileSync(path.join(OUT, "cards.json"), JSON.stringify(cards));
 writeFileSync(path.join(OUT, "scripts.json"), JSON.stringify(scripts));
 console.log(`cards: ${cards.length - tokens.size} + ${tokens.size} tokens (${variants.size} in an older version: card-versions.json` +
   `), scripts: ${Object.keys(scripts).length}`);
+console.log(`banlist ${banlist.name}: ${cards.filter((c) => c.limit !== undefined).length} pool cards limited` +
+  `${notInPool.length ? ` (not in the pool: ${notInPool.join(", ")})` : ""}`);
 if (missing.length) console.warn("not found in cards.cdb:", missing);
 if (noScript.length) console.warn("effect/spell/trap cards without a script:", noScript);

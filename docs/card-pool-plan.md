@@ -136,11 +136,22 @@ Progress:
 - Counter kinds: already handled before phase 5 (user confirmed): the badge on the card shows the total, the info
   panel lists each kind with its own count.
 
-### 6. Banlist
+### 6. Banlist ✅ (2026-10-27)
 
-- `data/banlist.json`: the May 2008 TCG list, edited for the modern card versions (e.g. Witch / Sangan are once per
-  turn now) and for any older version picked in `card-versions.json`.
-- `deckRules` enforces it (deck editor, deck validation); `smoke` checks the prebuilt decks against it.
+- `data/banlist.json`: the May 2008 TCG list as published (39 Forbidden, 55 Limited, 13 Semi-Limited; copied from
+  Yugipedia "May 2008 Lists"), by name, plus `changes` with a reason each. Changed for the modern versions (user's
+  picks): Witch of the Black Forest, Ring of Destruction, Sinister Serpent, Makyura the Destructor, Exchange of the
+  Spirit Forbidden → Limited. Sangan, Crush Card Virus, Chaos Emperor Dragon, Dark Magician of Chaos keep their
+  status. Last Turn is on the list but not in the pool. Revisit when `card-versions.json` picks an older version.
+- `build-data` resolves the names (fails on an unknown name or a card on two lists) and writes `limit` (0/1/2) into
+  each listed card's record. `deckRules.copiesAllowed` / `addProblem` enforce it in the deck editor ("FORBIDDEN",
+  "LIMITED (1)"); `deckProblems` adds `banlistProblems` for any deck that isn't exactly a prebuilt one.
+- Prebuilt decks are exempt (user's choice): all 7 break the list (Pot of Greed in each; Goat has 19 banned cards).
+  `smoke` lists their banlist breaks as information. Multiplayer: a prebuilt deck is accepted as is, a deck built in
+  the editor must follow the list.
+- Deck editor list: listed cards get a 0/1/2 disc on the art's top-left corner (Forbidden red, Limited orange,
+  Semi-Limited yellow; `limitBadge` in `listRow.ts`, the user's pick of four mockups).
+- Not done: a saved deck with banned cards is only caught when adding cards or in multiplayer.
 
 ### 7. NPC decks as data files
 

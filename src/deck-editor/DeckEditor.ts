@@ -9,7 +9,7 @@
 import Phaser from "phaser";
 import { TYPE, type CardRecord } from "../duel/engine/cardData.ts";
 import {
-  CardList, DECK_RULES, SORT_KEYS, addProblem, countKinds, filterCount, goesToExtra, sortDeck, type FilterState, type SortKey,
+  CardList, DECK_RULES, SORT_KEYS, addProblem, copiesAllowed, countKinds, filterCount, goesToExtra, sortDeck, type FilterState, type SortKey,
 } from "../duel/decks/deckRules.ts";
 import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import type { Deck } from "../duel/engine/DuelSession.ts";
@@ -30,7 +30,7 @@ import {
   BAR, CLEAR_X, EXTRA_LABEL_Y, EXTRA_Y, FELT, GRID_W, GRID_X, LIST, LIST_H, MAIN_LABEL_Y, MAIN_Y, MAT, OVERLAY_DEPTH, PANEL,
   PITCH, ROW_PITCH, ROW_W, ROW_X, SCOPE, SCROLL, SEARCH, SPLIT, STATUS_Y, TOOLS_Y,
 } from "./layout.ts";
-import { describe, eyeIcon, kindColor } from "./listRow.ts";
+import { describe, eyeIcon, kindColor, limitBadge } from "./listRow.ts";
 
 /** Deck counts below the limits (the Main Deck under 40). */
 const SHORT_COLOR = 0xff8a70;
@@ -197,7 +197,7 @@ export class DeckEditor extends Phaser.Scene {
     if (!o || !r) return;
     const problem = addProblem(this.deck, r, this.engine.cards);
     const copies = [...this.deck.main, ...this.deck.extra].filter((c) => c === r.code).length;
-    o.add.setLabel(problem ?? `ADD (${copies}/${DECK_RULES.copies})`);
+    o.add.setLabel(problem ?? `ADD (${copies}/${copiesAllowed(r)})`);
     o.add.setEnabled(!problem);
   }
 
@@ -443,7 +443,7 @@ export class DeckEditor extends Phaser.Scene {
     this.drawScrollbar();
   }
 
-  /** The visible rows: frame-colour strip, 32x32 art, name, Level / Attribute / Type (or Spell/Trap kind), ATK / DEF, copies in the deck. */
+  /** The visible rows: frame-colour strip, 32x32 art (with the banlist badge), name, Level / Attribute / Type (or Spell/Trap kind), ATK / DEF, copies in the deck. */
   private drawRows() {
     this.rows.removeAll(true);
     const inDeck = new Map<number, number>();
@@ -466,10 +466,11 @@ export class DeckEditor extends Phaser.Scene {
       const copies = inDeck.get(r.code) ?? 0;
       const countW = copies ? 14 : 0;
       this.rows.add(text(this, tx, y + 4, fit(this, FONT_UI, r.name.toUpperCase(), right - tx - countW), { color: ink }));
-      if (copies) this.rows.add(text(this, right, y + 4, `x${copies}`, { color: copies >= DECK_RULES.copies ? THEME.panel.error : ink, originX: 1 }));
+      if (copies) this.rows.add(text(this, right, y + 4, `x${copies}`, { color: copies >= copiesAllowed(r) ? THEME.panel.error : ink, originX: 1 }));
       const [line2, line3] = describe(r);
       this.rows.add(text(this, tx, y + 14, fit(this, FONT_UI, line2, right - tx), { color: soft }));
       if (line3) this.rows.add(text(this, tx, y + 24, line3, { color: soft }));
+      if (r.limit !== undefined) this.rows.add(limitBadge(this, artX - 1, artY - 1, r.limit));
     }
     if (!this.results.length) this.rows.add(text(this, LIST.x + LIST.w / 2, LIST.y + 20, "NO CARDS FOUND", { color: soft, originX: 0.5 }));
   }
