@@ -1,0 +1,16 @@
+{
+ "columns": 66,
+ "image": "../../../vendor/paid/themes/18_Fire_Station_32x32.png",
+ "imageheight": 960,
+ "imagewidth": 1056,
+ "margin": 0,
+ "name": "Fire_Station",
+ "spacing": 0,
+ "tilecount": 3960,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

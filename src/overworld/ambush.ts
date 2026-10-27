@@ -30,7 +30,7 @@ const AHEAD = 48, AHEAD_VERTICAL = 64;
 
 /**
  * Maze hedge tiles (tools/maps/hedge-maze.mjs: sheet columns 18-23 of Modern Exteriors) as ids in the full tileset
- * (the `sheetId` tile property build-tiles keeps), plain and flowered (14 rows lower):
+ * (the `sheetId` tile property build-tiles keeps, with `sheet` "world" = modern-exteriors.tsj), plain and flowered (14 rows lower):
  *  - FACE_TOP / FACE_BOTTOM: the two rows of a horizontal hedge's front face (FACE)
  *  - WEST_EDGE / EAST_EDGE: the sides of a vertical hedge (SURFACE "v" edges), facing a path on that side
  */
@@ -144,7 +144,10 @@ export class Ambushes {
   }
 
   private tileIn(col: number, row: number, set: Set<number>) {
-    return this.walls.some((l) => set.has((l.getTileAt(col, row)?.properties as { sheetId?: number } | undefined)?.sheetId ?? -1));
+    return this.walls.some((l) => {
+      const p = l.getTileAt(col, row)?.properties as { sheet?: string; sheetId?: number } | undefined;
+      return p?.sheet === "world" && set.has(p.sheetId ?? -1);
+    });
   }
 
   private solidTile(col: number, row: number) {

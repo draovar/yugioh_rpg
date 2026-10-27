@@ -359,9 +359,17 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     frames drawn from that character's down and side frames → `public/assets/overworld/ambush/<name>.png`: a dark
     hollow in the hedge face, eyes in it (2), head out through the leaves, crouch, leap, land, 2 leaves (particles), a
     sideways leap. Leaves use the hedge face's greens; no pixels come from the paid tileset.
-- `maps/`: `build-tiles` (Tiled map + its external tileset `data/maps/modern-exteriors.tsj`, whose image is the paid
-  sheet in `vendor/paid/` → `public/maps/<name>.png` with only the tiles the map uses + `<name>.json` with tile ids
-  remapped; each tile keeps its id in the full sheet as the `sheetId` tile property).
+- `maps/`: `build-tiles` (Tiled map + its external tilesets, whose images are paid sheets in `vendor/paid/` →
+  `public/maps/<name>.png` with only the tiles the map uses, from all its tilesets + `<name>.json` with one tileset
+  "world" and tile ids remapped; each tile keeps its tileset's name and its id there as the `sheet` / `sheetId` tile
+  properties). Two tileset families: `data/maps/modern-exteriors.tsj` (the complete LimeZu sheet, name "world": the town
+  and the maze) and `data/maps/tilesets/<theme>.tsj` (the pack's 24 theme sheets, for new maps; they lack some of the
+  complete sheet's tiles, e.g. its plain grass, so the old maps were not converted).
+  - `build-theme-tilesets.mjs`: the pack's ME_Theme_Sorter sheets → `vendor/paid/themes/` + one `.tsj` each (existing
+    ones kept unless `--force`; new ones get `collision` where the same art has it in modern-exteriors.tsj).
+  - `build-tile-catalog.mjs`: the pack's named Singles (one PNG per object) matched pixel for pixel into the theme
+    sheets → `data/maps/tile-catalog.json`, one line per object (theme, name, file, tileset, x/y/w/h tile rectangle):
+    maps are built by name, an object is looked at by opening its single. Helpers: `tools/lib/tile-hash.mjs`.
   - `hedge-maze.mjs`: maze layout (walls per grid line, extracted from the owner's maze picture) → hedge maze map:
     hedges auto-tiled from the sheet's hedge ring (flowered hedges after each fork of the right path, a subtle hint),
     meadows left/right, pine forests above/below (the only way across is the maze), ground decorations, the hidden
@@ -391,8 +399,9 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
 ## Maps and the Tiled MCP server
 
 Maps can be edited through the Tiled MCP server (`tiled` in `.mcp.json`, local paths: PengLx/TiledMCP built in
-`D:/Programming/tools/TiledMCP`, branch `windows-dir-fsync` = a local fix, directory fsync fails with EPERM on Windows).
+`D:/Programming/tools/TiledMCP`, branch `windows-dir-fsync` = local fixes: directory fsync fails with EPERM on Windows, and the tileset image limits
+(16 MP, 8192 px edge) are raised to 128 MP / 32768 px for the 92 MP complete sheet).
 It edits only maps whose tilesets are external `.tsj` files inside the repo; edits go preview →
-`tiled_apply_change_set`, with undo checkpoints in `.tiledmcp/` (gitignored). `tiled_render_preview` refuses the 92 MP
-LimeZu sheet (16 MP limit): check maps with `build-tiles` + the game instead. Edited tile layers are saved on one line;
+`tiled_apply_change_set`, with undo checkpoints in `.tiledmcp/` (gitignored). `tiled_render_preview` renders both
+tileset families, at most ~1.5 MP of output per call (60x44 tiles at scale 1). Edited tile layers are saved on one line;
 Tiled re-wraps them on save.

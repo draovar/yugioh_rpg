@@ -1,0 +1,16 @@
+{
+ "columns": 118,
+ "image": "../../../vendor/paid/themes/2_City_Terrains_32x32.png",
+ "imageheight": 3296,
+ "imagewidth": 1888,
+ "margin": 0,
+ "name": "City_Terrains",
+ "spacing": 0,
+ "tilecount": 24308,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

@@ -1,0 +1,16 @@
+{
+ "columns": 64,
+ "image": "../../../vendor/paid/themes/23_MIlitary_Base_32x32.png",
+ "imageheight": 9150,
+ "imagewidth": 1024,
+ "margin": 0,
+ "name": "Military_Base",
+ "spacing": 0,
+ "tilecount": 36544,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

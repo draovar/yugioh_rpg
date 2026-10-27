@@ -1,0 +1,16 @@
+{
+ "columns": 64,
+ "image": "../../../vendor/paid/themes/20_Subway_and_Train_Station_32x32.png",
+ "imageheight": 5920,
+ "imagewidth": 1024,
+ "margin": 0,
+ "name": "Subway_and_Train_Station",
+ "spacing": 0,
+ "tilecount": 23680,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

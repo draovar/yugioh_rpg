@@ -1,0 +1,16 @@
+{
+ "columns": 64,
+ "image": "../../../vendor/paid/themes/7_Villas_32x32.png",
+ "imageheight": 1824,
+ "imagewidth": 1024,
+ "margin": 0,
+ "name": "Villas",
+ "spacing": 0,
+ "tilecount": 7296,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

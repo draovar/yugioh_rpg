@@ -1,0 +1,16 @@
+{
+ "columns": 64,
+ "image": "../../../vendor/paid/themes/12_Hotel_and_Hospital_32x32.png",
+ "imageheight": 1984,
+ "imagewidth": 1024,
+ "margin": 0,
+ "name": "Hotel_and_Hospital",
+ "spacing": 0,
+ "tilecount": 7936,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

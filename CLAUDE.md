@@ -43,7 +43,9 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run check-cards` | list pool cards using mechanics the UI doesn't fully support yet (declare, counters, equips, tokens, fusions...) |
 | `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` |
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
-| `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled, external tileset) → `public/maps/<name>.png` + `.json` (needs `vendor/paid/`) |
+| `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled, external tilesets) → `public/maps/<name>.png` + `.json` (needs `vendor/paid/`) |
+| `node tools/maps/build-theme-tilesets.mjs [folder]` | the pack's theme sheets (ME_Theme_Sorter) → `vendor/paid/themes/` + `data/maps/tilesets/<theme>.tsj`, the tilesets for new maps (existing .tsj kept unless `--force`) |
+| `node tools/maps/build-tile-catalog.mjs [folder]` | the pack's named Singles → `data/maps/tile-catalog.json` (object name → tileset + tile rectangle; grep it) |
 | `node tools/maps/hedge-maze.mjs data/maps/maze-layout.json data/maps/maze.tmj` | maze layout → hedge maze map; **overwrites** the .tmj (Tiled edits lost), then `build-tiles` |
 | `npm run build-characters` | overworld sprites from `data/characters/` (per `characters.json`) → `public/assets/overworld/` + the contact sheet `docs/characters.png`, then the hedge ambush sheets (`tools/art/build-ambush.mjs`) |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |

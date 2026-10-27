@@ -1,0 +1,16 @@
+{
+ "columns": 64,
+ "image": "../../../vendor/paid/themes/9_Shopping_Center_and_Markets_32x32.png",
+ "imageheight": 2176,
+ "imagewidth": 1024,
+ "margin": 0,
+ "name": "Shopping_Center_and_Markets",
+ "spacing": 0,
+ "tilecount": 8704,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

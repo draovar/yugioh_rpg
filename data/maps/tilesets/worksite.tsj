@@ -1,0 +1,16 @@
+{
+ "columns": 64,
+ "image": "../../../vendor/paid/themes/8_Worksite_32x32.png",
+ "imageheight": 640,
+ "imagewidth": 1024,
+ "margin": 0,
+ "name": "Worksite",
+ "spacing": 0,
+ "tilecount": 2560,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

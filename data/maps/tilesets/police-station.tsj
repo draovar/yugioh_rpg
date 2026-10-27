@@ -1,0 +1,16 @@
+{
+ "columns": 64,
+ "image": "../../../vendor/paid/themes/15_Police_Station_32x32.png",
+ "imageheight": 2208,
+ "imagewidth": 1024,
+ "margin": 0,
+ "name": "Police_Station",
+ "spacing": 0,
+ "tilecount": 8832,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}
