@@ -78,7 +78,7 @@ Multiplayer (work in the deployed game too): `?mp` opens the multiplayer lobby, 
 Dev:
 - `/?duel` starts straight in a duel; `&lp=500` sets starting LP; `&seed=N` replays the same duel.
 - `&deck=NAME` / `&opp=NAME` pick the prebuilt decks (`yugi`, `kaiba`, `goat`, `kaibaEvolution`, `yugiEvolution`,
-  `zombieMadness`, `dragonsRoar`; default Yugi vs Kaiba).
+  `zombieMadness`, `dragonsRoar`, `plants`, `insects`; default Yugi vs Kaiba).
 - `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first).
 - `&setup=NAME` starts from a test board (`src/dev/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
   (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`, `ritual` (`&deck=kaibaEvolution`), `contact` (contact fusions from the Extra Deck), `union`, `gemini`, `spirit`, `toon`, `zones`, `exodia`, `destiny`;

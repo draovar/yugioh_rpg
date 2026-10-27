@@ -51,7 +51,7 @@ No Phaser imports: runs unchanged in Node (tools) and the browser.
 - `engine/loadEngine.ts`: browser only: fetches `public/data/*.json`, inits the core once.
 - `decks/decks.ts`: prebuilt decks (NPCs, the AI, the deck editor's LOAD): `yugi`, `kaiba`, `goat` + Extra Decks;
   starter decks `kaibaEvolution`, `yugiEvolution` (the Evolution starter decks with the owner's swaps); structure
-  decks `zombieMadness` (as printed), `dragonsRoar` (owner's swaps). `deckProblems()` = legality check (40-60 main,
+  decks `zombieMadness` (as printed), `dragonsRoar` (owner's swaps); NPC decks `plants`, `insects` (early game, owner's picks). `deckProblems()` = legality check (40-60 main,
   ≤15 extra, ≤3 copies, no tokens, all in the pool, and `banlistProblems()` unless the deck is exactly a prebuilt
   one: prebuilt decks keep their banned cards; `smoke` only lists them).
 - `decks/deckRules.ts`: the deck editor's rules and card list: `DECK_RULES`, `addProblem` (3 copies or the card's banlist

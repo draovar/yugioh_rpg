@@ -26,6 +26,12 @@ const C = {
   redEyes: 74677422, redEyesDarkness: 96561011, lusterDragon: 11091375, twinHeadedBehemoth: 43586926,
   armedDragonLv3: 980973, armedDragonLv5: 46384672, redEyesChick: 36262024, elementDragon: 30314994,
   maskedDragon: 39191307, mirageDragon: 15960641,
+  lonefireBlossom: 48686504, gigaplant: 53257892, regeneratingRose: 31986288, fairyKingTruesdale: 45425051,
+  lordPoison: 40320754, rafflesiaSeduction: 31440542, jerryBeansMan: 23635815, samsaraLotus: 5592689,
+  rigorousReaver: 39180960, grassPhantom: 41249545, motherGrizzly: 57839750,
+  howlingInsect: 93107608, gokipon: 14472500, ultimateInsectLv3: 34088136, ultimateInsectLv5: 34830502,
+  ultimateInsectLv7: 19877898, insectQueen: 91512835, pinchHopper: 26185991, insectKnight: 35052053, neoBug: 16587243,
+  girochinKuwagata: 84620194, chainsawInsect: 77252217, arsenalBug: 42364374, parasiteParacide: 27911549,
   // rituals
   paladinOfWhiteDragon: 73398797, blackLusterSoldier: 5405694,
   // fusions (Extra Deck)
@@ -41,7 +47,9 @@ const C = {
   blackLusterRitual: 55761792, dianKeto: 84257639, lastWill: 85602018, cardDestruction: 72892473, removeTrap: 51482758,
   reliableGuardian: 16430187, axeOfDespair: 40619825, malevolentNuzzler: 99597615, mysticPlasmaZone: 18161786,
   creatureSwap: 31036355, giantTrunade: 42703248, cardOfSafeReturn: 57953380, bookOfLife: 2204140,
-  callOfTheMummy: 4861205, reload: 22589918, stampingDestruction: 81385346,
+  callOfTheMummy: 4861205, reload: 22589918, stampingDestruction: 81385346, forest: 87430998, vileGerms: 39774685,
+  lightningVortex: 69162969, laserCannonArmor: 77007920, multiplicationOfAnts: 22493811, insectImitation: 96965364,
+  insectBarrier: 23615409,
   // traps
   mirrorForce: 44095762, sakuretsu: 56120475, trapHole: 4206964, callOfTheHaunted: 97077563, ringOfDestruction: 83555666,
   torrential: 53582587, bottomless: 29401950, magicCylinder: 62279055, waboku: 12607053, dustTornado: 60082869,
@@ -50,7 +58,7 @@ const C = {
   lightOfIntervention: 62867251, jarOfGreed: 83968380, riryokuField: 70344351, burstBreath: 80163754,
   magicJammer: 77414722, sevenTools: 3819470, spellbindingCircle: 18807108, backupSoldier: 36280194, shift: 59560625,
   disappear: 24623598, raigekiBreak: 4178474, ceasefire: 36468556, dragonsBead: 92408984, dragonsRage: 54178050,
-  trapJammer: 19252988, curseOfAnubis: 66742250, coveringFire: 74458486,
+  trapJammer: 19252988, curseOfAnubis: 66742250, coveringFire: 74458486, sinisterSeeds: 60406591,
 } as const;
 
 type Name = keyof typeof C;
@@ -171,6 +179,37 @@ export const DECKS = {
         stampingDestruction: 3, creatureSwap: 2, reload: 2,
         callOfTheHaunted: 1, ceasefire: 1, dragonsBead: 1, dragonsRage: 2, recklessGreed: 1, coveringFire: 2,
         trapJammer: 1, curseOfAnubis: 1,
+      }),
+    },
+  },
+  // Early-game NPC deck (owner's picks): Lonefire Blossom pulls Plants from the Deck; Mystic Tomato / Mother Grizzly /
+  // Lord Poison replace themselves when destroyed. No Dark Hole, Swords or Monster Reborn, to keep it beatable.
+  plants: {
+    label: "Plants",
+    deck: {
+      main: list({
+        lonefireBlossom: 3, gigaplant: 2, regeneratingRose: 1, fairyKingTruesdale: 2, lordPoison: 2, mysticTomato: 2,
+        rafflesiaSeduction: 1, jerryBeansMan: 2, samsaraLotus: 1, rigorousReaver: 1, grassPhantom: 2, motherGrizzly: 2,
+        forest: 1, vileGerms: 2, prematureBurial: 1, mst: 1, fissure: 1, smashingGround: 1, lightningVortex: 1,
+        rushRecklessly: 1,
+        sinisterSeeds: 2, sakuretsu: 2, callOfTheHaunted: 1, mirrorForce: 1, torrential: 1, bottomless: 1,
+        dustTornado: 1, trapHole: 1,
+      }),
+    },
+  },
+  // Early-game NPC deck in Weevil's style (owner's OK): Howling Insect / Gokipon fetch small Insects, Ultimate Insect
+  // levels up to LV7, Insect Queen finishes; Parasite Paracide + Insect Barrier as the gimmick.
+  insects: {
+    label: "Insects",
+    deck: {
+      main: list({
+        howlingInsect: 3, gokipon: 2, ultimateInsectLv3: 2, ultimateInsectLv5: 1, ultimateInsectLv7: 1, insectQueen: 1,
+        pinchHopper: 1, insectKnight: 2, neoBug: 2, girochinKuwagata: 1, chainsawInsect: 1, arsenalBug: 1, manEaterBug: 2,
+        parasiteParacide: 1,
+        forest: 1, laserCannonArmor: 2, multiplicationOfAnts: 1, insectImitation: 1, insectBarrier: 1, mst: 1,
+        prematureBurial: 1, fissure: 1, smashingGround: 1,
+        sakuretsu: 2, trapHole: 2, spellbindingCircle: 1, mirrorForce: 1, callOfTheHaunted: 1, bottomless: 1,
+        dustTornado: 1,
       }),
     },
   },
