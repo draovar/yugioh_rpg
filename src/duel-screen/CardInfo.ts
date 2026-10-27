@@ -25,6 +25,10 @@ const STAR_SIZE = 7, STAR_GAP = 3;
 const STAT_PLATE_H = 26;
 /** Card art: 128px art inside the LP bar's frame (theme rim). */
 const ART_FRAME = 128 + 2 * INSET.lpTrack;
+/** Card text: extra padding at its top and left, and extra pixels between its lines. */
+const DESC_LEAD = 2, DESC_LINE_GAP = 1;
+/** Text that scrolls wraps this much narrower: room for its 2px scroll bar. */
+const DESC_BAR_LANE = 4;
 
 /** Tiny pixel icons: one string per row, each character a colour key ("." = empty). */
 interface PixelIcon { rows: string[]; colors: Record<string, number> }
@@ -56,6 +60,8 @@ export class CardInfo {
   /** Card shown right now, 0 for none. */
   code = 0;
   private nameScroll: { tween: Phaser.Tweens.Tween; mask: Phaser.GameObjects.Graphics } | null = null;
+  /** Stops the card text's scrolling (its input listeners and mask), if it scrolls. */
+  private descScroll: (() => void) | null = null;
 
   constructor(scene: Phaser.Scene, engine: Engine, box: CardInfoBox) {
     this.scene = scene;
@@ -71,6 +77,7 @@ export class CardInfo {
     const s = this.scene;
     this.code = code;
     this.stopNameScroll();
+    this.stopDescScroll();
     const p = this.container.removeAll(true);
     const L = this.box;
     const monster = (r.type & TYPE.MONSTER) !== 0;
@@ -129,14 +136,82 @@ export class CardInfo {
     });
     const descY = artY + ART_FRAME + 5;
     p.add(paperInset(s, L.x, descY, L.w, L.bottom - descY));
+    // 2px more room at the top and left than at the right, and 1px more between lines than the font's own.
     const pad = INSET.paper + 1;
-    p.add(text(s, L.x + pad, descY + pad, r.desc, { maxWidth: L.w - pad * 2, color: THEME.panel.paperInk }));
+    const desc = text(s, L.x + pad + DESC_LEAD, descY + pad + DESC_LEAD, r.desc,
+      { maxWidth: L.w - pad * 2 - DESC_LEAD, color: THEME.panel.paperInk }).setLineSpacing(DESC_LINE_GAP);
+    let overflow = desc.y + desc.height - (L.bottom - pad);
+    // Too long: wrap it narrower, leaving a lane for the scroll bar at the right.
+    if (overflow > 0) {
+      desc.setMaxWidth(desc.maxWidth - DESC_BAR_LANE);
+      overflow = desc.y + desc.height - (L.bottom - pad);
+    }
+    // In a container of its own: the scroll mask goes on that (as the name's), not on the text.
+    const descBox = s.add.container(0, 0, [desc]);
+    p.add(descBox);
+    if (overflow > 0) this.scrollDesc(descBox, desc, descY, overflow);
+  }
+
+  /**
+   * Card text taller than its paper: clipped to the paper's inside by a Mask filter, scrolled with the mouse wheel over
+   * it (a line per notch) or by dragging it (touch), with a thin bar on the paper's right edge showing where it is.
+   */
+  private scrollDesc(descBox: Phaser.GameObjects.Container, desc: Phaser.GameObjects.BitmapText, paperY: number, overflow: number) {
+    const s = this.scene, L = this.box, rim = INSET.paper;
+    const inner = { x: L.x + rim, y: paperY + rim, w: L.w - 2 * rim, h: L.bottom - paperY - 2 * rim };
+    const mask = s.make.graphics({}, false).fillStyle(0xffffff).fillRect(inner.x, inner.y, inner.w, inner.h);
+    descBox.enableFilters().filters!.internal.addMask(mask);
+    const top = desc.y;
+    const trackH = inner.h - 2, thumbH = Math.max(6, Math.round(trackH * inner.h / (inner.h + overflow)));
+    // A faint track the paper's full height, the thumb over it.
+    const barX = inner.x + inner.w - 4;
+    const track = s.add.rectangle(barX, inner.y + 1, 2, trackH, THEME.panel.paperInk, 0.15).setOrigin(0);
+    const bar = s.add.rectangle(barX, inner.y + 1, 2, thumbH, THEME.panel.paperInk, 0.6).setOrigin(0);
+    this.container.add([track, bar]);
+    let offset = 0;
+    const scrollTo = (y: number) => {
+      offset = Phaser.Math.Clamp(Math.round(y), 0, overflow);
+      desc.y = top - offset;
+      bar.y = inner.y + 1 + Math.round((trackH - thumbH) * offset / overflow);
+    };
+    // Only while the text is on screen (the caller may hide the panel) and the pointer is over the paper.
+    const shown = () => {
+      for (let o: Phaser.GameObjects.Container | null = this.container; o; o = o.parentContainer) if (!o.visible) return false;
+      return desc.active;
+    };
+    const over = (p: Phaser.Input.Pointer) =>
+      p.x >= inner.x && p.x < inner.x + inner.w && p.y >= inner.y && p.y < inner.y + inner.h;
+    const lineH = desc.fontData.lineHeight + DESC_LINE_GAP;
+    // A line per 50 wheel units (a mouse notch is ~100; trackpads send many small steps), as the deck editor's list.
+    let wheel = 0;
+    const onWheel = (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (!shown() || !over(p)) return;
+      wheel += dy;
+      const steps = Math.trunc(wheel / 50);
+      wheel -= steps * 50;
+      if (steps) scrollTo(offset + steps * lineH);
+    };
+    let drag: { y: number; offset: number } | null = null;
+    const onDown = (p: Phaser.Input.Pointer) => { drag = shown() && over(p) ? { y: p.y, offset } : null; };
+    const onMove = (p: Phaser.Input.Pointer) => { if (drag && p.isDown) scrollTo(drag.offset + drag.y - p.y); };
+    const onUp = () => { drag = null; };
+    s.input.on("wheel", onWheel).on("pointerdown", onDown).on("pointermove", onMove).on("pointerup", onUp);
+    this.descScroll = () => {
+      s.input.off("wheel", onWheel).off("pointerdown", onDown).off("pointermove", onMove).off("pointerup", onUp);
+      mask.destroy();
+    };
+  }
+
+  private stopDescScroll() {
+    this.descScroll?.();
+    this.descScroll = null;
   }
 
   /** Shows nothing. */
   clear() {
     this.code = 0;
     this.stopNameScroll();
+    this.stopDescScroll();
     this.container.removeAll(true);
   }
 

@@ -243,8 +243,10 @@ passes the `NetDuel` to `Duel`.
 - **Info panel** (`InfoPanel.ts`; the card part is `CardInfo.ts`, shared with the deck editor; positions derive from
   `LAYOUT` in InfoPanel.ts). **Card mode** (default) keeps the last hovered card (starts with the first card you draw);
   **log mode** shows the log and previews cards only while hovered. Long names scroll (marquee) after a short hover
-  (Phaser 4 mask filter, `InfoPanel.scrollName`). Counters are listed per kind at the bottom of the type plate
-  ("SPELL CTR 2").
+  (Phaser 4 mask filter, `CardInfo.scrollName`). Counters are listed per kind at the bottom of the type plate
+  ("SPELL CTR 2"). The card text has 2px extra padding top and left and 8px lines (the font's 7 + 1); text too long
+  for its paper (3 cards in the pool) wraps 4px narrower, is masked to the paper and scrolls by mouse wheel (a line per
+  notch) or drag, with a 2px bar on the right (`CardInfo.scrollDesc`).
 - **Corner buttons** (field top-right, stacked above the mat, all 24px wide, saved in localStorage): speed 1X/2X/4X,
   LOG/CARD info panel mode, chain mode AUTO/ALL/OFF (`ChainMode`).
 - **Animations** (`DuelAnimator.ts`): timings live in the `T` table at its top (pixel-art style: direct moves, no
