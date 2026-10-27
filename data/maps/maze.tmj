@@ -1596,6 +1596,29 @@
                  "width":0,
                  "x":48,
                  "y":672
+                }, 
+                {
+                 "height":48,
+                 "id":4,
+                 "name":"sign",
+                 "opacity":1,
+                 "properties":[
+                        {
+                         "name":"text",
+                         "type":"string",
+                         "value":"Let the white flowers guide you and beware of what hides in the leaves!"
+                        }, 
+                        {
+                         "name":"title",
+                         "type":"string",
+                         "value":"HEDGE MAZE"
+                        }],
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":32,
+                 "x":224,
+                 "y":768
                 }],
          "opacity":1,
          "type":"objectgroup",
@@ -1604,7 +1627,7 @@
          "y":0
         }],
  "nextlayerid":8,
- "nextobjectid":4,
+ "nextobjectid":5,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",

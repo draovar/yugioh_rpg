@@ -33,6 +33,8 @@ export function loadOverworld(load: Phaser.Loader.LoaderPlugin) {
 }
 
 const TALK_DISTANCE = 56, SPEED = 70, FADE_MS = 200;
+/** How far in front of the player's feet box a sign can be read. */
+const READ_REACH = 8;
 /** Holding Z runs: this much faster, with the look's run frames. */
 const RUN_SPEED = 1.5;
 
@@ -57,6 +59,8 @@ export class Overworld extends Phaser.Scene {
   private pad: TouchPad | null = null;
   private dialog!: DialogBox;
   private talkHint!: Phaser.GameObjects.BitmapText;
+  /** Readable spots: rectangles named "sign" (layer "objects"). */
+  private signs: { area: Phaser.Geom.Rectangle; title: string; text: string }[] = [];
   private facing: Facing = "down";
   /** The player's walk and run sprites (world menu: PLAYER). */
   private look = PLAYER_LOOKS[playerLook()];
@@ -156,6 +160,15 @@ export class Overworld extends Phaser.Scene {
       }),
     });
 
+    // Signs: rectangles named "sign" (layer "objects") with properties text and title (the dialog's header, "SIGN"
+    // if empty); read by facing them and pressing X.
+    this.signs = [];
+    for (const o of map.getObjectLayer("objects")?.objects ?? []) {
+      if (o.name !== "sign") continue;
+      const prop = (name: string) => (o.properties as { name: string; value: unknown }[] | undefined)?.find((p) => p.name === name)?.value;
+      this.signs.push({ area: new Phaser.Geom.Rectangle(o.x!, o.y!, o.width!, o.height!), title: String(prop("title") || "Sign"), text: String(prop("text") ?? "") });
+    }
+
     // Warps: rectangles named "warp" (layer "objects") with properties map (target map) and spawn (the point to
     // arrive at there); keepY keeps the player's height, for maps placed side by side with their tops aligned.
     for (const o of map.getObjectLayer("objects")?.objects ?? []) {
@@ -232,8 +245,10 @@ export class Overworld extends Phaser.Scene {
     if (this.menuOpen() || transitioning(this.game)) return;
     if (this.dialog.isOpen) this.dialog.handleKey(code);
     else if (code === "KeyX" || code === "Enter" || code === "Space") {
-      const npc = this.nearestNpc();
-      if (npc) this.talkTo(npc);
+      // A sign the player faces wins over an NPC standing nearby.
+      const sign = this.facedSign(), npc = sign ? null : this.nearestNpc();
+      if (sign) this.dialog.open(sign.title, sign.text, ["OK"], () => {});
+      else if (npc) this.talkTo(npc);
     }
   }
 
@@ -256,6 +271,14 @@ export class Overworld extends Phaser.Scene {
       if (d < bestDist) { best = npc; bestDist = d; }
     }
     return best;
+  }
+
+  /** The sign right in front of the player, in the direction they face. */
+  private facedSign() {
+    const b = this.player.body;
+    const ahead = { up: [0, -1], down: [0, 1], side: [this.player.flipX ? -1 : 1, 0] }[this.facing];
+    const x = b.center.x + ahead[0] * (b.halfWidth + READ_REACH), y = b.center.y + ahead[1] * (b.halfHeight + READ_REACH);
+    return this.signs.find((s) => s.area.contains(x, y)) ?? null;
   }
 
   /** Shows an NPC's standing frame for a facing ("left" = the side view flipped). */
@@ -303,9 +326,10 @@ export class Overworld extends Phaser.Scene {
       return;
     }
 
-    const npc = this.nearestNpc();
-    this.talkHint.setVisible(!!npc);
-    if (npc) this.talkHint.setPosition(Math.round(npc.x - this.talkHint.width / 2), Math.round(npc.getBounds().top - 2 - this.talkHint.height));
+    const sign = this.facedSign(), npc = sign ? null : this.nearestNpc();
+    const hintAt = sign ? { x: sign.area.centerX, top: sign.area.top } : npc ? { x: npc.x, top: npc.getBounds().top } : null;
+    this.talkHint.setVisible(!!hintAt);
+    if (hintAt) this.talkHint.setPosition(Math.round(hintAt.x - this.talkHint.width / 2), Math.round(hintAt.top - 2 - this.talkHint.height));
 
     let vx = 0, vy = 0;
     if (this.cursors.left.isDown || this.pad?.x === -1) vx = -SPEED;

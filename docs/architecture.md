@@ -173,6 +173,10 @@ passes the `NetDuel` to `Duel`.
   meadow, by the entrance); a warp fades out and restarts the scene on the target map (loaded on first visit in
   `preload`); an arrival on something solid is nudged to the nearest free spot (`freeY`). `&map=NAME` starts on another
   map at its `spawn` point.
+- Signs: `sign` rectangles in the `objects` layer (properties `text`, `title` = the dialog's header, "SIGN" if empty)
+  over any tile, the art stays a normal tile. Read only while facing them (`facedSign`: a point `READ_REACH` px in
+  front of the feet box must be inside the rectangle) with X / Enter / Space; the X hint shows over the sign, and a
+  faced sign wins over a nearby NPC.
 - NPCs (`NPCS` in `npcs.ts`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn
   to the player while talking) talk with X / Enter / Space in a `DialogBox` (tiny5 at 2x, clickable options); YES
   starts a duel, and the player comes back to the same spot (`savePosition`) with the NPC's line about the result.
