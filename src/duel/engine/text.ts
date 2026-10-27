@@ -7,6 +7,8 @@ export interface SystemStrings {
   system: Record<string, string>;
   /** Counter names by counter type (decimal), from strings.conf `!counter`. */
   counter?: Record<string, string>;
+  /** Why a duel ended, by WIN reason (decimal), from strings.conf `!victory`. */
+  victory?: Record<string, string>;
 }
 
 export class DuelText {
@@ -45,6 +47,14 @@ export class DuelText {
     const names = this.strings.counter ?? {};
     const name = names[kind] ?? names[kind | 0x1000] ?? names[kind & 0xfff];
     return !name || name.startsWith("Counter (") ? "Counter" : name;
+  }
+
+  /**
+   * Why a duel ended, from the WIN message's reason ("LP reached 0", 'By the effect of "Destiny Board"'), or "" if
+   * unknown. "Victory by" is shortened to "By": the line also explains a loss.
+   */
+  winReason(reason: number): string {
+    return (this.strings.victory?.[reason] ?? "").replace(/^Victory by/, "By");
   }
 
   name(code: number): string {

@@ -12,8 +12,8 @@
    Auto-answered prompts (SORT_CHAIN, RPS) wait until a card batch
    needs them (none came up in 150 bot duels with the current pool).
    ✅ Card batch 1: 107-card GOAT staples pool, token export, Yugi / Kaiba / Goat Control decks, `check-cards`.
-   Full pool (`docs/card-pool-plan.md`): every TCG card up to Premium Pack 2 (2,841 cards). ✅ Phase 1: `build-pool`. ✅ Phase 2: modern versions, hand-picked GOAT / pre-errata ones (`data/card-versions.json`). ✅ Phase 3: full data + art. ✅ Phase 4: random-deck smoke (Last Turn removed: engine hang).
-   Next: UI checks, May 2008 banlist, NPC decks as data.
+   Full pool (`docs/card-pool-plan.md`): every TCG card up to Premium Pack 2 (2,841 cards). ✅ Phase 1: `build-pool`. ✅ Phase 2: modern versions, hand-picked GOAT / pre-errata ones (`data/card-versions.json`). ✅ Phase 3: full data + art. ✅ Phase 4: random-deck smoke (Last Turn removed: engine hang). ✅ Phase 5: UI checks (pile actions for contact fusions, auto-answered lone mandatory effects, disabled zones, win reasons).
+   Next: May 2008 banlist, NPC decks as data.
    ✅ Token frame, counter badges, declarations, equip links, coin/dice animations (`check-cards` lists what's left).
    Starter decks: ✅ Kaiba Evolution (first Ritual: Paladin of White Dragon), ✅ Yugi Evolution.
    Structure decks: ✅ Zombie Madness, ✅ Dragon's Roar.

@@ -1,7 +1,7 @@
 // Builds the browser-side game data from the vendored Project Ignis repos:
 //   public/data/cards.json   – stats + text for every card in data/pool.json, plus the tokens they create
 //   public/data/scripts.json – { fileName: luaSource } for engine utility scripts + pool card scripts
-//   public/data/strings.json – { system: { id: text }, counter: { type: name } } from EDOPro's strings.conf
+//   public/data/strings.json – { system: { id: text }, counter: { type: name }, victory: { reason: text } } from EDOPro's strings.conf
 // Run `npm run fetch-data` first.
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
@@ -98,16 +98,19 @@ for (const c of cards) {
 
 const system = {};
 const counter = {}; // counter type (decimal) -> name, e.g. 1: "Spell Counter"
+const victory = {}; // win reason (decimal) -> text, e.g. 21: 'Victory by the effect of "Destiny Board"'
 for (const line of readFileSync(path.join(ROOT, "vendor/strings.conf"), "utf-8").split("\n")) {
   const l = line.trimEnd();
   const m = l.match(/^!system (\d+) (.*)$/);
   if (m) system[m[1]] = m[2];
   const c = l.match(/^!counter (0x[0-9a-f]+) (.*)$/i);
   if (c) counter[parseInt(c[1], 16)] = c[2];
+  const v = l.match(/^!victory (0x[0-9a-f]+) (.*)$/i);
+  if (v) victory[parseInt(v[1], 16)] = v[2];
 }
 
 mkdirSync(OUT, { recursive: true });
-writeFileSync(path.join(OUT, "strings.json"), JSON.stringify({ system, counter }));
+writeFileSync(path.join(OUT, "strings.json"), JSON.stringify({ system, counter, victory }));
 writeFileSync(path.join(OUT, "cards.json"), JSON.stringify(cards));
 writeFileSync(path.join(OUT, "scripts.json"), JSON.stringify(scripts));
 console.log(`cards: ${cards.length - tokens.size} + ${tokens.size} tokens (${variants.size} in an older version: card-versions.json` +

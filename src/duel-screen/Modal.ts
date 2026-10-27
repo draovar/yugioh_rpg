@@ -48,6 +48,8 @@ export interface PickerCard {
   locked?: boolean;
   /** Shown as selected initially. */
   selected?: boolean;
+  /** Shown but not clickable, and not raised like a locked card (browsing a pile). */
+  inert?: boolean;
 }
 
 export interface PickerOptions {
@@ -321,17 +323,17 @@ export class Modal {
         const x = rowLeft + j * PICK_PITCH_X + CARD.w / 2;
         const y = cardsTop + CARD.h / 2;
         const sp = new CardSprite(s, x, y).show(c.code, this.cards.records.get(c.code));
-        sp.setInteractive({ useHandCursor: !c.locked });
+        sp.setInteractive({ useHandCursor: !c.locked && !c.inert });
         sp.on("pointerover", () => {
           opts.onHover?.(c.code);
-          if (opts.mode === "single" && !c.locked) place(i, true);
+          if (opts.mode === "single" && !c.locked && !c.inert) place(i, true);
         });
         sp.on("pointerout", () => {
           opts.onHoverEnd?.();
           place(i);
         });
         sp.on("pointerup", () => {
-          if (c.locked) return;
+          if (c.locked || c.inert) return;
           if (opts.mode === "single") { this.close(); opts.onConfirm([i]); return; }
           if (togglePick(selected, i, opts.max)) refresh();
         });

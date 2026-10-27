@@ -86,12 +86,55 @@ Then NPCs get decks built from it.
 - Known, accepted script error (`KNOWN_ERRORS` in the script): Steel Scorpion copied by Phantom of Chaos reads the
   copy's deleted effects at the End Phase; the check just fails, the duel goes on.
 
-### 5. UI checks for untested mechanics
+### 5. UI checks for untested mechanics ✅
 
 One `&setup` board each, checked in the browser with the user, in the order NPC decks need them:
 contact fusions (19: Neos, Gladiator Beasts, VWXYZ), Union (18), Gemini (21), Spirit (12), Toon (9), zone disabling
 (5: Ground Collapse, Ojama King...), alternate wins (6: Destiny Board, Final Countdown, Vennominaga), counter kinds
 told apart on the badge (62 cards use counters).
+
+Progress:
+- Contact fusions: the Extra Deck / Graveyard browsers now offer a card's own actions (before, a Special Summon from
+  the Extra Deck by a card's own rule couldn't be chosen at all). `&setup=contact`: Air Neos (shuffled back), VW-Tiger
+  Catapult (banished), Gyzarus (returned) all summon through the UI. The pile pulses (yellow outline, ~1.8 s cycle)
+  and its count badge turns yellow while it holds a usable card (user's pick from four mockups: pulse + yellow badge).
+- Union: works with the existing UI, no changes. `&setup=union`: USE on W-Wing Catapult / Y-Dragon Head / Z-Metal Tank
+  (menu label "Use"; the engine's own is "Equip") → pick the target on the board; the Union sits in the S/T row as a
+  monster card with the equip link, the stats update (X-Head Cannon 1800 → 2800 with Y and Z). Next turn USE on the
+  equipped Union unequips it (zone, position). The AI's Mobius destroyed equipped Unions as Spells/Traps correctly. Not
+  seen: the destruction substitute (engine logic; the UI just shows the Union going to the Graveyard).
+- Gemini: works with the existing UI, no changes. `&setup=gemini`: face-up King Pyron / Goggle Golem show SUMMON in
+  their menu (the second Normal Summon, no tributes for the Level 5); afterwards King Pyron's USE burns 1000 once per
+  turn. Open: nothing shows whether a Gemini on the field has been Gemini Summoned (the query gives no type in
+  ocgcore-wasm 0.1.2; the UI would have to remember the summons).
+- Spirit: works with the existing UI, no changes. `&setup=spirit`: Flip Summon Asura Priest, Normal Summon Tsukuyomi
+  (its trigger picks a face-up target on the board and sets it face-down); at the End Phase both return triggers come
+  as a forced "You must activate an effect" chain picker (you order them), both cards go back to the hand, then the
+  hand-size discard. Since then a forced chain prompt with a single effect answers itself (`DuelController`, sent to a
+  peer like any answer): one Spirit returns without a dialog. With several the picker stays, because a forced list can
+  also hold optional effects of the same moment (seen in random duels: Labyrinth of Nightmare + Sinister Serpent, Venom
+  Swamp + Manticore of Darkness) and the message doesn't mark which are which. Not seen: Asura Priest attacking every
+  monster (setup boards start on turn 1, which has no Battle Phase; in a later turn the AI's Ring of Destruction got
+  it first). The picker's caption "SEND TO HAND" is cut to "SEND TO HAN" (card-width captions).
+- Toon: works with the existing UI, no changes. `&setup=toon` (Toon World face-up): Toon Mermaid SP.SUM from the hand,
+  Toon Summoned Skull SP.SUM tributing Celtic Guardian (picked on the board), Toon Gemini Elf Normal Summoned;
+  Mystical Space Typhoon on your Toon World sends all three Toons to the Graveyard with it (no dialog). Not seen:
+  Toon attacks (direct attacks, Toon Summoned Skull's 500 LP to attack): setup boards start on turn 1.
+- Zone disabling: picking the zones (SELECT_DISFIELD) already worked (the board's zone picker, free zones of both
+  sides). New: disabled zones are shown, darkened with a faint X in the field's line colour (user's pick of four
+  mockups): `DuelSession` keeps the last FIELD_DISABLED mask in the snapshot (`disabledZones`), `BoardView` draws it
+  under the cards. `&setup=zones`: Ground Collapse on your and the opponent's leftmost Monster Zone, both marked; a
+  later summon's zone choice skips the disabled one. Not seen: the mark clearing when Ground Collapse leaves. Ojama King
+  / Ojama Knight are Fusions (not tried here).
+- Alternate wins: the engine ends the duel itself (WIN message with a reason). New: the end dialog says why under
+  WIN / LOST / DRAW ("LP REACHED 0", 'BY THE EFFECT OF "DESTINY BOARD"'): `build-data` exports strings.conf `!victory`,
+  `DuelSession` passes the WIN reason on (`StepResult.winReason`, `onEnd(winner, reason)`). `&setup=exodia` wins at
+  once (checked in the browser). Destiny Board, checked headless against a passive opponent: placed "I"/"N"/"A"/"L"
+  on turns 2/4/6/8, then won (reason 0x15); it counts only the messages it placed itself, so `&setup=destiny` starts
+  with the four in hand (in the browser the AI's Heavy Storm + Prohibition stopped it). Final Countdown / Vennominaga:
+  not tried (20 turns / 3 counters); same WIN path.
+- Counter kinds: already handled before phase 5 (user confirmed): the badge on the card shows the total, the info
+  panel lists each kind with its own count.
 
 ### 6. Banlist
 

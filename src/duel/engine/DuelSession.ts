@@ -161,6 +161,11 @@ export interface PlayerView {
 
 export interface FieldSnapshot {
   players: [PlayerView, PlayerView];
+  /**
+   * Zones no one can use (Ground Collapse...): bit = zone, as in FIELD_DISABLED: player 0's in the low 16 bits, player
+   * 1's in the high 16; within each, bits 0-4 the Monster Zones, 8-12 the Spell & Trap Zones.
+   */
+  disabledZones?: number;
 }
 
 const QUERY_FLAGS = (OcgQueryFlags.CODE | OcgQueryFlags.POSITION | OcgQueryFlags.ATTACK | OcgQueryFlags.DEFENSE | OcgQueryFlags.COUNTERS | OcgQueryFlags.EQUIP_CARD | OcgQueryFlags.TARGET_CARD | OcgQueryFlags.OWNER) as OcgQueryFlags;
@@ -181,6 +186,8 @@ export interface StepResult {
   prompt: OcgMessage | null;
   /** Set once the duel is over (player index of the winner). */
   winner: number | null;
+  /** Why the duel ended (the WIN message's reason, e.g. 1 = LP reached 0, 0x15 = Destiny Board), once over. */
+  winReason: number | null;
   ended: boolean;
 }
 
@@ -192,6 +199,8 @@ export class DuelSession {
   private readonly core: OcgCoreSync;
   private readonly handle: OcgDuelHandle;
   private ended = false;
+  /** The last FIELD_DISABLED mask (see FieldSnapshot.disabledZones). */
+  private disabledZones = 0;
   /** Turns started so far (numbers NEW_TURN messages). */
   private turn = 0;
 
@@ -262,7 +271,7 @@ Duel.RegisterEffect(e,0)`);
   /** Runs the engine until it needs a decision or the duel ends. */
   advance(): StepResult {
     const messages: OcgMessage[] = [];
-    let winner: number | null = null;
+    let winner: number | null = null, winReason: number | null = null;
     while (!this.ended) {
       const status = this.core.duelProcess(this.handle);
       const batch = this.core.duelGetMessage(this.handle);
@@ -271,14 +280,15 @@ Duel.RegisterEffect(e,0)`);
       for (const m of batch) {
         if (m.type === OcgMessageType.NEW_TURN) (m as NewTurnMessage).turn = ++this.turn;
         if (m.type === OcgMessageType.RETRY) throw new Error("ocgcore rejected the last response (RETRY)");
-        if (m.type === OcgMessageType.WIN) { winner = m.player; this.ended = true; }
+        if (m.type === OcgMessageType.WIN) { winner = m.player; winReason = m.reason; this.ended = true; }
+        if (m.type === OcgMessageType.FIELD_DISABLED) this.disabledZones = m.field_mask;
       }
       if (status === OcgProcessResult.END) this.ended = true;
       if (status === OcgProcessResult.WAITING && !this.ended) {
-        return { messages, prompt: batch[batch.length - 1], winner, ended: false };
+        return { messages, prompt: batch[batch.length - 1], winner, winReason, ended: false };
       }
     }
-    return { messages, prompt: null, winner, ended: true };
+    return { messages, prompt: null, winner, winReason, ended: true };
   }
 
   /**
@@ -323,7 +333,7 @@ Duel.RegisterEffect(e,0)`);
       banished: read(p, OcgLocation.REMOVED).filter((c) => c !== null),
       extra: read(p, OcgLocation.EXTRA).filter((c) => c !== null),
     }));
-    return { players: players as [PlayerView, PlayerView] };
+    return { players: players as [PlayerView, PlayerView], disabledZones: this.disabledZones };
   }
 
   private toView(q: Partial<OcgCardQueryInfo>, controller: 0 | 1, location: OcgLocation, sequence: number, viewer: 0 | 1): CardView {

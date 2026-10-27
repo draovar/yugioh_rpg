@@ -7,8 +7,11 @@ import type { DuelAnimator } from "./DuelAnimator.ts";
 import type { InfoPanel } from "./InfoPanel.ts";
 import { CARD, cardKey, handXY, slotXY, type Slot } from "./layout.ts";
 import { INK, WHITE, text } from "../ui/pixel.ts";
+import { THEME } from "../ui/theme.ts";
 
 const DEFENSE = OcgPosition.FACEUP_DEFENSE | OcgPosition.FACEDOWN_DEFENSE;
+/** A disabled zone: darkened inside its border, with an X in the field's line colour inset this far. */
+const DISABLED_DARK = 0.65, DISABLED_X_INSET = 4;
 
 export interface BoardViewHost {
   scene: Phaser.Scene;
@@ -33,6 +36,8 @@ export interface BoardViewHost {
 export class BoardView {
   readonly container: Phaser.GameObjects.Container;
   readonly sprites = new Map<string, CardSprite>();
+  /** The pile sprites (Deck, Extra Deck, Graveyard) and their count badges by `${side}:${kind}`, while not empty. */
+  private piles = new Map<string, { sprite: CardSprite; badge: Phaser.GameObjects.Container }>();
   /** Counter badges on field cards; hidden while animating (they don't follow moving cards), redrawn after. */
   private counterBadges = new Map<string, Phaser.GameObjects.Container>();
 
@@ -51,7 +56,9 @@ export class BoardView {
     const h = this.host;
     this.container.removeAll(true);
     this.sprites.clear();
+    this.piles.clear();
     this.counterBadges.clear();
+    this.drawDisabledZones(snap.disabledZones ?? 0);
     snap.players.forEach((p, player) => {
       const s = h.side(player);
       h.handCount[s] = p.hand.length;
@@ -131,10 +138,50 @@ export class BoardView {
         sp.on("pointerout", () => h.panel.hoverEnd());
       }
       if (contents) sp.on("pointerup", () => h.browsePile(side, contents, banished, slot.kind === "extra" ? "extra" : "grave"));
-      this.container.add([sp, this.badge(x + 19, y - 28, String(count), 1)]);
+      const badge = this.badge(x + 19, y - 28, String(count), 1);
+      this.piles.set(`${side}:${slot.kind}`, { sprite: sp, badge });
+      this.container.add([sp, badge]);
     }
     // Banished cards have no zone in this layout: a badge under the Graveyard, listed when browsing it.
     if (banished.length) this.container.add(this.badge(x + 19, y + 28, `B${banished.length}`, 1, 1));
+  }
+
+  /** Zones no one can use (Ground Collapse...), under the cards: darkened, with a faint X. */
+  private drawDisabledZones(mask: number) {
+    if (!mask) return;
+    const g = this.host.scene.add.graphics();
+    for (const player of [0, 1]) {
+      const bits = (mask >>> (16 * player)) & 0xffff;
+      for (let bit = 0; bit < 13; bit++) {
+        if (!(bits & (1 << bit)) || (bit > 4 && bit < 8)) continue;
+        const slot: Slot = bit < 8 ? { kind: "mzone", seq: bit } : { kind: "szone", seq: bit - 8 };
+        const c = slotXY(this.host.side(player), slot);
+        const left = Math.round(c.x - CARD.w / 2), top = Math.round(c.y - CARD.h / 2);
+        g.fillStyle(INK, DISABLED_DARK).fillRect(left + 1, top + 1, CARD.w - 2, CARD.h - 2);
+        // Two 1px diagonals, one pixel per step along the longer side.
+        g.fillStyle(THEME.field.line);
+        const w = CARD.w - 1 - 2 * DISABLED_X_INSET, h = CARD.h - 1 - 2 * DISABLED_X_INSET, n = Math.max(w, h);
+        for (let i = 0; i <= n; i++) {
+          const dx = Math.round((i * w) / n), dy = DISABLED_X_INSET + Math.round((i * h) / n);
+          g.fillRect(left + DISABLED_X_INSET + dx, top + dy, 1, 1);
+          g.fillRect(left + CARD.w - 1 - DISABLED_X_INSET - dx, top + dy, 1, 1);
+        }
+      }
+    }
+    this.container.add(g);
+  }
+
+  /**
+   * Marks your pile `kind` as holding a card you can use (from its browser): a slowly pulsing yellow outline and the
+   * count badge in the same yellow with dark digits.
+   */
+  markPile(kind: "extra" | "grave", on: boolean) {
+    const pile = this.piles.get(`0:${kind}`);
+    if (!pile) return;
+    pile.sprite.setPulse(on);
+    const [plate, digits] = pile.badge.list as [Phaser.GameObjects.Rectangle, Phaser.GameObjects.BitmapText];
+    plate.setFillStyle(on ? THEME.pick.choice : INK);
+    digits.setTint(on ? INK : WHITE);
   }
 
   /** Small white-on-black number, anchored by its (originX, originY) corner at (x, y). */

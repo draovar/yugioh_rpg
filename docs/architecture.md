@@ -26,22 +26,25 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 No Phaser imports: runs unchanged in Node (tools) and the browser.
 
 - `engine/DuelSession.ts`: wraps one duel. `advance()` runs until a prompt/end, `respond()` answers it,
-  `snapshot(viewer)` reads the board from the engine with hidden info masked. Options for the AI's copies (defaults =
+  `snapshot(viewer)` reads the board from the engine with hidden info masked (plus `disabledZones`, the last
+  FIELD_DISABLED mask, kept from the messages). Options for the AI's copies (defaults =
   a normal duel): `startingLP` per player, `draws` (opening hand / per turn), `extraFlags` (e.g. attack on the first
   turn), `prepared` (an engine duel from `prepareDuel()` with the base scripts already loaded, the slow ~15 ms part;
   LP are then set by a `Duel.SetLP` script after `startDuel`). Start cards (`deck.start`, dev setups and AI copies)
   can carry equip links, persistent Traps' card targets and control handovers (`StartCard.equipTo` / `cardTargets` /
   `control`), linked by a one-off effect at the first draw phase.
 - `DuelController.ts`: the local player (`me`, either seat) vs the AI or a `RemotePeer`; emits `onUpdate` / `onPrompt`
-  / `onEnd` / `onError`, auto-passes empty chain prompts (both seats, unsent) and, per the local player's chain mode
+  / `onEnd` (winner + the engine's win reason) / `onError`, auto-passes empty chain prompts (both seats, unsent) and, per the local player's chain mode
   (`ChainMode`: auto = only when `spe_count` > 0 like YGOPro, all, off), hides their optional chain prompts (answered
-  "no" and sent like any answer). Takes any `AiPlayer` and awaits its decision (started at once, answered after
+  "no" and sent like any answer), and answers a forced chain prompt with a single effect (sent too; with several the
+  picker stays, since the list may hold optional effects). Takes any `AiPlayer` and awaits its decision (started at once, answered after
   `aiDelayMs` at the earliest). Peer-to-peer duels run in **lockstep**: both machines run the same duel (same seed,
   same two decks) and send only the answers to their own prompts, each with `DuelSession.checksum()` from before it
   was applied; a mismatch stops the duel ("out of sync"). Anything that differs between the two machines (non-seeded
   randomness in the engine layer, deck order, data) splits the duel.
 - `engine/text.ts`: `DuelText.describe(desc)` resolves system strings and `aux.Stringid` card strings; counter names
-  from strings.conf `!counter` (`DuelText.counterName`); `coinCallText` reads a coin call's HINT.
+  from strings.conf `!counter` (`DuelText.counterName`), why a duel ended from `!victory` (`DuelText.winReason`);
+  `coinCallText` reads a coin call's HINT.
 - `engine/rng.ts`: `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
 - `engine/cardData.ts`: `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
 - `engine/hash.ts`: `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).
@@ -202,7 +205,7 @@ passes the `NetDuel` to `Duel`.
   both draw ROCK/PAPER/SCISSORS, set one face-down in the middle Monster Zone, both flip, the loser's card flashes red,
   the winner gets a FIRST/SECOND dialog; a draw replays); `me` is only known after it.
 - **Redraw**: `DuelScene` redraws the whole board from `snapshot()` after every engine step (`BoardView`: cards, piles,
-  hand, counter badges, equip links). The phase boxes are `PhaseColumn`, the corner buttons `cornerButtons.ts`, the
+  hand, counter badges, equip links, disabled zones). The phase boxes are `PhaseColumn`, the corner buttons `cornerButtons.ts`, the
   prompt strip `PromptBand`, the `&aitrace` replay line and L-key board log `aiTrace.ts`. In dev builds
   `window.duelScene` exposes the scene (`.controller.waitingForHuman`, `.animator.current`, `.animator.speed`).
 - **Prompts**: `duelPrompts.ts` (`showPrompt`, through a `PromptHost`) maps each SELECT_* prompt to UI: card action menus

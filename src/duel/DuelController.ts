@@ -37,7 +37,8 @@ export interface DuelEvents {
   onUpdate(messages: OcgMessage[], snapshot: FieldSnapshot): void | Promise<void>;
   /** The human must answer; `hint` is the pending "Select the card(s) to …" system string id, if any. */
   onPrompt(prompt: HumanPrompt, hint: bigint | null): void;
-  onEnd(winner: number | null): void;
+  /** `reason`: the engine's win reason (`DuelText.winReason`), null if none was given. */
+  onEnd(winner: number | null, reason: number | null): void;
   /** The duel can't go on (peer-to-peer: the two machines' duels drifted apart). */
   onError?(message: string): void;
 }
@@ -137,7 +138,7 @@ export class DuelController {
     const opp = (1 - this.me) as 0 | 1;
     const players = [...mine.players] as FieldSnapshot["players"];
     players[opp] = this.session.snapshot(opp).players[opp];
-    return { players };
+    return { ...mine, players };
   }
 
   private async step(): Promise<void> {
@@ -149,7 +150,7 @@ export class DuelController {
 
     if (result.ended) {
       this.ai?.dispose();
-      this.events.onEnd(result.winner);
+      this.events.onEnd(result.winner, result.winReason);
       return;
     }
     const prompt = result.prompt as HumanPrompt;
@@ -182,6 +183,12 @@ export class DuelController {
     this.hint = null;
     // A chain prompt our chain mode hides: answered like any human answer (so a peer gets it too).
     if (this.skipsChain(prompt)) return this.answer({ type: OcgResponseType.SELECT_CHAIN, index: null });
+    // A lone mandatory effect has to be activated anyway: no picker. With several the picker stays: the list can also
+    // hold optional effects of the same moment (Labyrinth of Nightmare + Sinister Serpent), and the message doesn't
+    // say which are which.
+    if (prompt.type === OcgMessageType.SELECT_CHAIN && prompt.forced && prompt.selects.length === 1) {
+      return this.answer({ type: OcgResponseType.SELECT_CHAIN, index: 0 });
+    }
     this.events.onPrompt(prompt, hint);
     this.idleWhileWaiting();
   }

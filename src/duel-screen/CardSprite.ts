@@ -52,6 +52,8 @@ const highlightColor = (kind: CardHighlight): number => ({
 } satisfies Record<CardHighlight, number>)[kind];
 /** Attack declarations and pickable cards use a thin 1px outline; picked cards 2px. */
 const HIGHLIGHT_WIDTH: Partial<Record<CardHighlight, number>> = { choice: 1, attacker: 1, attacked: 1 };
+/** A pulsing outline (`setPulse`) fades from this alpha to full and back, PULSE_MS each way. */
+const PULSE_MIN_ALPHA = 0.35, PULSE_MS = 900;
 
 const LEFT = -CARD.w / 2, TOP = -CARD.h / 2;
 
@@ -69,6 +71,7 @@ export class CardSprite extends Phaser.GameObjects.Container {
   code = 0;
   private parts: Phaser.GameObjects.GameObject[] = [];
   private outline: Phaser.GameObjects.Graphics;
+  private pulseTween: Phaser.Tweens.Tween | null = null;
   private equipMark: Phaser.GameObjects.Image | null = null;
   private chainMark: Phaser.GameObjects.Container | null = null;
   /** The chain sprite of the chain mark (the animator spins it in), or null. */
@@ -184,6 +187,23 @@ export class CardSprite extends Phaser.GameObjects.Container {
     this.outline.clear();
     const t = HIGHLIGHT_WIDTH[kind] ?? 2;
     if (kind !== "none") border(this.outline, LEFT - t, TOP - t, CARD.w + 2 * t, CARD.h + 2 * t, highlightColor(kind), t);
+    return this;
+  }
+
+  /** The "choice" outline, slowly fading in and out: a pile holding a card you can use (contact fusion, GY effect). */
+  setPulse(on: boolean): this {
+    if (on === !!this.pulseTween) return this;
+    this.pulseTween?.remove();
+    this.pulseTween = null;
+    this.outline.setAlpha(on ? PULSE_MIN_ALPHA : 1);
+    this.setHighlight(on ? "choice" : "none");
+    if (on) {
+      this.pulseTween = this.scene.tweens.add({
+        // Starts faint and fades in, so a pile that becomes usable doesn't flash on at full strength.
+        targets: this.outline, alpha: { from: PULSE_MIN_ALPHA, to: 1 }, duration: PULSE_MS, ease: "Sine.easeInOut", yoyo: true, repeat: -1,
+      });
+      this.once(Phaser.GameObjects.Events.DESTROY, () => this.pulseTween?.remove());
+    }
     return this;
   }
 }

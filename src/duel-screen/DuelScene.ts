@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import {
+  OcgLocation,
   OcgMessageType,
   OcgResponseType,
   type OcgCardLoc,
@@ -281,7 +282,7 @@ export class DuelScene extends Phaser.Scene {
           this.lastHint = hint;
           this.onPrompt(prompt, hint);
         },
-        onEnd: (winner) => this.onEnd(winner),
+        onEnd: (winner, reason) => this.onEnd(winner, reason),
         onError: (message) => this.stopDuel(`${message} The duel can't continue.`),
       },
     });
@@ -299,7 +300,7 @@ export class DuelScene extends Phaser.Scene {
         me: () => this.me,
         snapshot: () => this.snapshot,
         prompt: (prompt, hint, onAnswer) => this.previewPrompt(() => this.onPrompt(prompt, hint), onAnswer),
-        end: (winner) => this.previewPrompt(() => this.endDialog(winner, () => this.answer({ type: OcgResponseType.SELECT_YESNO, yes: true }))),
+        end: (winner) => this.previewPrompt(() => this.endDialog(winner, 1 /* LP reached 0 */, () => this.answer({ type: OcgResponseType.SELECT_YESNO, yes: true }))),
         graveyard: (side, codes, banished) => this.previewPrompt(() => this.browsePile(side, codes.map((code) => ({ code }) as CardView), banished.map((code) => ({ code }) as CardView))),
       });
     }
@@ -364,10 +365,10 @@ export class DuelScene extends Phaser.Scene {
     });
   }
 
-  private onEnd(winner: number | null) {
+  private onEnd(winner: number | null, reason: number | null) {
     this.ended = true;
     this.clearInteraction();
-    this.endDialog(winner, () => this.scene.start(this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === this.me } }));
+    this.endDialog(winner, reason, () => this.scene.start(this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === this.me } }));
   }
 
   /**
@@ -405,11 +406,14 @@ export class DuelScene extends Phaser.Scene {
     return player === this.me ? 0 : 1;
   }
 
-  private endDialog(winner: number | null, onContinue: () => void) {
+  /** Win / loss / draw, and why underneath (LP reached 0, Exodia, Destiny Board...). */
+  private endDialog(winner: number | null, reason: number | null, onContinue: () => void) {
     let message = "THE DUEL ENDED IN A DRAW.";
     if (winner === this.me) message = "YOU WIN THE DUEL!";
     else if (winner === 1 - this.me) message = "YOU LOST THE DUEL...";
-    this.modal.dialog(message, [{ label: "CONTINUE", onClick: onContinue }]);
+    const why = reason === null ? "" : this.engine.text.winReason(reason);
+    this.modal.dialog(why ? `${message}
+${why.toUpperCase()}` : message, [{ label: "CONTINUE", onClick: onContinue }]);
   }
 
   /** Lists a pile's cards in a picker dialog: a Graveyard (newest first, then banished cards) or your Extra Deck. */
@@ -417,15 +421,24 @@ export class DuelScene extends Phaser.Scene {
     if (this.modal.isOpen || !contents.length && !banished.length) return;
     const pending = this.controller.waitingForHuman;
     const owner = side === 0 ? "Your" : "Opponent's";
+    // Cards you can use from here (a contact fusion's Sp.Sum, an effect that activates in the Graveyard) are
+    // clickable, captioned with their action; the rest only show.
+    const shown = [...contents, ...[...banished].reverse()];
+    const acts = shown.map((c) => (c.location === undefined ? undefined : this.actions.get(cardKey(c))));
     this.modal.picker({
       title: pile === "extra" ? `${owner} Extra Deck` : `${owner} Graveyard (newest first)${banished.length ? ", then banished" : ""}`,
       // No names (they're on the cards); only banished cards get a caption, to tell them apart.
-      cards: [
-        ...contents.map((c) => ({ code: c.code, locked: true, caption: "" })),
-        ...[...banished].reverse().map((c) => ({ code: c.code, locked: true, caption: "BANISHED" })),
-      ],
+      cards: shown.map((c, i) => acts[i]
+        ? { code: c.code, caption: acts[i].map((a) => a.label).join(" / ") }
+        : { code: c.code, inert: true, caption: i < contents.length ? "" : "BANISHED" }),
       mode: "single",
-      onConfirm: () => {},
+      onConfirm: ([i]) => {
+        const list = acts[i]!;
+        if (list.length === 1) { this.answer(list[0].response); return; }
+        this.modal.dialog(this.engine.text.name(shown[i].code).toUpperCase(),
+          [...list.map((a) => ({ label: a.label.toUpperCase(), onClick: () => this.answer(a.response) })), { label: "CANCEL", onClick: () => {} }],
+          shown[i].code);
+      },
       // Browsing leaves the board as it was (e.g. cards already picked for a tribute). Only a dev preview of this
       // browser cleared it: closing that one sets the pending prompt up again.
       buttons: [{ label: "Close", onClick: () => {
@@ -499,7 +512,8 @@ export class DuelScene extends Phaser.Scene {
   /**
    * Playable cards aren't outlined; only the cursor tells them apart (hand cursor on cards with an
    * action, plain arrow elsewhere). While choosing on the board, candidates get a yellow 1px outline and
-   * picked ones an orange 2px one (BoardPick); a declared attack outlines attacker and target in red.
+   * picked ones an orange 2px one (BoardPick); a declared attack outlines attacker and target in red. A pile holding
+   * a card with an action (it's used from the pile browser) gets the yellow outline, slowly pulsing, and a yellow count.
    */
   private applyHighlights() {
     const [attacker, target] = this.attackMarks;
@@ -509,6 +523,10 @@ export class DuelScene extends Phaser.Scene {
       sp.setHighlight(pick.look ?? (k === attacker ? "attacker" : k === target ? "attacked" : "none"));
       if (sp.input) sp.input.cursor = this.actions.has(k) || pick.clickable ? "pointer" : "default";
     }
+    // Your Extra Deck / Graveyard pulses while a card in it has an action (banished cards are browsed with the GY).
+    const inPile = (location: number) => [...this.actions.keys()].some((k) => k.startsWith(`${this.me}:${location}:`));
+    this.view.markPile("extra", inPile(OcgLocation.EXTRA));
+    this.view.markPile("grave", inPile(OcgLocation.GRAVE) || inPile(OcgLocation.REMOVED));
   }
 
   /** Sets up the UI for a prompt you have to answer (duelPrompts.ts). */

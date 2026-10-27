@@ -39,7 +39,7 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run build` | typecheck + production build to `dist/` |
 | `npm run fetch-data` | clone/update ProjectIgnis `CardScripts` (**pinned commit**, see Engine facts) + `BabelCDB` (latest) into `vendor/` |
 | `npm run build-pool [-- --refresh]` | `data/pool.json` = every card in a TCG product up to Premium Pack 2 (2008-07-31) ± `data/pool-exceptions.json` (YGOPRODeck lists cached in `vendor/ygoprodeck/`, passcodes from BabelCDB) |
-| `npm run build-data` | `data/pool.json` → `public/data/{cards,scripts,strings}.json` (plus the tokens pool cards create) |
+| `npm run build-data` | `data/pool.json` → `public/data/{cards,scripts,strings}.json` (plus the tokens pool cards create; strings: system, counter and victory texts) |
 | `npm run check-cards` | list pool cards using mechanics the UI doesn't fully support yet (declare, counters, equips, tokens, fusions...) |
 | `npm run fetch-art` | download art-only crops for the pool from YGOPRODeck into `vendor/art/` |
 | `npm run build-art` | art → shared palette: `public/cards/art32.png`+`.json` atlas (cards) and `public/cards/art128/<code>.png` (info panel) |
@@ -81,7 +81,7 @@ Dev:
   `zombieMadness`, `dragonsRoar`; default Yugi vs Kaiba).
 - `&first=you` / `&first=opp` skip rock-paper-scissors (`&seed` and `&setup` skip it too, you going first).
 - `&setup=NAME` starts from a test board (`src/dev/devSetups.ts`: `tribute`, `scapegoat` (use `&deck=goat`), `fusion`
-  (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`, `ritual` (`&deck=kaibaEvolution`);
+  (`&deck=kaiba`), `declare`, `counters`, `equip`, `coin`, `sort`, `confiscation`, `ritual` (`&deck=kaibaEvolution`), `contact` (contact fusions from the Extra Deck), `union`, `gemini`, `spirit`, `toon`, `zones`, `exodia`, `destiny`;
   cards placed in hand/on the field first).
 - `&ai=NAME` picks the opponent's brain (`src/duel/ai/brains.ts`: `planner` (default, `DEFAULT_BRAIN`), `generic`,
   `autobot`); `&noworker` makes the AI think on the main thread instead of its Web Worker.
@@ -182,7 +182,7 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
 
 ## Now
 
-Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-4 (pool generator, hand-picked
-older card versions, full-size data + art, random-deck smoke) done, next is phase 5 (UI checks for untested mechanics). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
+Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-5 (pool generator, hand-picked
+older card versions, full-size data + art, random-deck smoke, UI checks) done, next is phase 6 (May 2008 banlist). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
 `docs/ai-reports.md`, only clear bugs are fixed right away. Overworld: trainer line-of-sight challenges next.
 RPG loop: card collection, rewards/boosters, story, bosses, saving. Full list: `docs/roadmap.md`.
