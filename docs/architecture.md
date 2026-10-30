@@ -14,7 +14,7 @@ src/overworld/         Overworld scene, WorldMenu, DialogBox, TouchPad, characte
 src/duel-screen/       DuelScene, duelPrompts and the duel UI (cards, modal, info panel, animator, field, layout)
 src/deck-editor/       DeckEditor scene, its layout, list rows, filter panel, dialogs
 src/lobby/             multiplayer Lobby scene
-src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition
+src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition, view
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
 tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helpers
 data/                  pool.json (the card pool, generated) + pool-exceptions.json, card-versions.json (older versions), banlist.json, maps, characters, palette
@@ -204,11 +204,14 @@ passes the `NetDuel` to `Duel`.
   restart: back from the duel they stand there again (`backFromDuel`) until their result line is closed, then leap
   back into the hedge (`retreat`, which also starts the cooldown). `&ambush` forces only the first ambush of the session.
 - Touch devices: a semi-transparent D-pad (diagonals, keeps steering when the finger slides off) and X button
-  (`TouchPad.ts`), with the dialog between them. `TOUCH` in `src/ui/touch.ts` = coarse pointer (`&touch` forces it).
+  (`TouchPad.ts`, placed from the screen's bottom corners), with the dialog between them. `TOUCH` in
+  `src/ui/touch.ts` = coarse pointer (`&touch` forces it).
+- The overworld's view follows the window's size (`src/ui/view.ts`, "world" mode): the HUD (MENU button, touch pad,
+  dialog box, menu panel) is placed from the screen's edges and laid out again on a resize (`onViewResize`).
 - `WorldMenu`: overlay scene launched by Overworld (so it doesn't scroll). MENU (M) button top right opens the settings
   panel: PLAYER (boy / girl), your deck (drop-down lists, `makeDropDown` in `src/ui/widgets.ts`, saved in localStorage
-  via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place), DECK EDITOR, MULTIPLAYER; testing
-  aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and set cards in duels
+  via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place), ZOOM (the overworld's: 2X / 3X /
+  AUTO, `worldZoom()`), DECK EDITOR, MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and set cards in duels
   (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards drawn face-up at 60%
   alpha), QUICK DUEL, FULL SCREEN where the browser supports it.
 - Decks offered everywhere come from `prefs.ts`: `deckEntries()` = prebuilt + custom decks with 40+ Main Deck cards,
@@ -334,11 +337,21 @@ in the canvas: an invisible HTML input over the drawn field for phone keyboards 
 key capture while it exists; card search, lobby room code, deck names), `touch.ts`.
 
 `Transition.ts`: the scene switch between the overworld and duels (both ways, also a duel back to the Lobby). A scene
-Boot launches once and keeps on top: `transitionTo(from, key, data)` flips card backs (`CARD_BACK`, a 17x7 grid)
-in, diagonal by diagonal from the top-left, until they cover the screen, starts `key` underneath, and flips them
-away in the same order once that scene is created. While it plays
+Boot launches once and keeps on top: `transitionTo(from, key, data)` flips card backs (`CARD_BACK`, a grid covering
+the screen: 17x7 at 640x360, laid out again when the size changes, the sweep always as long) in, diagonal by
+diagonal from the top-left, until they cover the screen, starts `key` underneath, and flips them away in the same
+order once that scene is created. While it plays
 (`transitioning(game)`) a full-screen zone takes all clicks and the overworld ignores keys and keeps the player still
 (and skips its usual fade-in). It is in the `&anims` dropdown.
+
+`view.ts`: game size and zoom. Each scene picks a mode when it starts (`setViewMode`): "fixed" (Boot, Duel, DeckEditor,
+Lobby) is the 640x360 layout scaled up as far as the window allows; "world" (Overworld) draws at the world menu's
+ZOOM (2x by default; 3x; AUTO = as big as whole numbers fit, like "fixed") and grows the view with the window instead
+(at 2x a 1920x1080 window shows 960x540 game pixels of the map), taking the window's shape (no side bars on wide
+phones), never under 640x360. Windows too small for 2x get a fractional fit in both modes.
+From 2x on the zoom is a whole number of physical pixels (`devicePixelRatio`, e.g. Windows display scaling at 125%),
+so game pixels stay even. `fitView` runs on window resizes; scenes relayout through `onViewResize`. Scenes under the
+card transition switch size while it covers the screen.
 
 Phones: the page is `100dvh` tall (100vh = the height without the browser bar, which pushed the canvas under it) and
 the zoom may go below 1x so the whole screen fits; the first tap goes full screen (`fullscreenOnFirstTap`, Android /

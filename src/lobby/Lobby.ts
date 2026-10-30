@@ -6,6 +6,7 @@ import { chosenDeck } from "../ui/prefs.ts";
 import { WHITE, border, text } from "../ui/pixel.ts";
 import { createTextInput } from "../ui/textInput.ts";
 import { makeButton } from "../ui/widgets.ts";
+import { setViewMode } from "../ui/view.ts";
 import type { DuelSceneData } from "../duel-screen/DuelScene.ts";
 
 export interface LobbyData {
@@ -34,6 +35,7 @@ export class Lobby extends Phaser.Scene {
   }
 
   create(data: LobbyData) {
+    setViewMode(this.game, "fixed");
     this.cameras.main.setBackgroundColor(0x040218);
     this.view = this.add.container(0, 0);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.reset());

@@ -31,6 +31,7 @@ import {
   PITCH, ROW_PITCH, ROW_W, ROW_X, SCOPE, SCROLL, SEARCH, SPLIT, STATUS_Y, TOOLS_Y,
 } from "./layout.ts";
 import { describe, eyeIcon, kindColor, limitBadge } from "./listRow.ts";
+import { setViewMode } from "../ui/view.ts";
 
 /** Deck counts below the limits (the Main Deck under 40). */
 const SHORT_COLOR = 0xff8a70;
@@ -90,6 +91,7 @@ export class DeckEditor extends Phaser.Scene {
   }
 
   async create() {
+    setViewMode(this.game, "fixed");
     this.engine = await loadEngine();
     this.list = new CardList(this.engine.cards.records.values());
     this.query = "";

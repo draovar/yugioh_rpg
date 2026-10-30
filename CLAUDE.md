@@ -2,7 +2,8 @@
 
 A Pokémon-style overworld RPG (Phaser 4.2) in which every battle is a real Yu-Gi-Oh duel.
 Rendered natively at **640x360** pixel art (`pixelArt: true`), scaled up by whole numbers (2x/3x); the duel
-screen follows `docs/layout-sketch.png` exactly.
+screen follows `docs/layout-sketch.png` exactly. The overworld instead stays at the world menu's ZOOM (2x by default)
+and shows more of the map on bigger windows (`src/ui/view.ts`).
 Duel rules are **not** hand-written: they run on **ocgcore** (Project Ignis / EDOPro core),
 compiled to WebAssembly (`ocgcore-wasm` on npm) and started in `MODE_GOAT` (classic / GOAT-era rules).
 The reference project this approach comes from is circlenline/DUELIST_KINGDOM_ROGUELIKE (vanilla JS, same engine).

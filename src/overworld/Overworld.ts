@@ -12,6 +12,7 @@ import { NPCS, type NpcDef } from "./npcs.ts";
 import { bake, buildSortedWalls, depthForY } from "./sortedWalls.ts";
 import { Ambushes, loadAmbushes } from "./ambush.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
+import { setViewMode } from "../ui/view.ts";
 
 const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
@@ -91,6 +92,8 @@ export class Overworld extends Phaser.Scene {
   }
 
   init(data: { duelResult?: { won: boolean } }) {
+    // A bigger window shows more of the map rather than bigger sprites (src/ui/view.ts).
+    setViewMode(this.game, "world");
     this.duelResult = data?.duelResult;
     this.warping = false;
   }
@@ -104,7 +107,7 @@ export class Overworld extends Phaser.Scene {
     this.scene.launch("WorldMenu");
     if (import.meta.env.DEV) (window as unknown as { overworld: Overworld }).overworld = this;
     if (!this.cache.tilemap.exists(mapKey(currentMap))) {
-      text(this, 320, 170, "NO MAP: RUN NPM RUN BUILD-TILES (NEEDS VENDOR/PAID)", { color: WHITE, originX: 0.5 });
+      text(this, Math.round(this.scale.width / 2), Math.round(this.scale.height / 2) - 10, "NO MAP: RUN NPM RUN BUILD-TILES (NEEDS VENDOR/PAID)", { color: WHITE, originX: 0.5 });
       return;
     }
     const map = this.make.tilemap({ key: mapKey(currentMap) });
@@ -205,7 +208,7 @@ export class Overworld extends Phaser.Scene {
     // On touch devices the dialog sits between the D-pad and the X button.
     this.pad = TOUCH ? new TouchPad(this, (code) => this.handleKey(code)) : null;
     this.dialog = new DialogBox(this, this.cameras.main, TOUCH
-      ? { left: DPAD.x + DPAD.r + 8, right: 640 - (X_BUTTON.x - X_BUTTON.r) + 8 } : undefined);
+      ? { left: DPAD.left + DPAD.r + 8, right: X_BUTTON.right + X_BUTTON.r + 8 } : undefined);
 
     // Key events rather than JustDown polling, so quick taps are never missed.
     this.input.keyboard!.on("keydown", (event: KeyboardEvent) => this.handleKey(event.code));

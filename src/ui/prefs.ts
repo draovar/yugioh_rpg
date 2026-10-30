@@ -119,6 +119,23 @@ export function setPlayerLook(look: PlayerLook): void {
   store(LOOK_KEY, look);
 }
 
+const ZOOM_KEY = "world.zoom";
+/**
+ * How big the overworld is drawn (world menu: ZOOM): 2 or 3 screen pixels per game pixel, a bigger window showing
+ * more of the map, or "auto": as big as whole numbers fit the 640x360 view (sprites grow with the window).
+ */
+export const WORLD_ZOOMS = [2, 3, "auto"] as const;
+export type WorldZoom = (typeof WORLD_ZOOMS)[number];
+
+export function worldZoom(): WorldZoom {
+  const saved = load(ZOOM_KEY);
+  return saved === "auto" ? "auto" : saved === "3" ? 3 : 2;
+}
+
+export function setWorldZoom(zoom: WorldZoom): void {
+  store(ZOOM_KEY, String(zoom));
+}
+
 const CHAIN_KEY = "duel.chainMode";
 export const CHAIN_MODES: ChainMode[] = ["auto", "all", "off"];
 

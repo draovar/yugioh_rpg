@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { WHITE, border, text } from "../ui/pixel.ts";
+import { onViewResize } from "../ui/view.ts";
 
 const BG = 0x10102a, NAME = 0xffd75e, OPTION_OFF = 0x8888aa;
 const MARGIN = 8, PAD = 10, H = 76, SCALE = 2;
@@ -19,6 +20,8 @@ export class DialogBox {
   private optionTexts: Phaser.GameObjects.BitmapText[] = [];
   private cursor: Phaser.GameObjects.BitmapText | null = null;
   private onChoice: ((option: string) => void) | null = null;
+  /** What the open box shows, for laying it out again. */
+  private shown: Parameters<DialogBox["open"]> | null = null;
 
   private readonly scene: Phaser.Scene;
   private readonly camera: Phaser.Cameras.Scene2D.Camera;
@@ -29,10 +32,19 @@ export class DialogBox {
     this.camera = camera;
     this.insets = insets;
     this.container = scene.add.container(0, 0).setScrollFactor(0).setDepth(200).setVisible(false);
+    // The window changed size while open: laid out again for the new view, the same option still picked.
+    onViewResize(scene, () => {
+      if (!this.isOpen || !this.shown) return;
+      const selected = this.selected;
+      this.open(...this.shown);
+      this.selected = selected;
+      this.updateCursor();
+    });
   }
 
   /** `onChoice(option)` runs after the box closes. */
   open(name: string, body: string, options: string[], onChoice: (option: string) => void) {
+    this.shown = [name, body, options, onChoice];
     for (const o of this.items) o.destroy();
     const w = this.camera.width - this.insets.left - this.insets.right;
     const bg = this.scene.add.graphics().fillStyle(BG, 0.92).fillRect(0, 0, w, H);

@@ -39,6 +39,7 @@ import { PhaseColumn } from "./PhaseColumn.ts";
 import { PromptBand } from "./PromptBand.ts";
 import { createCornerButtons } from "./cornerButtons.ts";
 import { boardLog, replayInfo } from "./aiTrace.ts";
+import { setViewMode } from "../ui/view.ts";
 
 export interface DuelSceneData {
   /** Default: the Yugi deck. */
@@ -117,6 +118,7 @@ export class DuelScene extends Phaser.Scene {
   }
 
   init(data: DuelSceneData) {
+    setViewMode(this.game, "fixed");
     this.sceneData = data ?? {};
     this.me = 0; // until rock-paper-scissors decides
     this.ended = false;
