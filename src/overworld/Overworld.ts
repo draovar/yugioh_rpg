@@ -9,7 +9,7 @@ import type { DuelSceneData } from "../duel-screen/DuelScene.ts";
 import type { WorldMenu } from "./WorldMenu.ts";
 import { CHARACTERS, frameOf, loadCharacters, walkAnim, type Facing } from "./characters.ts";
 import { NPCS, type NpcDef } from "./npcs.ts";
-import { bake, buildSortedWalls, depthForY } from "./sortedWalls.ts";
+import { depthForY, isBaked, showMap } from "./sortedWalls.ts";
 import { Ambushes, loadAmbushes } from "./ambush.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
 import { setViewMode } from "../ui/view.ts";
@@ -27,6 +27,20 @@ function loadMap(load: Phaser.Loader.LoaderPlugin, name: string) {
   if (load.cacheManager.tilemap.exists(mapKey(name))) return;
   load.tilemapTiledJSON(mapKey(name), `maps/${name}.json`);
   load.image(tilesKey(name), `maps/${name}.png`);
+}
+
+/**
+ * The tilemap to parse for a map. Back on a map whose art is still baked (sortedWalls.ts), e.g. after a duel, a copy
+ * without its ground layers: they'd only be parsed to be thrown away (about half of the parsing).
+ */
+function tilemapKey(scene: Phaser.Scene, name: string) {
+  if (!isBaked(scene.textures, name)) return mapKey(name);
+  const key = `${mapKey(name)}-no-ground`, cache = scene.cache.tilemap;
+  if (!cache.exists(key)) {
+    const { format, data } = cache.get(mapKey(name)) as { format: number; data: { layers: { name: string }[] } };
+    cache.add(key, { format, data: { ...data, layers: data.layers.filter((l) => !l.name.startsWith("ground")) } });
+  }
+  return key;
 }
 
 /** A map's place in a Tiled world (data/maps/*.world, exported by build-tiles): its rectangle there, in pixels. */
@@ -110,22 +124,21 @@ export class Overworld extends Phaser.Scene {
       text(this, Math.round(this.scale.width / 2), Math.round(this.scale.height / 2) - 10, "NO MAP: RUN NPM RUN BUILD-TILES (NEEDS VENDOR/PAID)", { color: WHITE, originX: 0.5 });
       return;
     }
-    const map = this.make.tilemap({ key: mapKey(currentMap) });
+    // Empty cells stay null rather than becoming Tile objects: the main city's layers have ~590,000 cells, mostly
+    // empty in the walls and collision layers (parsing went from ~170 to ~100 ms on a desktop).
+    const map = this.make.tilemap({ key: tilemapKey(this, currentMap), insertNull: true });
     const tileset = map.addTilesetImage("world", tilesKey(currentMap))!;
-
-    // Ground layers (ground, ground2, ground3...): no collision, always under everything.
-    const grounds = map.layers.filter((l) => l.name.startsWith("ground")).map((l) => map.createLayer(l.name, tileset, 0, 0)!);
-    bake(this, grounds, 0);
 
     // Optional hidden "collision" layer: every tile in it blocks, whatever it shows (a map's exact footprints).
     this.blockers = map.getLayerIndex("collision") === null ? null
       : (map.createLayer("collision", tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false).setCollisionByExclusion([-1]);
 
-    // Walls layers (walls, walls2...) are only used for collision and are not drawn: their tiles are redrawn in
-    // y-sorted layers.
+    // Walls layers (walls, walls2...) are only used for collision and are not drawn: their tiles are drawn in
+    // y-sorted strips. Those and the ground layers (ground, ground2, ground3...: no collision, always under
+    // everything) are baked once per map (sortedWalls.ts).
     this.walls = map.layers.filter((l) => l.name.startsWith("walls")).map((l) =>
       (map.createLayer(l.name, tileset, 0, 0) as Phaser.Tilemaps.TilemapLayer).setVisible(false).setCollisionByProperty({ collision: true }));
-    buildSortedWalls(this, map, tileset, this.walls, this.blockers);
+    showMap(this, currentMap, map, tileset, this.walls, this.blockers);
 
     // Maps placed side by side in a world: walking past an edge goes on in the neighbouring map (crossEdge).
     this.placement = placements(this.cache)[currentMap] ?? null;

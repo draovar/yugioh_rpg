@@ -129,6 +129,10 @@ Dev:
   (otherwise half-pixel glyphs, e.g. a centred wrapped line, break up).
 - Phaser 4 masks are filters: `obj.enableFilters().filters!.internal.addMask(graphics)` (GeometryMask is Canvas-only),
   see `InfoPanel.scrollName`.
+- Phaser 4.2.1 leaked a full-size GPU texture per RenderTexture / DynamicTexture (the source's first texture is
+  replaced without being deleted): `tools/patch-phaser.mjs` fixes the dist files as npm's `postinstall` (after
+  patch-ocgcore) and fails loudly if Phaser changes. Still, prefer a few shared DynamicTextures over many
+  RenderTextures (`sortedWalls.ts`).
 - Duel UI chrome is themed (`src/ui/theme.ts`). **Positions and sizes are global** (`INSET`, `LIST_BUTTON` in
   `src/duel-screen/layout.ts`); a theme only changes the look. Code reads `THEME.*` when drawing (never copy theme
   values into module-level constants: they'd go stale after a switch), `ui(role)`, `INSET`; never hard-code UI

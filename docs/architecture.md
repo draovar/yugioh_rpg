@@ -166,13 +166,23 @@ passes the `NetDuel` to `Duel`.
   `ground2` = terrain overlapping it, `ground3` = non-collision decorations, see `flatten-ground.mjs`; layers hidden
   in Tiled are still drawn) and wall layers (every `walls*` layer: walls,
   walls2...; they collide and y-sort together, a later layer drawn over an earlier one on the same base) are baked into
-  RenderTextures once (`bake` in `sortedWalls.ts`: live tilemap layers re-culled every tile each frame, 4.2 → 0.6 ms a
-  frame on a desktop), in pieces of at most 2048 px (phones may not hold textures over 4096 px; the main city is
-  4800x4480). Wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`;
-  each strip covers only its tiles' rows and columns, and tiles of one strip more than `STRIP_GAP` columns apart are
-  baked as separate pieces: one strip spanning the main city was mostly empty texture, ~390 MB in all). Baked pieces
-  off the camera are hidden every frame (`bakedPieces`: the main city's ~1400 pieces cost 2 ms a frame to draw on a
-  desktop, 0.5 ms culled). An optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision
+  textures (`showMap` in `sortedWalls.ts`: live tilemap layers re-culled every tile each frame, 4.2 → 0.6 ms a frame on
+  a desktop), shown as Images. The ground in pieces of at most 2048 px (phones may not hold textures over 4096 px; the
+  main city is 4800x4480). Wall tiles are redrawn in strips y-sorted with the characters by their base row
+  (`wallPieces`, bases from `wallBaseY`); each group of touching tiles in a strip (a tree, a house, a lamp) is a piece
+  covering only its own rows and columns (strips joined across gaps baked mostly empty space: forest-south's forest
+  rows took ~800 MB), and pieces with the same tiles in the same layout (a forest's pines, street lamps) share one
+  baked frame. The frames are packed side by side into a few shared pages of at most 2048 px (shelf packing; main city
+  2 pages, 32 MB; forests 1 page, under 10 MB): a texture per piece (~1700 in the main city) took most of a second to
+  create and kept the GPU switching textures. The ground is now most of a map's GPU memory (39-119 MB on the island).
+  The baked textures stay in the texture manager while the player is on that map, across scene restarts (back from a
+  duel, the deck editor, the lobby: no baking, and the map is parsed without its ground layers, `tilemapKey`; main city
+  ~1.2 s → ~0.1-0.2 s on a desktop; a first visit ~0.25 s, forests ~0.45 s); baking another map frees them, and a
+  restored WebGL context bakes again. Maps are parsed with `insertNull` (empty cells are null, not Tile objects).
+  Pieces are on the display list only near the camera (`showNearCamera`: cells of `CELL` px the view reaches; Images
+  made on first use): a forest has thousands of pieces, and the scene sorted them all by depth every frame the
+  player moved (forest-south 2.3 → 1.0 ms a frame on a desktop).
+  An optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision
   for the y-sort (walls' own tiles collide by the tileset's `collision` property).
 - Warps: maps link through `warp` rectangles in their `objects` layer (properties `map`, `spawn` = the arrival point's
   name there, `keepY` = keep the height: town and maze sit side by side, tops aligned, town's right edge ↔ maze's left
@@ -463,6 +473,8 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   (lockstep duels on an in-memory link), `smoke-random` (the pool shuffled into random decks, autoBot duels on worker
   threads with a hang timeout; known script errors in its `KNOWN_ERRORS`; see `docs/card-pool-plan.md` phase 4).
 - `patch-ocgcore.mjs`: npm `postinstall` fix for ocgcore-wasm's message parser (see CLAUDE.md, Engine facts).
+- `patch-phaser.mjs`: npm `postinstall` fix for Phaser 4.2.1's DynamicTexture leak (see CLAUDE.md, Pixel art); clears
+  Vite's pre-bundled copy (`node_modules/.vite`) when it patches.
 
 ## Maps and the Tiled MCP server
 

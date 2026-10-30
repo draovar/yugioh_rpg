@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "postinstall": "node tools/patch-ocgcore.mjs",
+    "postinstall": "node tools/patch-ocgcore.mjs && node tools/patch-phaser.mjs",
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
