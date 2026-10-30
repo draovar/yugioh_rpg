@@ -1,0 +1,16 @@
+{
+ "columns": 24,
+ "image": "../../../vendor/paid/themes/Godot_Autotiles_32x32.png",
+ "imageheight": 3328,
+ "imagewidth": 384,
+ "margin": 0,
+ "name": "Autotiles",
+ "spacing": 0,
+ "tilecount": 4992,
+ "tiledversion": "1.12.2",
+ "tileheight": 16,
+ "tiles": [],
+ "tilewidth": 16,
+ "type": "tileset",
+ "version": "1.10"
+}

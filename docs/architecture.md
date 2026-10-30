@@ -162,12 +162,17 @@ passes the `NetDuel` to `Duel`.
 - Player: `player` / `player-run` or `player-girl` / `player-girl-run` (`PLAYER_LOOKS`, world menu PLAYER: BOY / GIRL,
   `playerLook()` in `prefs.ts`). 32px character frames (`characters.png`, by name: `frameOf`, `walkAnim` in
   `characters.ts`) drawn at 2x.
-- Map layers: ground layers (every `ground*` layer, in map order) and wall layers (every `walls*` layer: walls,
+- Map layers: ground layers (every `ground*` layer, in map order; hand-edited maps use `ground` = main ground,
+  `ground2` = terrain overlapping it, `ground3` = non-collision decorations, see `flatten-ground.mjs`; layers hidden
+  in Tiled are still drawn) and wall layers (every `walls*` layer: walls,
   walls2...; they collide and y-sort together, a later layer drawn over an earlier one on the same base) are baked into
   RenderTextures once (`bake` in `sortedWalls.ts`: live tilemap layers re-culled every tile each frame, 4.2 → 0.6 ms a
   frame on a desktop), in pieces of at most 2048 px (phones may not hold textures over 4096 px; the main city is
   4800x4480). Wall tiles are redrawn in layers y-sorted with the characters by their base row (`buildSortedWalls`;
-  each strip covers only its tiles' rows and columns). An optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision
+  each strip covers only its tiles' rows and columns, and tiles of one strip more than `STRIP_GAP` columns apart are
+  baked as separate pieces: one strip spanning the main city was mostly empty texture, ~390 MB in all). Baked pieces
+  off the camera are hidden every frame (`bakedPieces`: the main city's ~1400 pieces cost 2 ms a frame to draw on a
+  desktop, 0.5 ms culled). An optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision
   for the y-sort (walls' own tiles collide by the tileset's `collision` property).
 - Warps: maps link through `warp` rectangles in their `objects` layer (properties `map`, `spawn` = the arrival point's
   name there, `keepY` = keep the height: town and maze sit side by side, tops aligned, town's right edge ↔ maze's left
@@ -367,13 +372,28 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     hollow in the hedge face, eyes in it (2), head out through the leaves, crouch, leap, land, 2 leaves (particles), a
     sideways leap. Leaves use the hedge face's greens; no pixels come from the paid tileset.
 - `maps/`: `build-tiles` (Tiled map + its external tilesets, whose images are paid sheets in `vendor/paid/` →
-  `public/maps/<name>.png` with only the tiles the map uses, from all its tilesets + `<name>.json` with one tileset
+  `public/maps/<name>.png` with only the tiles the map uses, from all its tilesets, packed square (the main city's
+  ~17,000 tiles: 2112x2096; 32 a row would be 8000+ px tall, over most GPUs' texture limit) + `<name>.json` with one tileset
   "world" and tile ids remapped; each tile keeps its tileset's name and its id there as the `sheet` / `sheetId` tile
   properties; layers Tiled stores base64 / zlib-compressed become plain arrays, Phaser reads no compression), plus
   `public/maps/worlds.json` from `data/maps/*.world`. Two tileset families: `data/maps/modern-exteriors.tsj` (the
   complete LimeZu sheet, name "world": the town and the maze) and `data/maps/tilesets/<theme>.tsj` (the pack's 24 theme
   sheets, drawn at 16 px so each 32 px piece is 2x2 tiles, for new maps; they lack some of the complete sheet's tiles,
-  e.g. its plain grass, so the old maps were not converted).
+  e.g. its plain grass, so the old maps were not converted). Plus `data/maps/tilesets/autotiles.tsj`: the pack's Godot
+  autotile sheet (`vendor/paid/themes/Godot_Autotiles_32x32.png`, 26 blocks of 12x4 pieces in the "3x3 minimal" blob
+  layout, 8 tile rows a block: sidewalk on asphalt in six colours, sand/grass/water edges, hedges, iron fence, lane
+  markings), whose complete edge sets the theme sheets lack.
+  - `build-main-city.mjs`: the main city, planned by hand in code on the island template (the ground under it is read
+    from the island blockout, so the edges still meet `junction` and `city-north`): tile classes (water, sand, grass,
+    sidewalk, road, dirt) from rectangles and polygons → terrain layers (sidewalk/asphalt curbs from the autotile set,
+    grey sidewalks in the east), lane markings, zebra crossings, piers and a boardwalk from the camping sheet, then
+    buildings and props stamped by catalogue name (a modular shop is roof + floors + shopfront, `tower`), street lamps
+    along every road, iron-fenced villa gardens (their door paths are the gates), district `area` labels. Prints props
+    that found no room and walkable tiles left without ground. A scaffold: **overwrites** the .tmj (Tiled edits lost).
+    Its helpers are `tools/lib/map-builder.mjs`: tilesets + catalogue lookup, `stamp` (an object into the first free
+    walls layer, collision `all` / `base` rows / tree `trunk`, fully transparent cells skipped), corner-signature terrain
+    (`edgeSet`, `scored` for blob sets: picks the piece whose inside matches its corners), blob sets read from the
+    sidewalk block's layout (`blobSet` / `paintBlob`, for fences and hedges) and the .tmj writer.
   - `generate-world.mjs data/maps/island/layout.json [--only NAME] [--force]`: world template from a blockout picture
     (`data/maps/island/blockout.png`, 1 px = 1 tile, 1868x1688: traced from the owner's `sketch.png`, then made 4x as
     wide with smoothed coasts and roads redrawn as 1 px lines; colours in the layout's legend: sea, grass, desert,
@@ -394,13 +414,22 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   - `build-theme-tilesets.mjs`: the pack's ME_Theme_Sorter sheets → `vendor/paid/themes/` + one `.tsj` each (existing
     ones kept unless `--force`; new ones get `collision` where the same art has it in modern-exteriors.tsj).
   - `build-tile-catalog.mjs`: the pack's named Singles (one PNG per object) matched pixel for pixel into the theme
-    sheets → `data/maps/tile-catalog.json`, one line per object (theme, name, file, tileset, x/y/w/h tile rectangle):
-    maps are built by name, an object is looked at by opening its single. Helpers: `tools/lib/tile-hash.mjs`.
+    sheets → `data/maps/tile-catalog.json`, one line per object (theme, name, file, tileset, x/y/w/h tile rectangle;
+    `empty`: cells the single leaves transparent where the sheet has a neighbour's art, e.g. the bollard beside a street
+    lamp): maps are built by name, an object is looked at by opening its single. Helpers: `tools/lib/tile-hash.mjs`.
   - `hedge-maze.mjs`: maze layout (walls per grid line, extracted from the owner's maze picture) → hedge maze map:
     hedges auto-tiled from the sheet's hedge ring (flowered hedges after each fork of the right path, a subtle hint),
     meadows left/right, pine forests above/below (the only way across is the maze), ground decorations, the hidden
     `collision` layer and a `spawn` point at the entrance. **Overwrites** the .tmj (Tiled edits lost); the maze has
     been edited by hand since.
+  - `flatten-ground.mjs data/maps/<name>.tmj [--dry]`: sorts a map's ground layers into the owner's layout for hand
+    editing: `ground` the main ground (each cell's lowest visible terrain tile), `ground2` terrain overlapping it
+    (edges, transitions, piers over water), `ground3` non-collision decorations. Terrain = tiles of the terrain sheets
+    (`TERRAIN_SETS`: terrains-and-fences, autotiles, city-terrains), piers, and tiles no catalogue object names; the
+    rest of the catalogue is decoration. Terrain under an opaque terrain tile is dropped (an opaque decoration hides
+    nothing: the ground stays under it). A cell with three terrain tiles keeps the pair that changes the fewest pixels
+    (printed), two decorations on one tile stop the run. The generators stack one layer per terrain, water under
+    everything (main-city: 7 ground layers before; 97% of its cells need one terrain tile). Walls layers untouched.
 - `ai/`:
   - `arena`: brain vs brain win rates over seeded duels (every deck pairing, both seat orders) on all CPU cores.
     `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened

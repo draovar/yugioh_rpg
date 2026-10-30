@@ -3,7 +3,8 @@
 // tiles it uses, from any number of tilesets:
 //   data/maps/<name>.tmj + its tilesets data/maps/**/*.tsj (Tiled, committed) + their images in vendor/paid/ (private
 //   assets repo, gitignored)
-//   → public/maps/<name>.png (used tiles, 32 per row) + public/maps/<name>.json (the map with one tileset, "world", and
+//   → public/maps/<name>.png (used tiles, packed square: at least 32 a row, under phones' 4096 px texture limit while
+//     it can be) + public/maps/<name>.json (the map with one tileset, "world", and
 //     its tile ids remapped)
 // vendor/paid is a clone of the private Draovar/yugioh_rpg-assets repo (the deploy checks it out with a deploy key).
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -14,7 +15,6 @@ import sharp from "sharp";
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const MAPS = path.join(ROOT, "data/maps");
 const OUT = path.join(ROOT, "public/maps");
-const COLUMNS = 32;
 const FLIP_BITS = 0xe0000000;
 mkdirSync(OUT, { recursive: true });
 
@@ -67,6 +67,7 @@ async function pack(name) {
     }
   }
 
+  const COLUMNS = Math.max(32, Math.ceil(Math.sqrt(remap.size)));
   const rows = Math.ceil(remap.size / COLUMNS);
   const width = COLUMNS * tw, height = rows * th;
   const dst = Buffer.alloc(width * height * 4);

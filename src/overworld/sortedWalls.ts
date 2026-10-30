@@ -8,6 +8,32 @@ export function depthForY(y: number) {
 /** The largest side of one baked texture: phones may not hold textures over 4096 px (a big map takes several). */
 const CHUNK = 2048;
 
+/** Baked pieces this far (px) outside the camera's view are not drawn. */
+const CULL_MARGIN = 64;
+const baked = new WeakMap<Phaser.Scene, Phaser.GameObjects.RenderTexture[]>();
+
+/**
+ * A scene's baked pieces, hidden while off the camera: a city map bakes ~1400 of them (one per wall strip), which took
+ * 2 ms a frame to draw on a desktop, 0.4 ms culled. The camera's view is last frame's, hence the margin.
+ */
+function bakedPieces(scene: Phaser.Scene) {
+  let pieces = baked.get(scene);
+  if (!pieces) {
+    const own: Phaser.GameObjects.RenderTexture[] = pieces = [];
+    baked.set(scene, own);
+    const cull = () => {
+      const v = scene.cameras.main.worldView, m = CULL_MARGIN;
+      for (const p of own) p.visible = p.x < v.right + m && p.x + p.width > v.x - m && p.y < v.bottom + m && p.y + p.height > v.y - m;
+    };
+    scene.events.on("prerender", cull);
+    scene.events.once("shutdown", () => {
+      scene.events.off("prerender", cull);
+      baked.delete(scene);
+    });
+  }
+  return pieces;
+}
+
 /**
  * Static tile layers drawn once into textures (pieces of at most CHUNK px), which replace them: a tilemap layer re-culls
  * and re-submits every visible tile each frame, which kept phones busy (and hot) while nothing moved. All layers share
@@ -17,16 +43,23 @@ export function bake(scene: Phaser.Scene, layers: (Phaser.Tilemaps.TilemapLayer 
   const { x, y, width, height } = layers[0];
   for (let cy = 0; cy < height; cy += CHUNK) {
     for (let cx = 0; cx < width; cx += CHUNK) {
-      scene.add.renderTexture(x + cx, y + cy, Math.min(CHUNK, width - cx), Math.min(CHUNK, height - cy))
-        .setOrigin(0).setDepth(depth).draw(layers, -x - cx, -y - cy).render();
+      const piece = scene.add.renderTexture(x + cx, y + cy, Math.min(CHUNK, width - cx), Math.min(CHUNK, height - cy))
+        .setOrigin(0).setDepth(depth);
+      piece.draw(layers, -x - cx, -y - cy).render();
+      bakedPieces(scene).push(piece);
     }
   }
   for (const l of layers) l.destroy();
 }
 
+/** Wall tiles of one strip further apart than this many columns are baked separately. */
+const STRIP_GAP = 4;
+
 /**
  * Wall tiles that share a base y go into one layer, whose depth comes from the base y the same way characters get
- * theirs from their feet. So walls, the player and NPCs all sort together. Each layer only covers its tiles' rows and columns.
+ * theirs from their feet. So walls, the player and NPCs all sort together. Each layer only covers its tiles' rows and
+ * columns, and tiles far apart across the map (a lamp at one end, a house at the other) are baked as separate pieces,
+ * so the textures hold little but empty space.
  * Every walls layer gets its own strips (two layers can fill the same cell); a later layer is drawn over an earlier
  * one on the same base.
  */
@@ -39,12 +72,19 @@ export function buildSortedWalls(scene: Phaser.Scene, map: Phaser.Tilemaps.Tilem
     strips.get(key)!.tiles.push(tile);
   }
   for (const [key, { order, baseY, tiles }] of strips) {
-    const top = Math.min(...tiles.map((t) => t.y)), bottom = Math.max(...tiles.map((t) => t.y));
-    const left = Math.min(...tiles.map((t) => t.x)), right = Math.max(...tiles.map((t) => t.x));
-    const sorted = map.createBlankLayer(`walls_${key}`, tileset, left * map.tileWidth, top * map.tileHeight, right - left + 1, bottom - top + 1)!;
-    for (const t of tiles) sorted.putTileAt(t.index, t.x - left, t.y - top);
-    // -0.5 so a character standing exactly on the base is drawn in front.
-    bake(scene, [sorted], depthForY(baseY - 0.5) + order * 1e-7);
+    tiles.sort((a, b) => a.x - b.x);
+    for (let from = 0, piece = 0; from < tiles.length; piece++) {
+      let to = from + 1;
+      while (to < tiles.length && tiles[to].x - tiles[to - 1].x <= STRIP_GAP) to++;
+      const group = tiles.slice(from, to);
+      from = to;
+      const top = Math.min(...group.map((t) => t.y)), bottom = Math.max(...group.map((t) => t.y));
+      const left = group[0].x, right = group[group.length - 1].x;
+      const sorted = map.createBlankLayer(`walls_${key}_${piece}`, tileset, left * map.tileWidth, top * map.tileHeight, right - left + 1, bottom - top + 1)!;
+      for (const t of group) sorted.putTileAt(t.index, t.x - left, t.y - top);
+      // -0.5 so a character standing exactly on the base is drawn in front.
+      bake(scene, [sorted], depthForY(baseY - 0.5) + order * 1e-7);
+    }
   }
 }
 

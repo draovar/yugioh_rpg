@@ -6,7 +6,8 @@
 //   (default ../../assets/Modern_Exteriors_32x32/Modern_Exteriors_Complete_Singles_32x32, the unzipped pack, not in any repo)
 //   → data/maps/tile-catalog.json, one entry per line (grep it): { theme, name, file, tileset, x, y, w, h } = a w x h
 //     tile rectangle at column x, row y of data/maps/tilesets/<tileset>.tsj. Singles not found as one rectangle list
-//     each cell as "<tileset>:<id>" in `cells` instead (row by row, null = transparent or not found).
+//     each cell as "<tileset>:<id>" in `cells` instead (row by row, null = transparent or not found). `empty` lists the
+//     cells (row by row) of a rectangle that the single leaves transparent but the sheet fills with a neighbour's art.
 // The singles are 32x32-pixel art, so most objects cover an even number of 16x16 tiles.
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -65,7 +66,11 @@ for (const file of readdirSync(SINGLES).filter((f) => f.endsWith(".png")).sort()
     if (at) { found = { tileset: sheet.name, ...at }; break; }
   }
   if (found) {
-    entries.push({ ...entry, ...found, w: single.w, h: single.h });
+    // cells the single leaves transparent where the sheet has other art (a neighbouring object): not part of it
+    const { columns } = sheets.find((s) => s.name === found.tileset).set;
+    const sheetHashes = sheets.find((s) => s.name === found.tileset).hashes;
+    const empty = single.hashes.flatMap((h, i) => (!h && sheetHashes[(found.y + Math.floor(i / single.w)) * columns + found.x + (i % single.w)] ? [i] : []));
+    entries.push({ ...entry, ...found, w: single.w, h: single.h, ...(empty.length ? { empty } : {}) });
     rects++;
     continue;
   }

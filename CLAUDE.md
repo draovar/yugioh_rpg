@@ -46,8 +46,10 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run build-tiles` | overworld maps: `data/maps/<name>.tmj` (Tiled, external tilesets) → `public/maps/<name>.png` + `.json` (needs `vendor/paid/`) |
 | `node tools/maps/build-theme-tilesets.mjs [folder]` | the pack's theme sheets (ME_Theme_Sorter) → `vendor/paid/themes/` + `data/maps/tilesets/<theme>.tsj`, the tilesets for new maps (existing .tsj kept unless `--force`) |
 | `node tools/maps/build-tile-catalog.mjs [folder]` | the pack's named Singles → `data/maps/tile-catalog.json` (object name → tileset + tile rectangle; grep it) |
-| `node tools/maps/generate-world.mjs data/maps/island/layout.json [--only NAME] [--force]` | blockout picture (1 px = 1 tile) → the island's maps (rectangles named in `data/maps/island/layout.json`, along the terrain: `main-city`, `desert-west`...) + `data/maps/island.world` (terrain, roads, trees, collision); existing maps kept unless `--force` (Tiled edits lost), then `build-tiles` |
+| `node tools/maps/generate-world.mjs data/maps/island/layout.json [--only NAME] [--force]` | blockout picture (1 px = 1 tile) → the island's maps (rectangles named in `data/maps/island/layout.json`, along the terrain: `main-city`, `desert-west`...) + `data/maps/island.world` (terrain, roads, trees, collision); existing maps kept unless `--force` (Tiled edits lost; `main-city` comes from `build-main-city` instead: leave it out), then `build-tiles` |
+| `node tools/maps/build-main-city.mjs` | the main city, laid out in code on the island template (districts, roads, buildings and props by catalogue name, fenced gardens, piers; helpers in `tools/lib/map-builder.mjs`); **overwrites** `data/maps/main-city.tmj` (Tiled edits lost), then `build-tiles`; main-city is edited by hand in Tiled now: don't rerun it |
 | `node tools/maps/hedge-maze.mjs data/maps/maze-layout.json data/maps/maze.tmj` | maze layout → hedge maze map; **overwrites** the .tmj (Tiled edits lost), then `build-tiles` |
+| `node tools/maps/flatten-ground.mjs data/maps/<name>.tmj [--dry]` | a map's ground layers sorted into the owner's layout: `ground` = main ground, `ground2` = terrain overlapping it where needed, `ground3` = non-collision decorations (then walls, walls2, walls3); hidden tiles dropped, same pixels; save in Tiled first, reload after, then `build-tiles` |
 | `npm run build-characters` | overworld sprites from `data/characters/` (per `characters.json`) → `public/assets/overworld/` + the contact sheet `docs/characters.png`, then the hedge ambush sheets (`tools/art/build-ambush.mjs`) |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/art/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
@@ -188,5 +190,5 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
 
 Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-6 (pool generator, hand-picked
 older card versions, full-size data + art, random-deck smoke, UI checks, May 2008 banlist) done, next is phase 7 (NPC decks as data files). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
-`docs/ai-reports.md`, only clear bugs are fixed right away. Overworld: trainer line-of-sight challenges next.
+`docs/ai-reports.md`, only clear bugs are fixed right away. Overworld: the main city is built (`build-main-city`) and now edited by hand in Tiled, trainer line-of-sight challenges next.
 RPG loop: card collection, rewards/boosters, story, bosses, saving. Full list: `docs/roadmap.md`.
