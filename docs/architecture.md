@@ -394,10 +394,18 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     frames drawn from that character's down and side frames → `public/assets/overworld/ambush/<name>.png`: a dark
     hollow in the hedge face, eyes in it (2), head out through the leaves, crouch, leap, land, 2 leaves (particles), a
     sideways leap. Leaves use the hedge face's greens; no pixels come from the paid tileset.
-  - `build-billboards`: billboard designs drawn in code (`DESIGNS`: tournament, cardShop, museum, booster) on the
-    custom sheet's blank billboard (tile rows 4-7) → `vendor/paid/custom/yugioh_tileset.png` from tile row 15, four rows
-    each (rows 0-14, the hand-made tiles, are kept byte for byte), + `yugioh.tsj`'s size. Drawn in 2x2 art pixels like
-    the pack's 32x32 art; text in tiny5 and a 5x7 headline font. New designs go at the end so tile ids stay put.
+  - `build-yugioh-sheet`: the custom sheet's generated pieces (`PIECES`), each drawn in code on a base and put at its
+    own tile position → `vendor/paid/custom/yugioh_tileset.png`, 20 tiles wide (rows 0-14, the hand-made tiles, kept
+    byte for byte) + `yugioh.tsj`'s size. Columns 0-9: billboards on the sheet's blank billboard (rows 15-30), plaque
+    signs "Cards" / "Packs" on the pack's plain bakery sign with the bread and word cleared (31-40), "CARD SHOP" /
+    "DUEL ARENA" panels in the pack's empty sign frame (41-50), two small ads on the pack's mall wall (51-52), the pack's
+    hardware sign with a Duel Disk for its hammer (cols 0-15, rows 53-60); columns 10-19: "GAME STORE" on the pack's gun
+    store sign, a game pad for the gun (rows 15-18). Hidden parts of a pack sign are rebuilt from its symmetric frame
+    and each row's own colour. Pack pieces are read from `vendor/paid/themes/` at run time, so the script holds no paid
+    pixels. Drawn in 2x2 art pixels like the pack's 32x32 art; text in tiny5, a 5x7 headline font, a bold script like
+    the pack's "Bakery" and worn capitals like its "GUN STORE". Pieces never move (placed tiles keep their ids); new
+    ones go in free space, overlaps are refused. (The sheet was 10 wide until the hardware sign: main-city's tiles from
+    it were renumbered then, the built map identical.)
 - `maps/`: `build-tiles` (Tiled map + its external tilesets, whose images are paid sheets in `vendor/paid/` →
   `public/maps/<name>.png` with only the tiles the map uses, from all its tilesets, packed square (the main city's
   ~17,000 tiles: 2112x2096; 32 a row would be 8000+ px tall, over most GPUs' texture limit) + `<name>.json` with one tileset
@@ -411,7 +419,7 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   layout, 8 tile rows a block: sidewalk on asphalt in six colours, sand/grass/water edges, hedges, iron fence, lane
   markings), whose complete edge sets the theme sheets lack. Custom art goes the same way: its image in
   `vendor/paid/custom/`, its `.tsj` in `data/maps/tilesets/` (`yugioh.tsj`: `custom/yugioh_tileset.png`, 16 px tiles;
-  rows 0-14 drawn by hand, the billboards below them from `build-billboards`).
+  rows 0-14 drawn by hand, the pieces below them from `build-yugioh-sheet`).
   - `build-main-city.mjs`: the main city, planned by hand in code on the island template (the ground under it is read
     from the island blockout, so the edges still meet `junction` and `city-north`): tile classes (water, sand, grass,
     sidewalk, road, dirt) from rectangles and polygons → terrain layers (sidewalk/asphalt curbs from the autotile set,
