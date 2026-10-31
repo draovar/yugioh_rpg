@@ -394,6 +394,10 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     frames drawn from that character's down and side frames → `public/assets/overworld/ambush/<name>.png`: a dark
     hollow in the hedge face, eyes in it (2), head out through the leaves, crouch, leap, land, 2 leaves (particles), a
     sideways leap. Leaves use the hedge face's greens; no pixels come from the paid tileset.
+  - `build-billboards`: billboard designs drawn in code (`DESIGNS`: tournament, cardShop, museum, booster) on the
+    custom sheet's blank billboard (tile rows 4-7) → `vendor/paid/custom/yugioh_tileset.png` from tile row 15, four rows
+    each (rows 0-14, the hand-made tiles, are kept byte for byte), + `yugioh.tsj`'s size. Drawn in 2x2 art pixels like
+    the pack's 32x32 art; text in tiny5 and a 5x7 headline font. New designs go at the end so tile ids stay put.
 - `maps/`: `build-tiles` (Tiled map + its external tilesets, whose images are paid sheets in `vendor/paid/` →
   `public/maps/<name>.png` with only the tiles the map uses, from all its tilesets, packed square (the main city's
   ~17,000 tiles: 2112x2096; 32 a row would be 8000+ px tall, over most GPUs' texture limit) + `<name>.json` with one tileset
@@ -405,7 +409,9 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   e.g. its plain grass, so the old maps were not converted). Plus `data/maps/tilesets/autotiles.tsj`: the pack's Godot
   autotile sheet (`vendor/paid/themes/Godot_Autotiles_32x32.png`, 26 blocks of 12x4 pieces in the "3x3 minimal" blob
   layout, 8 tile rows a block: sidewalk on asphalt in six colours, sand/grass/water edges, hedges, iron fence, lane
-  markings), whose complete edge sets the theme sheets lack.
+  markings), whose complete edge sets the theme sheets lack. Custom art goes the same way: its image in
+  `vendor/paid/custom/`, its `.tsj` in `data/maps/tilesets/` (`yugioh.tsj`: `custom/yugioh_tileset.png`, 16 px tiles;
+  rows 0-14 drawn by hand, the billboards below them from `build-billboards`).
   - `build-main-city.mjs`: the main city, planned by hand in code on the island template (the ground under it is read
     from the island blockout, so the edges still meet `junction` and `city-north`): tile classes (water, sand, grass,
     sidewalk, road, dirt) from rectangles and polygons → terrain layers (sidewalk/asphalt curbs from the autotile set,

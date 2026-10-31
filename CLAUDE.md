@@ -52,6 +52,7 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `node tools/maps/hedge-maze.mjs data/maps/maze-layout.json data/maps/maze.tmj` | maze layout → hedge maze map; **overwrites** the .tmj (Tiled edits lost), then `build-tiles` |
 | `node tools/maps/flatten-ground.mjs data/maps/<name>.tmj [--dry]` | a map's ground layers sorted into the owner's layout: `ground` = main ground, `ground2` = terrain overlapping it where needed, `ground3` = non-collision decorations (then walls, walls2, walls3); hidden tiles dropped, same pixels; save in Tiled first, reload after, then `build-tiles` |
 | `npm run build-characters` | overworld sprites from `data/characters/` (per `characters.json`) → `public/assets/overworld/` + the contact sheet `docs/characters.png`, then the hedge ambush sheets (`tools/art/build-ambush.mjs`) |
+| `node tools/art/build-billboards.mjs` | billboard designs (in code: `DESIGNS`) on the custom sheet's blank billboard → `vendor/paid/custom/yugioh_tileset.png` from tile row 15 (earlier rows kept) + `yugioh.tsj`'s size; then `build-tiles` |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/art/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/` |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/art/build-tiny5-font.mjs`) |
