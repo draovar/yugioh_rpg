@@ -183,7 +183,10 @@ passes the `NetDuel` to `Duel`.
   made on first use): a forest has thousands of pieces, and the scene sorted them all by depth every frame the
   player moved (forest-south 2.3 → 1.0 ms a frame on a desktop).
   An optional hidden `collision` tile layer blocks wherever it has a tile and counts as collision
-  for the y-sort (walls' own tiles collide by the tileset's `collision` property).
+  for the y-sort (walls' own tiles collide by the tileset's `collision` property). An object drawn over another one
+  (on a later walls layer, from another sheet than the cell's first tile: a street lamp in front of a bar) sorts by its
+  own sheet's `collision` tiles below it in the column when there are any, not by the other object's collision cells
+  it overlaps (those split it: head behind the player, pole in front).
 - Warps: maps link through `warp` rectangles in their `objects` layer (properties `map`, `spawn` = the arrival point's
   name there, `keepY` = keep the height: town and maze sit side by side, tops aligned, town's right edge ↔ maze's left
   meadow, by the entrance); a warp fades out and restarts the scene on the target map (loaded on first visit in

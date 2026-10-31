@@ -251,6 +251,10 @@ function touchingGroups(tiles: Phaser.Tilemaps.Tile[]): Phaser.Tilemaps.Tile[][]
  * A cell of the "collision" layer (`blockers`) counts as a collision tile, with or without a wall tile on it (a tree
  * whose trunk is drawn on a ground layer still sorts by it). All walls layers count together: a crown on walls2 sorts
  * by the trunk below it on walls.
+ * Except for an object drawn over another one (a tile on a later walls layer, from another sheet than the cell's
+ * first tile: a street lamp in front of a bar): if its own sheet's tiles below it in the column have the `collision`
+ * property, it sorts by those, ignoring the other object's collision on the way (the bar's "collision" layer cells
+ * would otherwise split the lamp: head behind a character, pole in front).
  */
 function wallBaseY(layers: Phaser.Tilemaps.TilemapLayer[], blockers: Phaser.Tilemaps.TilemapLayer | null): Map<Phaser.Tilemaps.Tile, number> {
   const { width: w, height: h } = layers[0].layer;
@@ -258,19 +262,26 @@ function wallBaseY(layers: Phaser.Tilemaps.TilemapLayer[], blockers: Phaser.Tile
   // Per cell, read once (a forest made millions of tile lookups): a wall tile on any walls layer (`occupied`), and
   // a "collision" layer cell or a wall tile with the `collision` property (`solid`).
   const isTile = (t: Phaser.Tilemaps.Tile | null): t is Phaser.Tilemaps.Tile => !!t && t.index !== -1;
+  const props = (t: Phaser.Tilemaps.Tile) => t.properties as { collision?: boolean; sheet?: string };
+  // ...and the sheet of the cell's first wall tile (`firstSheet`).
   const occupiedAt = new Uint8Array(w * h), solidAt = new Uint8Array(w * h), blockedAt = new Uint8Array(w * h);
+  const firstSheet: (string | undefined)[] = new Array(w * h);
   blockers?.layer.data.forEach((row, y) => row.forEach((t, x) => { if (isTile(t)) blockedAt[y * w + x] = solidAt[y * w + x] = 1; }));
   const walls = layers.map((l) => l.layer.data);
   for (const data of walls) {
     data.forEach((row, y) => row.forEach((t, x) => {
       if (!isTile(t)) return;
+      if (!occupiedAt[y * w + x]) firstSheet[y * w + x] = props(t).sheet;
       occupiedAt[y * w + x] = 1;
-      if ((t.properties as { collision?: boolean })?.collision) solidAt[y * w + x] = 1;
+      if (props(t).collision) solidAt[y * w + x] = 1;
     }));
   }
-  const collides = (t: Phaser.Tilemaps.Tile) => !!(t.properties as { collision?: boolean })?.collision || !!blockedAt[t.y * w + t.x];
+  const collides = (t: Phaser.Tilemaps.Tile) => !!props(t).collision || !!blockedAt[t.y * w + t.x];
   const occupied = (x: number, y: number) => occupiedAt[y * w + x] === 1;
   const solid = (x: number, y: number) => solidAt[y * w + x] === 1;
+  /** A wall tile of `sheet` with the `collision` property in the cell, on any walls layer. */
+  const sheetSolid = (x: number, y: number, sheet: string | undefined) =>
+    walls.some((data) => { const t = data[y][x]; return isTile(t) && !!props(t).collision && props(t).sheet === sheet; });
 
   // Groups of touching wall cells (any walls layer): the lowest collision bottom of each.
   const groupBase = new Int32Array(w * h).fill(-1);
@@ -298,11 +309,21 @@ function wallBaseY(layers: Phaser.Tilemaps.TilemapLayer[], blockers: Phaser.Tile
   }
 
   const baseYs = new Map<Phaser.Tilemaps.Tile, number>();
-  for (const data of walls) {
+  walls.forEach((data, order) => {
     for (const tile of data.flat()) {
       if (!isTile(tile)) continue;
       let baseY = tile.bottom;
-      if (!collides(tile)) {
+      const { collision, sheet } = props(tile);
+      // Drawn over another sheet's object: its own sheet's collision tiles below it, if the column reaches them.
+      let own = -1;
+      if (!collision && order > 0 && firstSheet[tile.y * w + tile.x] !== sheet) {
+        let y = tile.y + 1;
+        while (y < h && occupied(tile.x, y) && !sheetSolid(tile.x, y, sheet)) y++;
+        if (y < h && sheetSolid(tile.x, y, sheet)) own = y;
+      }
+      if (own >= 0) {
+        for (let y = own; y < h && sheetSolid(tile.x, y, sheet);) baseY = (++y) * tileH;
+      } else if (!collides(tile)) {
         // Walk down the column to the first collision tile, then to the end of that run.
         let y = tile.y + 1;
         while (y < h && occupied(tile.x, y) && !solid(tile.x, y)) y++;
@@ -315,6 +336,6 @@ function wallBaseY(layers: Phaser.Tilemaps.TilemapLayer[], blockers: Phaser.Tile
       }
       baseYs.set(tile, baseY);
     }
-  }
+  });
   return baseYs;
 }
