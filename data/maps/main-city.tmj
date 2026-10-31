@@ -320,17 +320,8 @@
          "source":"modern-exteriors.tsj"
         }, 
         {
-         "columns":10,
          "firstgid":693813,
-         "image":"..\/..\/vendor\/paid\/custom\/yugioh_tileset.png",
-         "imageheight":496,
-         "imagewidth":160,
-         "margin":0,
-         "name":"yugioh_tileset",
-         "spacing":0,
-         "tilecount":310,
-         "tileheight":16,
-         "tilewidth":16
+         "source":"tilesets\/yugioh.tsj"
         }],
  "tilewidth":16,
  "type":"map",
