@@ -1,7 +1,9 @@
 // The card shop (a "shop" spot in the overworld, or `?shop`), drawn like a real shop: on the left a glass display case
-// on a panelled wall, two shelves of three booster displays (a set's box: lid standing up behind, packs inside, the
-// set code on the front lip, a price label on the shelf edge). Clicking (tapping) a pack, or the arrow keys, picks it:
-// its front pack lifts out of the box. On the right the checklist on Runewood's info board: the picked set's name,
+// on a panelled wall, shelves of three booster displays (a set's box: lid standing up behind, packs inside, the set
+// code on the front lip, a price label on the shelf edge), two shelves in view; with more, the shelves scroll smoothly
+// a row at a time (wheel, swipe, the bobbing arrow tabs on the case's frame, or the arrow keys picking a pack out of
+// view).
+// Clicking (tapping) a pack, or the arrow keys, picks it: its front pack lifts out of the box. On the right the checklist on Runewood's info board: the picked set's name,
 // release, size, every card it drops with its rarity (on the paper inset, scrolls; clicking a card opens its details
 // over the checklist, like the deck editor's), the price, how many packs (- / +) and BUY: the packs open one after
 // another (PackOpening.ts). The card collection isn't built yet: packs are free for now (no chips spent) and the pulled
@@ -21,6 +23,7 @@ import { setViewMode } from "../ui/view.ts";
 import { LIST_BUTTON_H, makeListButton } from "../ui/widgets.ts";
 import { BOOSTERS, CARDS_PER_PACK, RARITIES, pullPack, rarityLook, type BoosterList, type BoosterStock } from "./boosters.ts";
 import { PackOpening } from "./PackOpening.ts";
+import { rarityPack } from "../dev/rarityPack.ts";
 
 /** What the overworld hands over. */
 export interface ShopData {
@@ -49,6 +52,12 @@ const BOX_W = 92, LIP_H = 16, LID_ABOVE = 8;
 /** Packs behind the front one, each this much higher, darker. */
 const BEHIND = [{ dy: -8, tint: 0x6a6a6a }, { dy: -4, tint: 0x9a9a9a }];
 const LIFT = 8, LIFT_MS = 80;
+/** Shelves in view; more scroll (a row at a time, SCROLL_MS each). A swipe on the case this long scrolls a row (touch,
+ * or a mouse drag); so do this many wheel units (a mouse notch is ~100). */
+const VISIBLE_ROWS = 2, SCROLL_MS = 250, SWIPE_PX = 16, WHEEL_STEP = 50;
+/** The scroll cues' arrows bob a pixel this often. */
+const CUE_BOB_MS = 600;
+const SHELF_ROWS = Math.ceil(BOOSTERS.length / COLS);
 const TAG = { w: 24, h: 9 };
 
 /**
@@ -111,7 +120,16 @@ export class Shop extends Phaser.Scene {
   private chips = 0;
   private picked = 0;
   private packs: Phaser.GameObjects.Container[] = [];
+  /** Each pack's hit zone (only the rows in view take clicks). */
+  private zones: Phaser.GameObjects.Zone[] = [];
   private tags!: Phaser.GameObjects.Graphics;
+  /** Everything on the shelves; it moves up by whole rows, clipped to the case's inside (a mask on its parent). */
+  private shelfRows!: Phaser.GameObjects.Container;
+  /** The first row in view, and whether the shelves are moving to it. */
+  private shelfRow = 0;
+  private scrolling = false;
+  /** The scroll cues on the case's frame: which way (-1 up, 1 down), the tab, its bobbing arrow at rest at restY. */
+  private cues: { by: -1 | 1; root: Phaser.GameObjects.Container; arrow: Phaser.GameObjects.Graphics; restY: number }[] = [];
   private nameText!: Phaser.GameObjects.BitmapText;
   private nameShadow!: Phaser.GameObjects.BitmapText;
   private factsText!: Phaser.GameObjects.BitmapText;
@@ -145,6 +163,10 @@ export class Shop extends Phaser.Scene {
     this.chips = data.chips ?? 0;
     this.picked = 0;
     this.packs = [];
+    this.zones = [];
+    this.shelfRow = 0;
+    this.scrolling = false;
+    this.cues = [];
     this.chipTexts = [];
     this.nameTexts = [];
     this.scrollRow = 0;
@@ -174,9 +196,9 @@ export class Shop extends Phaser.Scene {
     this.lists = new Map(((this.cache.json.get(LISTS_KEY) as BoosterList[] | undefined) ?? []).map((l) => [l.code, l]));
 
     this.drawRoom();
-    BOOSTERS.forEach((b, i) => this.packs.push(this.add.container(...this.packXY(i), this.packPicture(b))));
-    this.drawFronts();
+    this.drawShelves();
     this.drawGlass();
+    this.makeCues();
     this.drawChecklist();
 
     text(this, 10, 12, `CHIPS: ${this.chips}`, { color: C.light });
@@ -186,6 +208,7 @@ export class Shop extends Phaser.Scene {
     this.input.keyboard?.on("keydown", (e: KeyboardEvent) => this.handleKey(e.code));
 
     this.packs[0].y -= LIFT;
+    this.setZones();
     this.showSet();
   }
 
@@ -202,7 +225,7 @@ export class Shop extends Phaser.Scene {
     return [cx - PACK.w / 2, shelfTop - PACK.h];
   }
 
-  // --- The room: wall, sign, display case, shelves, box lids (baked: none of it changes) -------------------------
+  // --- The room: wall, sign, display case (baked: none of it changes) --------------------------------------------
 
   private drawRoom() {
     const g = this.make.graphics({}, false);
@@ -222,16 +245,31 @@ export class Shop extends Phaser.Scene {
     g.fillStyle(C.woodEdge).fillRect(IN.x - 1, IN.y - 1, IN.w + 2, IN.h + 2);
     g.fillStyle(C.back).fillRect(IN.x, IN.y, IN.w, IN.h);
     g.fillStyle(C.backShadow).fillRect(IN.x, IN.y, IN.w, 3);
+    const baked = this.add.renderTexture(0, 0, 640, 360).setOrigin(0);
+    baked.draw(g).render();
+    g.destroy();
 
-    for (let row = 0; row < 2; row++) {
+    text(this, CASE.x + CASE.w / 2, 10, "CARD SHOP", { color: C.signInk, scale: 2, originX: 0.5 });
+  }
+
+  /**
+   * The shelves and everything on them, in `shelfRows`: per row a shelf; per display its lid standing up behind, the
+   * packs further back in the box (darker), the front pack, the lip with the set code, the price label, a hit zone
+   * (covering the lifted pack too). Its parent clips it to the case's inside.
+   */
+  private drawShelves() {
+    this.shelfRows = this.add.container(0, 0);
+    const clip = this.make.graphics({}, false).fillStyle(0xffffff).fillRect(IN.x, IN.y, IN.w, IN.h);
+    this.add.container(0, 0, [this.shelfRows]).enableFilters().filters!.internal.addMask(clip);
+
+    const g = this.add.graphics();
+    for (let row = 0; row < SHELF_ROWS; row++) {
       const top = IN.y + row * ROW_H + SHELF_TOP;
       g.fillStyle(C.woodLight).fillRect(IN.x, top, IN.w, SHELF_FACE);
       g.fillStyle(C.wood).fillRect(IN.x, top + SHELF_FACE, IN.w, SHELF_FRONT);
       g.fillStyle(C.woodEdge).fillRect(IN.x, top + SHELF_FACE + SHELF_FRONT, IN.w, 1);
       g.fillStyle(C.backShadow).fillRect(IN.x, top + SHELF_FACE + SHELF_FRONT + 1, IN.w, 2);
     }
-
-    // Box lids standing up behind the packs, and the packs further back in each box (darker).
     BOOSTERS.forEach((b, i) => {
       const { cx, shelfTop } = this.cell(i);
       const top = shelfTop - PACK.h + BEHIND[0].dy - LID_ABOVE, left = cx - BOX_W / 2;
@@ -239,16 +277,110 @@ export class Shop extends Phaser.Scene {
       g.fillStyle(shade(b.color, -10)).fillRect(left, top, BOX_W, 1);
       g.fillStyle(shade(b.color, -55)).fillRect(left, top + 1, 1, shelfTop - top - 1).fillRect(left + BOX_W - 1, top + 1, 1, shelfTop - top - 1);
     });
-    const baked = this.add.renderTexture(0, 0, 640, 360).setOrigin(0);
-    baked.draw(g).render();
-    g.destroy();
+    this.shelfRows.add(g);
 
-    text(this, CASE.x + CASE.w / 2, 10, "CARD SHOP", { color: C.signInk, scale: 2, originX: 0.5 });
     BOOSTERS.forEach((b, i) => {
       const [x, y] = this.packXY(i);
-      if (!this.textures.exists(packKey(b))) return;
-      for (const p of BEHIND) this.add.image(x, y + p.dy, packKey(b)).setOrigin(0).setTint(p.tint);
+      if (this.textures.exists(packKey(b))) {
+        for (const p of BEHIND) this.shelfRows.add(this.add.image(x, y + p.dy, packKey(b)).setOrigin(0).setTint(p.tint));
+      }
     });
+    BOOSTERS.forEach((b, i) => {
+      const pack = this.add.container(...this.packXY(i), this.packPicture(b));
+      this.packs.push(pack);
+      this.shelfRows.add(pack);
+    });
+
+    const lips = this.add.graphics();
+    this.shelfRows.add(lips);
+    BOOSTERS.forEach((b, i) => {
+      const { cx, shelfTop } = this.cell(i), left = cx - BOX_W / 2, top = shelfTop - LIP_H;
+      lips.fillStyle(shade(b.color, -45)).fillRect(left, top, BOX_W, LIP_H);
+      lips.fillStyle(b.color).fillRect(left + 1, top + 1, BOX_W - 2, LIP_H - 1);
+      lips.fillStyle(shade(b.color, 20)).fillRect(left + 1, top + 1, BOX_W - 2, 1);
+      this.shelfRows.add([
+        text(this, cx + 1, top + 5, b.code, { color: shade(b.color, -50), scale: 2, originX: 0.5 }),
+        text(this, cx, top + 4, b.code, { color: 0xffffff, scale: 2, originX: 0.5 }),
+      ]);
+    });
+    this.tags = this.add.graphics();
+    this.shelfRows.add(this.tags);
+    BOOSTERS.forEach((b, i) => {
+      const { cx, shelfTop } = this.cell(i);
+      this.shelfRows.add(text(this, cx, shelfTop + SHELF_FACE + 3, String(b.price), { color: C.ink, originX: 0.5 }));
+      const [x, y] = this.packXY(i);
+      const hit = this.add.zone(x, y - LIFT, PACK.w, PACK.h + LIFT).setOrigin(0).setInteractive({ useHandCursor: true });
+      // A press that drags (a swipe) scrolls instead.
+      hit.on("pointerup", (p: Phaser.Input.Pointer) => { if (Math.abs(p.y - p.downY) <= DRAG_PX) this.pick(i); });
+      this.zones.push(hit);
+      this.shelfRows.add(hit);
+    });
+
+    // Swiping over the case (touch, or a mouse drag) scrolls it a row.
+    this.input.on("pointerup", (p: Phaser.Input.Pointer) => {
+      const inCase = p.downX >= IN.x && p.downX < IN.x + IN.w && p.downY >= IN.y && p.downY < IN.y + IN.h;
+      if (inCase && !this.opening && Math.abs(p.y - p.downY) > SWIPE_PX) this.scrollShelves(p.y < p.downY ? 1 : -1);
+    });
+  }
+
+  /** Scrolls the shelves `by` rows (smoothly; one move at a time), as far as there are rows. */
+  private scrollShelves(by: number) {
+    const to = Phaser.Math.Clamp(this.shelfRow + by, 0, Math.max(0, SHELF_ROWS - VISIBLE_ROWS));
+    if (this.scrolling || to === this.shelfRow) return;
+    this.shelfRow = to;
+    this.scrolling = true;
+    this.setZones();
+    this.showCues();
+    this.tweens.add({
+      targets: this.shelfRows, y: -to * ROW_H, duration: SCROLL_MS, ease: "Sine.easeInOut",
+      onComplete: () => {
+        this.scrolling = false;
+        this.setZones();
+      },
+    });
+  }
+
+  /** Only the packs on the rows in view take clicks, none while the shelves move. */
+  private setZones() {
+    this.zones.forEach((z, i) => {
+      const row = Math.floor(i / COLS);
+      z.input!.enabled = !this.scrolling && row >= this.shelfRow && row < this.shelfRow + VISIBLE_ROWS;
+    });
+  }
+
+  /**
+   * Scroll cues (only with more rows than fit): a small tab like the shop's sign on the case's top / bottom frame, a
+   * gold arrow in it bobbing a pixel toward the rows out of view (pixel steps, CUE_BOB_MS apart); shown while the
+   * shelves can scroll that way. Clicking one scrolls a row.
+   */
+  private makeCues() {
+    if (SHELF_ROWS <= VISIBLE_ROWS) return;
+    const cx = CASE.x + CASE.w / 2, w = 17, h = 9;
+    this.cues = ([-1, 1] as const).map((by) => {
+      // Top: across the top frame, under the sign; bottom: across the bottom frame.
+      const y = by < 0 ? CASE.y - 2 : CASE.y + CASE.h - h + 2;
+      const tab = this.add.graphics().fillStyle(C.signEdge).fillRect(cx - 8, y, w, h).fillStyle(C.sign).fillRect(cx - 7, y + 1, w - 2, h - 2);
+      // 7 wide, 4 tall: rows 1, 3, 5, 7 px pointing up, the reverse pointing down.
+      const arrow = this.add.graphics({ x: cx, y: y + 2 });
+      for (let k = 0; k < 4; k++) arrow.fillStyle(C.signInk).fillRect(-k, by < 0 ? k : 3 - k, 2 * k + 1, 1);
+      const hit = this.add.zone(cx - 24, y - 2, 48, h + 4).setOrigin(0).setInteractive({ useHandCursor: true });
+      hit.on("pointerup", () => { if (!this.opening) this.scrollShelves(by); });
+      return { by, root: this.add.container(0, 0, [tab, arrow, hit]).setDepth(3), arrow, restY: y + 2 };
+    });
+    let out = false;
+    this.time.addEvent({
+      delay: CUE_BOB_MS, loop: true,
+      callback: () => {
+        out = !out;
+        for (const c of this.cues) c.arrow.y = c.restY + (out ? c.by : 0);
+      },
+    });
+    this.showCues();
+  }
+
+  /** Each cue shows while the shelves can scroll its way. */
+  private showCues() {
+    for (const c of this.cues) c.root.setVisible(c.by < 0 ? this.shelfRow > 0 : this.shelfRow < SHELF_ROWS - VISIBLE_ROWS);
   }
 
   /** The pack's picture, or a blank pack with its set code when the picture is missing. */
@@ -256,25 +388,6 @@ export class Shop extends Phaser.Scene {
     if (this.textures.exists(packKey(b))) return [this.add.image(0, 0, packKey(b)).setOrigin(0)];
     const g = this.add.graphics().fillStyle(0x8a8a8a).fillRect(0, 0, PACK.w, PACK.h).fillStyle(0x6a6a6a).fillRect(3, 3, PACK.w - 6, PACK.h - 6);
     return [g, text(this, PACK.w / 2, PACK.h / 2 - 2, b.code, { color: 0xffffff, originX: 0.5 })];
-  }
-
-  /** In front of the packs: each box's lip with the set code, the price labels on the shelf edge, the hit zones. */
-  private drawFronts() {
-    const g = this.add.graphics();
-    BOOSTERS.forEach((b, i) => {
-      const { cx, shelfTop } = this.cell(i), left = cx - BOX_W / 2, top = shelfTop - LIP_H;
-      g.fillStyle(shade(b.color, -45)).fillRect(left, top, BOX_W, LIP_H);
-      g.fillStyle(b.color).fillRect(left + 1, top + 1, BOX_W - 2, LIP_H - 1);
-      g.fillStyle(shade(b.color, 20)).fillRect(left + 1, top + 1, BOX_W - 2, 1);
-      text(this, cx + 1, top + 5, b.code, { color: shade(b.color, -50), scale: 2, originX: 0.5 });
-      text(this, cx, top + 4, b.code, { color: 0xffffff, scale: 2, originX: 0.5 });
-      text(this, cx, shelfTop + SHELF_FACE + 3, String(b.price), { color: C.ink, originX: 0.5 }).setDepth(1);
-      // The hit area covers the lifted pack too.
-      const [x, y] = this.packXY(i);
-      const hit = this.add.zone(x, y - LIFT, PACK.w, PACK.h + LIFT).setOrigin(0).setInteractive({ useHandCursor: true });
-      hit.on("pointerup", () => this.pick(i));
-    });
-    this.tags = this.add.graphics();
   }
 
   /** The price labels, the picked one yellow. */
@@ -332,8 +445,18 @@ export class Shop extends Phaser.Scene {
 
     // The list scrolls by the wheel or by dragging it (touch); a click (tap) on a card that doesn't drag opens its
     // details; the row under the pointer is highlighted.
+    // Over the display case the wheel scrolls the shelves instead (a row per WHEEL_STEP units).
+    let wheel = 0;
     this.input.on("wheel", (p: Phaser.Input.Pointer, _: unknown, __: number, dy: number) => {
-      if (p.x >= BOARD.x && !this.opening && !this.details.root.visible) this.scrollTo(this.scrollRow + Math.sign(dy) * 3);
+      if (this.opening) return;
+      if (p.x >= BOARD.x && !this.details.root.visible) this.scrollTo(this.scrollRow + Math.sign(dy) * 3);
+      else if (p.x >= CASE.x && p.x < CASE.x + CASE.w && p.y >= CASE.y && p.y < CASE.y + CASE.h) {
+        wheel += dy;
+        if (Math.abs(wheel) >= WHEEL_STEP) {
+          this.scrollShelves(Math.sign(wheel));
+          wheel = 0;
+        }
+      }
     });
     const rowAt = (y: number) => this.scrollRow + Math.floor((y - LIST.y) / LIST.rowH);
     const zone = this.add.zone(LIST.x, LIST.y, SCROLL.x - SCROLL_REACH - LIST.x, SCROLL.h).setOrigin(0).setInteractive({ useHandCursor: true });
@@ -538,6 +661,10 @@ export class Shop extends Phaser.Scene {
     lift(this.picked, false);
     lift(i, true);
     this.picked = i;
+    // A pack on a row out of view (picked with the arrow keys) scrolls it in.
+    const row = Math.floor(i / COLS);
+    if (row < this.shelfRow) this.scrollShelves(row - this.shelfRow);
+    else if (row >= this.shelfRow + VISIBLE_ROWS) this.scrollShelves(row - this.shelfRow - VISIBLE_ROWS + 1);
     this.showSet();
   }
 
@@ -548,8 +675,11 @@ export class Shop extends Phaser.Scene {
     if (!list) return this.setStatus("NO CARD LIST: RUN BUILD-DATA", RUNEWOOD.panel.error);
     this.closeDetails();
     const key = [largeKey(b), packKey(b)].find((k) => this.textures.exists(k)) ?? null;
+    // Dev: `&anims` deals one card of each rarity instead, to preview every reveal (src/dev/rarityPack.ts).
+    const preview = import.meta.env.DEV && new URLSearchParams(location.search).has("anims");
+    const packs = preview ? [rarityPack(list, [...this.lists.values()])] : Array.from({ length: this.quantity }, () => pullPack(list));
     this.opening = new PackOpening(this, {
-      packKey: key, title: list.name, packs: Array.from({ length: this.quantity }, () => pullPack(list)), engine: this.engine,
+      packKey: key, title: list.name, packs, engine: this.engine,
       onClose: () => { this.opening = null; },
     });
   }

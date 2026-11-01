@@ -44,7 +44,7 @@
    ✅ Character sprites from the Reshef of Destruction sheet, hold Z to run, a girl player option.
    Next: trainer line-of-sight challenges.
 5. **RPG loop**: ✅ deck editor v1 (every pool card, custom deck slots, both themes; later: limited to your collection).
-   ✅ card shop v1 (`src/shop/`: a display case with the first six core boosters, a checklist of each set's cards with
+   ✅ card shop v1 (`src/shop/`: a scrolling display case with the first twelve core boosters, a checklist of each set's cards with
    rarities (`data/boosters.json`), entered at a `shop` spot; BUY opens the pack: tear, deal, flip with rarity effects;
    free for now, the cards aren't kept).
    Next: card collection (keep pulled cards, spend chips), rewards/boosters after duels,

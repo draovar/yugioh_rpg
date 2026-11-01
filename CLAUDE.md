@@ -103,7 +103,8 @@ Dev:
 - `&anims` adds a dropdown (top-left) to replay single animations; `&dialogs` adds one that opens every prompt UI with
   sample cards (answers are only logged, then the real prompt returns; numbers match `docs/duel-ui-checklist.md`).
 - `&theme=NAME` picks the UI theme (`runewood`, `hologram`).
-- `/?shop` starts in the card shop (`src/shop/`; in the overworld: a `shop` rectangle in a map's `objects` layer, X).
+- `/?shop` starts in the card shop (`src/shop/`; in the overworld: a `shop` rectangle in a map's `objects` layer, X);
+  `&anims` there makes BUY deal one card of each rarity, lowest first, to preview every reveal animation.
 - `&map=NAME` starts on another map instead of the island's main city (`main-city`): `overworld` = the old town, `maze`,
   or any island map (`castle`, `forest-south`... see `data/maps/island/layout.json`); the player starts at its `spawn` point object, else at 400,520.
 - `&ambush` makes the first maze hedge ambush happen at the first spot that fits (walk along a hedge).

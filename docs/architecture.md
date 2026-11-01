@@ -323,7 +323,8 @@ passes the `NetDuel` to `Duel`.
   feedback (attack red, summon flashes) are not themed.
 - **Dev previews** (`src/dev/`): `&anims` (`animPreview.ts`) replays single animations, `&dialogs` (`dialogPreview.ts`)
   opens every prompt UI with sample cards (numbers match `docs/duel-ui-checklist.md`); both are written for seat 0 =
-  you (`previewSeats.ts` swaps seats). `devSetups.ts` = the `&setup` boards. `capture.ts` + `tools/art/make-gif.mjs` =
+  you (`previewSeats.ts` swaps seats). In the card shop, `?shop&anims` makes BUY deal `rarityPack.ts`: one card of each
+  rarity, lowest first, to preview every reveal. `devSetups.ts` = the `&setup` boards. `capture.ts` + `tools/art/make-gif.mjs` =
   frame capture to GIFs.
 
 ## Deck editor (`src/deck-editor/`)
@@ -350,14 +351,21 @@ The `Shop` scene (a `shop` spot in the overworld, or `?shop`), "fixed" 640x360. 
 theme's (the owner's choice: one real-shop look; colours in `C`; the checklist is always Runewood's board and paper,
 from `THEMES.runewood`, loaded under keys of its own), and Runewood list-row buttons (`button`: EXIT in dark brown with a white label, - / +, BUY).
 `boosters.ts` = the packs on
-sale (`BOOSTERS`: set code, price, the display box's colour), the first six core sets so far; their card lists come
+sale (`BOOSTERS`: set code, price, the display box's colour), the first twelve core sets so far; their card lists come
 from `public/data/boosters.json` (`data/boosters.json` from `build-pool`, copied by `build-data`: per set its name,
 release date and `[number, passcode, rarity]` per card).
 
 - Left: a glass display case on a panelled wall (sign, CHIPS from `ShopData`, EXIT / Esc = the card wave back to the
-  overworld). Two shelves, three booster displays each: a box (lid standing up behind, packs inside: the front pack
-  plus two darker ones behind, the set code on the front lip), a price label on the shelf edge, faint light streaks
-  on the glass over it all. The room, case, shelves and lids are baked into one texture.
+  overworld). Shelves of three booster displays: a box (lid standing up behind, packs inside: the front pack plus two
+  darker ones behind, the set code on the front lip), a price label on the shelf edge, faint light streaks on the glass
+  over it all (they don't move). The room and case are baked into one texture; everything on the shelves sits in
+  `shelfRows`, clipped to the case's inside by a Mask filter on its parent. Two shelves are in view (`VISIBLE_ROWS`);
+  with more stock the shelves scroll a whole row at a time, smoothly (`scrollShelves`, `SCROLL_MS`): the wheel over
+  the case (a row per `WHEEL_STEP` units), a swipe on it (touch or mouse drag, `SWIPE_PX`; a press that drags never
+  picks a pack), the scroll cues (`makeCues`: a small tab like the shop's sign on the case's top / bottom frame, a gold
+  arrow in it bobbing a pixel toward the rows out of view, shown only while the shelves can scroll that way; clicking
+  one scrolls a row), or picking a pack out of view with the arrow keys. Only packs on the rows in view take clicks
+  (`setZones`).
 - Pack pictures are drawn at 1x: 64x110 (`public/boosters/<SET>.png` from `npm run build-boosters`, loaded in
   `preload`; a missing one shows as a blank pack with its code). Clicking a pack (its hit zone covers the lifted spot
   too) or the arrow keys (rows and columns) pick it: its front pack lifts `LIFT` px out of the box, its label turns
