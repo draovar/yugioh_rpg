@@ -445,7 +445,8 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   `boosters.json`, every card checked to be in the pool), `check-cards`.
 - `art/`: `fetch-art` / `build-art` (YGOPRODeck crops → the shared palette, `art32` atlas + `art128`), `build-palette`,
   `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `make-gif`, `build-boosters`
-  (`vendor/booster-packs/<SET>.png`, pack pictures saved by hand → `public/boosters/`, each 64x110, the card shop's 1x
+  (`vendor/paid/booster-packs/<SET>.png`, pack pictures saved by hand, in the private assets repo; the deploy runs it
+  after `build-tiles` → `public/boosters/`, each 64x110, the card shop's 1x
   size: transparent padding cut, other shapes stretched; plus `public/boosters/large/` at 100x172 for opening packs).
   - `build-characters`: `data/characters/reshef-sheet.png` (every Reshef of Destruction character, green cells on a
     purple grid) sliced per `data/characters/characters.json` (name → 3x3 block or explicit cells per direction,

@@ -54,7 +54,7 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `node tools/maps/flatten-ground.mjs data/maps/<name>.tmj [--dry]` | a map's ground layers sorted into the owner's layout: `ground` = main ground, `ground2` = terrain overlapping it where needed, `ground3` = non-collision decorations (then walls, walls2, walls3); hidden tiles dropped, same pixels; save in Tiled first, reload after, then `build-tiles` |
 | `npm run build-characters` | overworld sprites from `data/characters/` (per `characters.json`) → `public/assets/overworld/` + the contact sheet `docs/characters.png`, then the hedge ambush sheets (`tools/art/build-ambush.mjs`) |
 | `node tools/art/build-yugioh-sheet.mjs` | the custom sheet's generated pieces (in code: `PIECES`, each at a fixed tile position: billboards, shop signs, mall ads, drawn on bases from the sheet or the pack) → `vendor/paid/custom/yugioh_tileset.png` (20 tiles wide; rows 0-14 hand-made, kept) + `yugioh.tsj`'s size; then `build-tiles` |
-| `npm run build-boosters` | booster pack pictures for the card shop: `vendor/booster-packs/<SET>.png` (saved by hand, any size) → `public/boosters/<SET>.png`, each 64x110 (the shelf), and `public/boosters/large/<SET>.png`, 100x172 (opening a pack); both drawn at 1x |
+| `npm run build-boosters` | booster pack pictures for the card shop: `vendor/paid/booster-packs/<SET>.png` (saved by hand, any size; in the private assets repo) → `public/boosters/<SET>.png`, each 64x110 (the shelf), and `public/boosters/large/<SET>.png`, 100x172 (opening a pack); both drawn at 1x |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/art/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/`; `shop` = the card shop's green and dark brown Runewood list buttons (`public/assets/ui/shop/`) |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/art/build-tiny5-font.mjs`) |
@@ -68,8 +68,9 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`, then
-`git clone https://github.com/Draovar/yugioh_rpg-assets.git vendor/paid && npm run build-tiles` (private repo with the
-paid art packs; without it the overworld shows a "no map" message, duels still work).
+`git clone https://github.com/Draovar/yugioh_rpg-assets.git vendor/paid && npm run build-tiles && npm run build-boosters`
+(private repo with the paid art packs and the card shop's pack pictures; without it the overworld shows a "no map"
+message and the shop blank packs, duels still work).
 After changing `data/pool-exceptions.json` (or the cutoff; `card-versions.json` needs only `build-data` + `smoke`), rerun `build-pool`, then `build-data`, `check-cards`, `fetch-art`, `build-art`, then `smoke` (it validates
 the decks in `src/duel/decks/decks.ts` and plays every deck pairing). `fetch-art`/`build-art` read `public/data/cards.json`, so
 tokens get art too.
