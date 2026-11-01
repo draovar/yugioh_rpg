@@ -14,6 +14,8 @@ public/assets/tilesets/Modern_Exteriors_*
 public/maps/
 # Card images from YGOPRODeck — re-fetch with `npm run fetch-art`
 public/cards/
+# Booster pack pictures (Konami's pack art) — rebuild with `npm run build-boosters` (needs vendor/booster-packs)
+public/boosters/
 # Third-party asset packs (sources for tools/import-ui.mjs); only the sprites we use are copied to public/
 /assets/
 # Dev frame captures / GIFs (src/dev/capture.ts, tools/make-gif.mjs)

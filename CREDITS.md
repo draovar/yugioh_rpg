@@ -14,7 +14,8 @@
 ## Art & UI
 - **Complete UI Essential Pack** by **Crusenho Agus Hennihuno** — https://crusenho.itch.io —
   licensed [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Used: Runewood theme sprites
-  (phase buttons, LP bars, panel frames, card action menu) and Hologram theme sprites, trimmed/nine-sliced; see `tools/art/import-ui.mjs`.
+  (phase buttons, LP bars, panel frames, card action menu, a list button recoloured green and dark brown for the card shop) and Hologram
+  theme sprites, trimmed/nine-sliced; see `tools/art/import-ui.mjs`.
 - **3x3 Font for Nerds** — Norwegian Ink (www.noink.no). *No license found (checked 2026-10: none in the font file, noink.no is gone); kept by the project owner's choice for this non-commercial project.*
 - **Modern Exteriors** tileset by **LimeZu** (paid pack, https://limezu.itch.io): overworld map tiles. Not in this
   repository; only the tiles the maps use are packed into the built game.
@@ -25,5 +26,6 @@
 
 ## Card artwork
 Card names, text and artwork are © Konami. Artwork is downloaded from [YGOPRODeck](https://ygoprodeck.com)
-at build time (not stored in this repository) and downscaled to pixel art. This is a non-commercial fan
-project, not affiliated with or endorsed by Konami.
+at build time (not stored in this repository) and downscaled to pixel art. Booster pack art (the card shop) is
+© Konami too, from [YGOPRODeck](https://ygoprodeck.com) and [yugioh-card.com](https://www.yugioh-card.com) (not stored
+in this repository). This is a non-commercial fan project, not affiliated with or endorsed by Konami.

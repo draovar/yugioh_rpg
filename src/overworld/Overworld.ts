@@ -6,6 +6,7 @@ import { PLAYER_LOOKS, chosenDeck, playerLook } from "../ui/prefs.ts";
 import { DPAD, TouchPad, X_BUTTON } from "./TouchPad.ts";
 import { TOUCH } from "../ui/touch.ts";
 import type { DuelSceneData } from "../duel-screen/DuelScene.ts";
+import type { ShopData } from "../shop/Shop.ts";
 import type { WorldMenu } from "./WorldMenu.ts";
 import { CHARACTERS, frameOf, loadCharacters, walkAnim, type Facing } from "./characters.ts";
 import { NPCS, type NpcDef } from "./npcs.ts";
@@ -56,7 +57,7 @@ export function loadOverworld(load: Phaser.Loader.LoaderPlugin) {
 }
 
 const TALK_DISTANCE = 56, SPEED = 70, FADE_MS = 200;
-/** How far in front of the player's feet box a sign can be read. */
+/** How far in front of the player's feet box a sign can be read (or a shop entered). */
 const READ_REACH = 8;
 /** Holding Z runs: this much faster, with the look's run frames. */
 const RUN_SPEED = 1.5;
@@ -85,8 +86,8 @@ export class Overworld extends Phaser.Scene {
   private pad: TouchPad | null = null;
   private dialog!: DialogBox;
   private talkHint!: Phaser.GameObjects.BitmapText;
-  /** Readable spots: rectangles named "sign" (layer "objects"). */
-  private signs: { area: Phaser.Geom.Rectangle; title: string; text: string }[] = [];
+  /** Spots used by facing them and pressing X: signs and shops (rectangles named "sign" / "shop", layer "objects"). */
+  private spots: { area: Phaser.Geom.Rectangle; use: () => void }[] = [];
   private facing: Facing = "down";
   /** The player's walk and run sprites (world menu: PLAYER). */
   private look = PLAYER_LOOKS[playerLook()];
@@ -197,12 +198,16 @@ export class Overworld extends Phaser.Scene {
     });
 
     // Signs: rectangles named "sign" (layer "objects") with properties text and title (the dialog's header, "SIGN"
-    // if empty); read by facing them and pressing X.
-    this.signs = [];
+    // if empty); read by facing them and pressing X. Shops: rectangles named "shop" (a counter, a door), the card
+    // shop opens the same way.
+    this.spots = [];
     for (const o of map.getObjectLayer("objects")?.objects ?? []) {
-      if (o.name !== "sign") continue;
+      const area = new Phaser.Geom.Rectangle(o.x!, o.y!, o.width!, o.height!);
       const prop = (name: string) => (o.properties as { name: string; value: unknown }[] | undefined)?.find((p) => p.name === name)?.value;
-      this.signs.push({ area: new Phaser.Geom.Rectangle(o.x!, o.y!, o.width!, o.height!), title: String(prop("title") || "Sign"), text: String(prop("text") ?? "") });
+      if (o.name === "sign") {
+        const title = String(prop("title") || "Sign"), body = String(prop("text") ?? "");
+        this.spots.push({ area, use: () => this.dialog.open(title, body, ["OK"], () => {}) });
+      } else if (o.name === "shop") this.spots.push({ area, use: () => this.enterShop() });
     }
 
     // Warps: rectangles named "warp" (layer "objects") with properties map (target map) and spawn (the point to
@@ -311,9 +316,9 @@ export class Overworld extends Phaser.Scene {
     if (this.menuOpen() || transitioning(this.game)) return;
     if (this.dialog.isOpen) this.dialog.handleKey(code);
     else if (code === "KeyX" || code === "Enter" || code === "Space") {
-      // A sign the player faces wins over an NPC standing nearby.
-      const sign = this.facedSign(), npc = sign ? null : this.nearestNpc();
-      if (sign) this.dialog.open(sign.title, sign.text, ["OK"], () => {});
+      // A sign or shop the player faces wins over an NPC standing nearby.
+      const spot = this.facedSpot(), npc = spot ? null : this.nearestNpc();
+      if (spot) spot.use();
       else if (npc) this.talkTo(npc);
     }
   }
@@ -339,12 +344,12 @@ export class Overworld extends Phaser.Scene {
     return best;
   }
 
-  /** The sign right in front of the player, in the direction they face. */
-  private facedSign() {
+  /** The sign or shop right in front of the player, in the direction they face. */
+  private facedSpot() {
     const b = this.player.body;
     const ahead = { up: [0, -1], down: [0, 1], side: [this.player.flipX ? -1 : 1, 0] }[this.facing];
     const x = b.center.x + ahead[0] * (b.halfWidth + READ_REACH), y = b.center.y + ahead[1] * (b.halfHeight + READ_REACH);
-    return this.signs.find((s) => s.area.contains(x, y)) ?? null;
+    return this.spots.find((s) => s.area.contains(x, y)) ?? null;
   }
 
   /** Shows an NPC's standing frame for a facing ("left" = the side view flipped). */
@@ -372,6 +377,13 @@ export class Overworld extends Phaser.Scene {
     void transitionTo(this, "Duel", data, { onCovered: () => this.scene.stop("WorldMenu") });
   }
 
+  /** The card shop, behind the card-wave transition; afterwards the player is back here. */
+  private enterShop() {
+    this.savePosition();
+    const data: ShopData = { chips: this.chips };
+    void transitionTo(this, "Shop", data, { onCovered: () => this.scene.stop("WorldMenu") });
+  }
+
   update() {
     if (!this.player) return;
     if (this.warping || transitioning(this.game)) {
@@ -392,8 +404,8 @@ export class Overworld extends Phaser.Scene {
       return;
     }
 
-    const sign = this.facedSign(), npc = sign ? null : this.nearestNpc();
-    const hintAt = sign ? { x: sign.area.centerX, top: sign.area.top } : npc ? { x: npc.x, top: npc.getBounds().top } : null;
+    const spot = this.facedSpot(), npc = spot ? null : this.nearestNpc();
+    const hintAt = spot ? { x: spot.area.centerX, top: spot.area.top } : npc ? { x: npc.x, top: npc.getBounds().top } : null;
     this.talkHint.setVisible(!!hintAt);
     if (hintAt) this.talkHint.setPosition(Math.round(hintAt.x - this.talkHint.width / 2), Math.round(hintAt.top - 2 - this.talkHint.height));
 

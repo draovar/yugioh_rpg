@@ -24,6 +24,7 @@
     "build-fonts": "node tools/art/build-pixel-font.mjs public/assets/fonts/3x3_font_for_nerds.ttf nerds3 228.3 && node tools/art/build-tiny5-font.mjs",
     "build-art": "node tools/art/build-art.mjs",
     "build-palette": "node tools/art/build-palette.mjs",
+    "build-boosters": "node tools/art/build-boosters.mjs",
     "build-tiles": "node tools/maps/build-tiles.mjs",
     "build-characters": "node tools/art/build-characters.mjs && node tools/art/build-ambush.mjs"
   },

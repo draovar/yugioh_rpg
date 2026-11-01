@@ -13,11 +13,12 @@ src/net/               peer-to-peer networking, no Phaser
 src/overworld/         Overworld scene, WorldMenu, DialogBox, TouchPad, characters, npcs, ambush, sortedWalls
 src/duel-screen/       DuelScene, duelPrompts and the duel UI (cards, modal, info panel, animator, field, layout)
 src/deck-editor/       DeckEditor scene, its layout, list rows, filter panel, dialogs
+src/shop/              Shop scene (the card shop), boosters (the packs it sells)
 src/lobby/             multiplayer Lobby scene
 src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition, view
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
 tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helpers
-data/                  pool.json (the card pool, generated) + pool-exceptions.json, card-versions.json (older versions), banlist.json, maps, characters, palette
+data/                  pool.json (the card pool, generated) + pool-exceptions.json, boosters.json (booster set lists, generated), card-versions.json (older versions), banlist.json, maps, characters, palette
 vendor/                Project Ignis repos, art downloads, paid assets (gitignored)
 ```
 
@@ -198,10 +199,11 @@ passes the `NetDuel` to `Duel`.
   fades over to the map of the world there, the player on the same spot of the world (unrounded, so they don't land on
   its edge and bounce back). The player doesn't collide with a world map's bounds; where no map follows (open sea, left
   out of the grid) `crossEdge` keeps them in.
-- Signs: `sign` rectangles in the `objects` layer (properties `text`, `title` = the dialog's header, "SIGN" if empty)
-  over any tile, the art stays a normal tile. Read only while facing them (`facedSign`: a point `READ_REACH` px in
-  front of the feet box must be inside the rectangle) with X / Enter / Space; the X hint shows over the sign, and a
-  faced sign wins over a nearby NPC.
+- Spots (`spots`): rectangles in the `objects` layer over any tile (the art stays a normal tile), used only while
+  facing them (`facedSpot`: a point `READ_REACH` px in front of the feet box must be inside the rectangle) with
+  X / Enter / Space; the X hint shows over the spot, and a faced spot wins over a nearby NPC. `sign` = a sign to read
+  (properties `text`, `title` = the dialog's header, "SIGN" if empty); `shop` = the card shop (`enterShop`: the card
+  wave over to the `Shop` scene with the player's chips; EXIT comes back to the same spot).
 - NPCs (`NPCS` in `npcs.ts`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn
   to the player while talking) talk with X / Enter / Space in a `DialogBox` (tiny5 at 2x, clickable options); YES
   starts a duel, and the player comes back to the same spot (`savePosition`) with the NPC's line about the result.
@@ -342,6 +344,61 @@ table). Geometry in `layout.ts`.
   changes ask SAVE / DISCARD / CANCEL); the message and rename dialogs are in `dialogs.ts`.
 - Custom decks live in localStorage (`prefs.ts`: `customDecks`, up to `MAX_CUSTOM_DECKS`).
 
+## Card shop (`src/shop/`)
+
+The `Shop` scene (a `shop` spot in the overworld, or `?shop`), "fixed" 640x360. It has its own look, not the UI
+theme's (the owner's choice: one real-shop look; colours in `C`; the checklist is always Runewood's board and paper,
+from `THEMES.runewood`, loaded under keys of its own), and Runewood list-row buttons (`button`: EXIT in dark brown with a white label, - / +, BUY).
+`boosters.ts` = the packs on
+sale (`BOOSTERS`: set code, price, the display box's colour), the first six core sets so far; their card lists come
+from `public/data/boosters.json` (`data/boosters.json` from `build-pool`, copied by `build-data`: per set its name,
+release date and `[number, passcode, rarity]` per card).
+
+- Left: a glass display case on a panelled wall (sign, CHIPS from `ShopData`, EXIT / Esc = the card wave back to the
+  overworld). Two shelves, three booster displays each: a box (lid standing up behind, packs inside: the front pack
+  plus two darker ones behind, the set code on the front lip), a price label on the shelf edge, faint light streaks
+  on the glass over it all. The room, case, shelves and lids are baked into one texture.
+- Pack pictures are drawn at 1x: 64x110 (`public/boosters/<SET>.png` from `npm run build-boosters`, loaded in
+  `preload`; a missing one shows as a blank pack with its code). Clicking a pack (its hit zone covers the lifted spot
+  too) or the arrow keys (rows and columns) pick it: its front pack lifts `LIFT` px out of the box, its label turns
+  yellow.
+- Right: the checklist on Runewood's info board (the duel's info panel size, 224 px): set name (2x, wrapped by word,
+  light with a drop shadow like a card name in the info panel), release month, set size, cards per pack, then on the
+  paper inset every card of the set with a rarity chip (`RARITIES` in `boosters.ts`: SCR, UR, SR, R, SSP, SP, C), highest rarity
+  first, then by number; 30 rows at a time, down to just above the bottom row (wheel, drag the list, or grab the scrollbar's thumb and drag it: pressing
+  the track elsewhere brings the thumb there, still held, and the pointer may wander off the bar; the row under the
+  pointer is highlighted). A press
+  that doesn't drag (`DRAG_PX`, as the deck editor) opens that card's details over the checklist, like the deck
+  editor's: the duel's info panel (`CardInfo`, the UI theme's board), CLOSE (Esc; picking another
+  pack or buying closes it too). Under the list: the price (the packs' total) in the set name's lettering (light, drop
+  shadow), the pack count in plain black at the buttons' label size (centred on its glyphs between - and +), - / +
+  (keys - / =, 1 to `MAX_PACKS`) and BUY (X / Enter /
+  Space). These are list-row buttons like the info panel's CLOSE, always Runewood's (`LIST_BUTTONS`): its wood one
+  for - / +, a darker green copy for BUY (`public/assets/ui/shop/`, `import-ui.mjs shop`); 2px taller than a list row
+  with the label in the middle, darker on hover, firing on release. A status (no card list) shows in the price's place.
+- BUY opens the packs (`PackOpening.ts`, one `pullPack` each), free for now: no chips are spent and the cards aren't
+  kept (no collection yet).
+  `pullPack` (`boosters.ts`) deals `CARDS_PER_PACK` cards: one from the rare slot (roughly the era's odds: Secret 1 pack
+  in 24, Ultra 1 in 12, Super 1 in 6, else Rare; a rarity the set lacks gives the next lower one) and different
+  commons (a Short Print half as likely as a Common, a Super Short Print a quarter), in random order.
+- The opening is an overlay in the shop scene (depth 100, a zone over everything takes the clicks; the shop passes it
+  its keys), laid out like the duel: the cards in the left 416 px, the duel's card info panel (`CardInfo` on the
+  theme's info board, 224 px) on the right. A dark shade, the set name, the pack at 1x
+  (`public/boosters/large/<SET>.png`, 100x172) fades in, wiggles,
+  its top tears off along a jagged line (`tornPieces`: two canvas textures cut from the picture, made once per pack)
+  and flies away with a few bits of foil, the face-down cards (`CardSprite` at 2x) rise out of it while it drops, and
+  they're dealt into two rows (2x, 6 px apart). Clicking a card (Enter / Space / X: the next one) flips it like the duel does (squash
+  to its centre line, swap the face): a Rare flashes; a Super Rare and up (`tier` in `RARITIES`) first shakes with a
+  pulsing 2px glow in its rarity's colour, then flashes and bursts into plus-shaped sparkles; an Ultra or Secret Rare
+  also flashes the screen and gets a light band sweeping across it every few seconds; a Secret Rare's glow and
+  sparkles run through the colours. Each turned card gets its rarity chip under it. The info panel shows each card as
+  its face comes up (during REVEAL ALL only the pack's one Rare-or-better card: commons leave it alone, so it doesn't
+  flicker), then any face-up card hovered or tapped ("TURN A CARD OVER" before the first; no rarity line: the chips
+  under the cards show it). REVEAL ALL (Esc) turns the rest over one by one. Once every card's reveal has
+  played out: with more packs bought, NEXT PACK fades this pack's layer (its pieces, cards, effects; looping effects
+  stopped) away, empties the panel and opens the next one (the title counts them, "2/3"); after the last, DONE (Esc)
+  closes the overlay (`CardInfo.clear()` drops its scroll listeners).
+
 ## Shared UI (`src/ui/`)
 
 `pixel.ts` (bitmap text via `text()`, crisp 1px borders, `GlyphSnapSubmitter`), `widgets.ts` (wood / list buttons,
@@ -358,7 +415,7 @@ order once that scene is created. While it plays
 (and skips its usual fade-in). It is in the `&anims` dropdown.
 
 `view.ts`: game size and zoom. Each scene picks a mode when it starts (`setViewMode`): "fixed" (Boot, Duel, DeckEditor,
-Lobby) is the 640x360 layout scaled up as far as the window allows; "world" (Overworld) draws at the world menu's
+Shop, Lobby) is the 640x360 layout scaled up as far as the window allows; "world" (Overworld) draws at the world menu's
 ZOOM (2x by default; 3x; AUTO = as big as whole numbers fit, like "fixed") and grows the view with the window instead
 (at 2x a 1920x1080 window shows 960x540 game pixels of the map), taking the window's shape (no side bars on wide
 phones), never under 640x360. Windows too small for 2x get a fractional fit in both modes.
@@ -381,10 +438,15 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   value` option parsing. `lib/palette.mjs` / `art-style.mjs` / `bmfont.mjs` / `indexed-png.mjs`: art quantisation, style knobs, BMFont output, lossless indexed PNG output (card art).
 - `data/`: `fetch-data` (CardScripts at the pinned commit + BabelCDB), `build-pool` (TCG products up to the cutoff
   from YGOPRODeck set lists, mapped to BabelCDB passcodes (an alias with the same name is an alt art, one with another
-  name a card of its own, e.g. Harpie Lady 1), ± `pool-exceptions.json` by name → `data/pool.json`), `build-data` (pool → `public/data/*.json`, modern versions except the GOAT / pre-errata ones `card-versions.json` picks, under the real passcodes,
-  plus the tokens pool scripts create; `data/banlist.json` → each card's `limit` in `cards.json`), `check-cards`.
+  name a card of its own, e.g. Harpie Lady 1), ± `pool-exceptions.json` by name → `data/pool.json`; and the core
+  booster sets' card lists → `data/boosters.json`: per card the original print's number and rarity (LOB-001, else -EN,
+  else -E), variant rarities like Ultimate / Ghost Rare left out, the highest base rarity when a print lists several), `build-data` (pool → `public/data/*.json`, modern versions except the GOAT / pre-errata ones `card-versions.json` picks, under the real passcodes,
+  plus the tokens pool scripts create; `data/banlist.json` → each card's `limit` in `cards.json`; `data/boosters.json` →
+  `boosters.json`, every card checked to be in the pool), `check-cards`.
 - `art/`: `fetch-art` / `build-art` (YGOPRODeck crops → the shared palette, `art32` atlas + `art128`), `build-palette`,
-  `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `make-gif`.
+  `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `make-gif`, `build-boosters`
+  (`vendor/booster-packs/<SET>.png`, pack pictures saved by hand → `public/boosters/`, each 64x110, the card shop's 1x
+  size: transparent padding cut, other shapes stretched; plus `public/boosters/large/` at 100x172 for opening packs).
   - `build-characters`: `data/characters/reshef-sheet.png` (every Reshef of Destruction character, green cells on a
     purple grid) sliced per `data/characters/characters.json` (name → 3x3 block or explicit cells per direction,
     `nudge` = move single frames by pixels; `{ "sheet": "x.png" }` = a ready-made 96x96 sheet in the same layout, drawn

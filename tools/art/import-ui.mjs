@@ -1,8 +1,9 @@
 // Copies each duel-screen theme's UI sprites from the Crusenho "Complete UI Essential Pack" (assets/,
 // CC BY 4.0) into public/assets/ui/<theme>/<role>.png. The roles are UI_ROLES in src/ui/theme.ts; a role
 // left out here (e.g. Runewood's "star", drawn for this project) is a hand-made file kept in the folder.
-// The theme's nine-slice insets and colours live in src/ui/theme.ts.
-// Usage: node tools/art/import-ui.mjs [theme...]   (default: every theme)
+// The theme's nine-slice insets and colours live in src/ui/theme.ts. "shop" isn't a theme: the card shop's own
+// Runewood sprites (public/assets/ui/shop/).
+// Usage: node tools/art/import-ui.mjs [theme...]   (default: every theme, and shop)
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
@@ -81,6 +82,15 @@ const THEMES = {
     "attack-up": ["@runewood/attack-up.png"],
     "attack-down": ["@runewood/attack-down.png"],
     "star": ["@runewood/star.png"],
+  },
+  // Not a theme: the card shop's own Runewood sprites (src/shop/Shop.ts, the same whatever the theme). BUY: Runewood's
+  // list-row button with its face in the toggles' greens (Runewood has no green button), darker on hover. EXIT: the
+  // same button in a dark brown (lighter on hover), its outline darkened to stand out on the shop's dark wall.
+  shop: {
+    "list-button-green": ["@runewood/menu-button.png", { replace: { "#d49969": "#4e9a3a" } }],
+    "list-button-green-hover": ["@runewood/menu-button-hover.png", { replace: { "#975f3d": "#3a7426" } }],
+    "list-button-dark": ["@runewood/menu-button.png", { replace: { "#d49969": "#5a3a24", "#432925": "#1e130d" } }],
+    "list-button-dark-hover": ["@runewood/menu-button-hover.png", { replace: { "#975f3d": "#794e30", "#432925": "#1e130d" } }],
   },
 };
 

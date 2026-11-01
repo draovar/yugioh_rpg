@@ -58,6 +58,7 @@ export class Boot extends Phaser.Scene {
           history.replaceState(null, "", `${location.pathname}${params.size ? `?${params}` : ""}`);
           this.scene.start("Lobby", { join });
         } else if (params.has("mp")) this.scene.start("Lobby");
+        else if (params.has("shop")) this.scene.start("Shop");
         else if (params.has("duel")) {
           this.scene.start("Duel", {
             opponentName: "Test Opponent", startingLP: lp, seed, setup, goFirst, ai: isBrainName(ai) ? ai : undefined,
