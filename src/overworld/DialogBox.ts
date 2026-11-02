@@ -1,14 +1,14 @@
 import Phaser from "phaser";
 import { WHITE, border, text } from "../ui/pixel.ts";
-import { onViewResize } from "../ui/view.ts";
+import { HEIGHT, WIDTH } from "../ui/view.ts";
 
 const BG = 0x10102a, NAME = 0xffd75e, OPTION_OFF = 0x8888aa;
 const MARGIN = 8, PAD = 10, H = 76, SCALE = 2;
 
 /**
  * Overworld dialog box: speaker name, text and options (Yes / No, or just OK). It always sits at the bottom of the
- * camera's view. Left/Right picks an option, X / Enter / Space
- * confirms, or click one. The scene forwards key codes to `handleKey()` while the box is open (also the touch pad's).
+ * screen, in `hud` (the scene's screen-fixed container, laid out in 640x360). Left/Right picks an option, X / Enter /
+ * Space confirms, or click one. The scene forwards key codes to `handleKey()` while the box is open (also the touch pad's).
  * `insets` keeps it clear of on-screen controls at the bottom corners (the touch pad).
  */
 export class DialogBox {
@@ -20,33 +20,21 @@ export class DialogBox {
   private optionTexts: Phaser.GameObjects.BitmapText[] = [];
   private cursor: Phaser.GameObjects.BitmapText | null = null;
   private onChoice: ((option: string) => void) | null = null;
-  /** What the open box shows, for laying it out again. */
-  private shown: Parameters<DialogBox["open"]> | null = null;
 
   private readonly scene: Phaser.Scene;
-  private readonly camera: Phaser.Cameras.Scene2D.Camera;
   private readonly insets: { left: number; right: number };
 
-  constructor(scene: Phaser.Scene, camera: Phaser.Cameras.Scene2D.Camera, insets = { left: MARGIN, right: MARGIN }) {
+  constructor(scene: Phaser.Scene, hud: Phaser.GameObjects.Container, insets = { left: MARGIN, right: MARGIN }) {
     this.scene = scene;
-    this.camera = camera;
     this.insets = insets;
-    this.container = scene.add.container(0, 0).setScrollFactor(0).setDepth(200).setVisible(false);
-    // The window changed size while open: laid out again for the new view, the same option still picked.
-    onViewResize(scene, () => {
-      if (!this.isOpen || !this.shown) return;
-      const selected = this.selected;
-      this.open(...this.shown);
-      this.selected = selected;
-      this.updateCursor();
-    });
+    this.container = scene.add.container(0, 0).setScrollFactor(0).setVisible(false);
+    hud.add(this.container);
   }
 
   /** `onChoice(option)` runs after the box closes. */
   open(name: string, body: string, options: string[], onChoice: (option: string) => void) {
-    this.shown = [name, body, options, onChoice];
     for (const o of this.items) o.destroy();
-    const w = this.camera.width - this.insets.left - this.insets.right;
+    const w = WIDTH - this.insets.left - this.insets.right;
     const bg = this.scene.add.graphics().fillStyle(BG, 0.92).fillRect(0, 0, w, H);
     border(bg, 0, 0, w, H, WHITE, 2);
     const nameText = text(this.scene, PAD, PAD, name.toUpperCase(), { color: NAME, scale: SCALE });
@@ -69,7 +57,7 @@ export class DialogBox {
     this.onChoice = onChoice;
     this.selected = 0;
     this.updateCursor();
-    this.container.setPosition(this.camera.x + this.insets.left, this.camera.y + this.camera.height - H - MARGIN).setVisible(true);
+    this.container.setPosition(this.insets.left, HEIGHT - H - MARGIN).setVisible(true);
     this.isOpen = true;
   }
 

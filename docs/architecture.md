@@ -219,14 +219,22 @@ passes the `NetDuel` to `Duel`.
   restart: back from the duel they stand there again (`backFromDuel`) until their result line is closed, then leap
   back into the hedge (`retreat`, which also starts the cooldown). `&ambush` forces only the first ambush of the session.
 - Touch devices: a semi-transparent D-pad (diagonals, keeps steering when the finger slides off) and X button
-  (`TouchPad.ts`, placed from the screen's bottom corners), with the dialog between them. `TOUCH` in
-  `src/ui/touch.ts` = coarse pointer (`&touch` forces it).
-- The overworld's view follows the window's size (`src/ui/view.ts`, "world" mode): the HUD (MENU button, touch pad,
-  dialog box, menu panel) is placed from the screen's edges and laid out again on a resize (`onViewResize`).
-- `WorldMenu`: overlay scene launched by Overworld (so it doesn't scroll). MENU (M) button top right opens the settings
+  (`TouchPad.ts`), with the dialog between them. `TOUCH` in `src/ui/touch.ts` = coarse pointer (`&touch` forces it).
+- ZOOM (windows from 1280x720 on, `worldZoom()` / `worldSpriteScale()` in `src/ui/view.ts`): the sprite size in
+  screen pixels per game pixel, 1X up to the window's scale; the map shows 640x360 times scale / size (1080p: 3X =
+  640x360, 2X = 960x540, 1X = 1920x1080). The biggest size is the plain 640x360 game; a smaller one makes the game as
+  big as the screen's 16:9 area (1280x720 / 1920x1080) and zooms the camera to the size, so every size is drawn at full
+  detail. A chosen size the window can't fit falls back to the biggest it can (kept for a bigger window). The camera
+  follows the player snapped to whole screen pixels (a getter target read as it renders), its bounds too (a map
+  smaller than the view sits in its middle). The screen-fixed HUD (CHIPS, touch pad, dialog box) is one container,
+  `hud`, laid out in 640x360 and kept at the layout's scale whatever the camera's zoom (`layoutView`, on every resize:
+  scroll-factor-0 objects zoom around the screen's centre, so it is scaled back around it; its objects keep scroll
+  factor 0 for input hit tests, the touch pad divides pointer positions by `layoutScale`); the talk hint is scaled
+  the same way.
+- `WorldMenu`: overlay scene launched by Overworld (so it doesn't scroll; laid out in 640x360, its camera scales it up with the full-detail game, `scaleWithView`). MENU (M) button top right opens the settings
   panel: PLAYER (boy / girl), your deck (drop-down lists, `makeDropDown` in `src/ui/widgets.ts`, saved in localStorage
-  via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place), ZOOM (the overworld's: 2X / 3X /
-  AUTO, `worldZoom()`), DECK EDITOR, MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and set cards in duels
+  via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place), ZOOM (1X up to the window's scale, only from 2x windows on; the game may change size, the panel is rebuilt on resize),
+  DECK EDITOR, MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and set cards in duels
   (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards drawn face-up at 60%
   alpha), QUICK DUEL, FULL SCREEN where the browser supports it.
 - Decks offered everywhere come from `prefs.ts`: `deckEntries()` = prebuilt + custom decks with 40+ Main Deck cards,
@@ -415,24 +423,23 @@ in the canvas: an invisible HTML input over the drawn field for phone keyboards 
 key capture while it exists; card search, lobby room code, deck names), `touch.ts`.
 
 `Transition.ts`: the scene switch between the overworld and duels (both ways, also a duel back to the Lobby). A scene
-Boot launches once and keeps on top: `transitionTo(from, key, data)` flips card backs (`CARD_BACK`, a grid covering
-the screen: 17x7 at 640x360, laid out again when the size changes, the sweep always as long) in, diagonal by
-diagonal from the top-left, until they cover the screen, starts `key` underneath, and flips them away in the same
+Boot launches once and keeps on top: `transitionTo(from, key, data)` flips card backs (`CARD_BACK`, a 17x7 grid)
+in, diagonal by diagonal from the top-left, until they cover the screen, starts `key` underneath, and flips them away in the same
 order once that scene is created. While it plays
 (`transitioning(game)`) a full-screen zone takes all clicks and the overworld ignores keys and keeps the player still
 (and skips its usual fade-in). It is in the `&anims` dropdown.
 
-`view.ts`: game size and zoom. Each scene picks a mode when it starts (`setViewMode`): "fixed" (Boot, Duel, DeckEditor,
-Shop, Lobby) is the 640x360 layout scaled up as far as the window allows; "world" (Overworld) draws at the world menu's
-ZOOM (2x by default; 3x; AUTO = as big as whole numbers fit, like "fixed") and grows the view with the window instead
-(at 2x a 1920x1080 window shows 960x540 game pixels of the map), taking the window's shape (no side bars on wide
-phones), never under 640x360. Windows too small for 2x get a fractional fit in both modes.
-From 2x on the zoom is a whole number of physical pixels (`devicePixelRatio`, e.g. Windows display scaling at 125%),
-so game pixels stay even. `fitView` runs on window resizes; scenes relayout through `onViewResize`. Scenes under the
-card transition switch size while it covers the screen.
+`view.ts`: game size and zoom. Each scene picks a mode when it starts (`setViewMode`). "fixed" (Boot, Duel,
+DeckEditor, Shop, Lobby): 640x360 (16:9), scaled up by the biggest whole number of physical pixels the window fits
+(`viewScale`, `devicePixelRatio`: Windows display scaling, phones' full resolution); the rest is border (a 1000x600
+window stays at 1x), only a window under 640x360 gets a fractional fit. "world" (Overworld): the same at the biggest ZOOM, else
+the game is 640x360 times that scale at zoom 1 / `devicePixelRatio` and the camera zooms to the sprite size. Overlay scenes laid out in 640x360
+(WorldMenu, Transition) scale their camera with it (`scaleWithView`, `layoutScale`). `fitView` runs on window resizes
+and mode / ZOOM changes (resize, then setZoom: Phaser's resize skips the canvas's CSS size when it equals the game
+size). Scenes under the card transition switch size while it covers the screen.
 
-Phones: the page is `100dvh` tall (100vh = the height without the browser bar, which pushed the canvas under it) and
-the zoom may go below 1x so the whole screen fits; the first tap goes full screen (`fullscreenOnFirstTap`, Android /
+Phones: the page is `100dvh` tall (100vh = the height without the browser bar, which pushed the canvas under it), and
+count by their full resolution (a landscape phone is about 3x; with the browser bar showing 2x); the first tap goes full screen (`fullscreenOnFirstTap`, Android /
 desktop; iPhones have no Fullscreen API: there `manifest.webmanifest` + the apple-mobile-web-app meta tags make the
 home-screen app open without the browser bar).
 

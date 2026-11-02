@@ -1,20 +1,20 @@
 import Phaser from "phaser";
 import { WHITE, border, text } from "../ui/pixel.ts";
 import {
-  WORLD_ZOOMS, aiDeck, chosenDeck, deckEntries, playerLook, revealAiCards, setAiDeck, setChosenDeck, setPlayerLook,
-  setRevealAiCards, setWorldZoom, worldZoom,
+  aiDeck, chosenDeck, deckEntries, playerLook, revealAiCards, setAiDeck, setChosenDeck, setPlayerLook, setRevealAiCards,
+  setWorldZoom,
 } from "../ui/prefs.ts";
 import { THEME, THEMES, setTheme } from "../ui/theme.ts";
 import { enterFullscreen } from "../ui/touch.ts";
 import { makeButton, makeDropDown, type Button } from "../ui/widgets.ts";
-import { fitView, onViewResize } from "../ui/view.ts";
+import { HEIGHT, WIDTH, fitView, scaleWithView, viewScale, worldSpriteScale } from "../ui/view.ts";
 import type { Overworld } from "./Overworld.ts";
 
 /** ACTION_COLOR: buttons that leave the overworld (DECK EDITOR, MULTIPLAYER, QUICK DUEL), a lighter blue than the settings. */
 const BUTTON_COLOR = 0x2d4a7a, PICKED_COLOR = 0x3f7a3a, ACTION_COLOR = 0x4a72b0;
 /**
  * The settings panel: centred, one row per setting; labels on the left, controls in a column from `controlX` on, all
- * `controlW` wide (a pair of buttons with the `gap` between them included).
+ * `controlW` wide (a pair of buttons with the `gap` between them included). `h` counts the ZOOM row.
  */
 const PANEL = { w: 230, h: 250, row: 22, controlX: 100, controlW: 120, gap: 6 };
 
@@ -24,7 +24,7 @@ const deckOptions = () => deckEntries().map((e) => ({ value: e.key, label: e.lab
 /**
  * Overlay on the Overworld (its own scene, so it doesn't scroll with the map camera): a MENU button at the top right
  * that opens the settings panel (also M): the player character (boy / girl), your deck, the quick duel's AI deck (NPCs bring their own decks), whether
- * the AI's hand and set cards are shown, the duel UI theme, the overworld's zoom; then DECK EDITOR, MULTIPLAYER, QUICK DUEL and FULL SCREEN.
+ * the AI's hand and set cards are shown, the duel UI theme, the overworld's ZOOM; then DECK EDITOR, MULTIPLAYER, QUICK DUEL and FULL SCREEN.
  */
 export class WorldMenu extends Phaser.Scene {
   isOpen = false;
@@ -39,16 +39,18 @@ export class WorldMenu extends Phaser.Scene {
   create() {
     this.isOpen = false;
     this.panel = null;
-    const menu = makeButton(this, this.scale.width - 8 - 28, 8 + 7, 56, 14, "MENU (M)", () => this.toggle());
+    // Laid out in 640x360, scaled up with the overworld's full-detail game.
+    scaleWithView(this);
+    makeButton(this, WIDTH - 8 - 28, 8 + 7, 56, 14, "MENU (M)", () => this.toggle());
     this.input.keyboard!.on("keydown-M", () => this.toggle());
-    // The overworld's view follows the window's size: the button stays top right, an open panel centred.
-    onViewResize(this, (w) => {
-      menu.setX(w - 8 - 28);
-      if (this.isOpen) {
-        this.close();
-        this.open();
-      }
-    });
+    // A resized window may offer other ZOOM sizes: an open panel is built again.
+    const rebuild = () => {
+      if (!this.isOpen) return;
+      this.close();
+      this.open();
+    };
+    this.scale.on(Phaser.Scale.Events.RESIZE, rebuild);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, rebuild));
   }
 
   private toggle() {
@@ -66,8 +68,10 @@ export class WorldMenu extends Phaser.Scene {
     this.isOpen = true;
     // FULL SCREEN only where the browser can do it (not on iPhones: there the home-screen app has no browser bar).
     const fullscreen = this.scale.fullscreen.available;
-    const h = PANEL.h + (fullscreen ? PANEL.row : 0);
-    const { width, height } = this.scale;
+    // ZOOM only where there's a choice: windows from 1280x720 on.
+    const most = viewScale();
+    const h = PANEL.h + (fullscreen ? PANEL.row : 0) - (most >= 2 ? 0 : PANEL.row);
+    const width = WIDTH, height = HEIGHT;
     const left = Math.round((width - PANEL.w) / 2), top = Math.round((height - h) / 2);
     // Full-screen shade that also swallows clicks meant for the map.
     const shade = this.add.rectangle(0, 0, width, height, 0x000000, 0.45).setOrigin(0).setInteractive();
@@ -86,14 +90,20 @@ export class WorldMenu extends Phaser.Scene {
       y += PANEL.row;
       return at;
     };
-    /** Buttons side by side filling the control column (one choice each), rebuilt after a pick. */
+    /**
+     * Buttons side by side filling the control column (one choice each), rebuilt after a pick. Edges on whole pixels:
+     * widths differ by a pixel where the column doesn't split evenly.
+     */
     const choices = (rowY: number, labels: string[], picked: () => number, onPick: (i: number) => void) => {
-      const bw = (PANEL.controlW - PANEL.gap * (labels.length - 1)) / labels.length;
+      const step = (PANEL.controlW + PANEL.gap) / labels.length;
       let buttons: Button[] = [];
       const draw = () => {
         for (const b of buttons) b.destroy();
-        buttons = labels.map((label, i) => add(makeButton(this, cx + Math.floor(bw / 2) + i * (bw + PANEL.gap), rowY, bw, 14,
-          label, () => { onPick(i); draw(); }, i === picked() ? PICKED_COLOR : BUTTON_COLOR)));
+        buttons = labels.map((label, i) => {
+          const l = Math.round(i * step), w = Math.round((i + 1) * step - PANEL.gap) - l;
+          return add(makeButton(this, cx + l + Math.floor(w / 2), rowY, w, 14,
+            label, () => { onPick(i); draw(); }, i === picked() ? PICKED_COLOR : BUTTON_COLOR));
+        });
       };
       draw();
     };
@@ -110,12 +120,19 @@ export class WorldMenu extends Phaser.Scene {
       this.loadingTheme = true;
       void setTheme(this, themes[i]).then(() => (this.loadingTheme = false));
     });
-    // Applied once this click is done: the new size lays the panel out again (onViewResize above).
-    choices(row("ZOOM:"), WORLD_ZOOMS.map((z) => String(z).toUpperCase() + (z === "auto" ? "" : "X")),
-      () => WORLD_ZOOMS.indexOf(worldZoom()), (i) => {
-        setWorldZoom(WORLD_ZOOMS[i]);
-        this.time.delayedCall(0, () => fitView(this.game));
+    // The sprite size, 1X up to the window's scale: the map shows as much more as the sprites are smaller
+    // (src/ui/view.ts). Applied once this click is done: the game may change size (the panel is then built again for
+    // it, the resize handler above), the overworld's camera zooms.
+    if (most >= 2) {
+      const sizes = Array.from({ length: most }, (_, i) => i + 1);
+      choices(row("ZOOM:"), sizes.map((s) => `${s}X`), () => worldSpriteScale() - 1, (i) => {
+        setWorldZoom(sizes[i]);
+        this.time.delayedCall(0, () => {
+          fitView(this.game);
+          (this.scene.get("Overworld") as Overworld).layoutView();
+        });
       });
+    }
 
     y += 4;
     add(makeButton(this, mid, row(""), PANEL.controlW, 14, "DECK EDITOR", () => this.leave("DeckEditor"), ACTION_COLOR));

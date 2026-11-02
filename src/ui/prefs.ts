@@ -121,18 +121,15 @@ export function setPlayerLook(look: PlayerLook): void {
 
 const ZOOM_KEY = "world.zoom";
 /**
- * How big the overworld is drawn (world menu: ZOOM): 2 or 3 screen pixels per game pixel, a bigger window showing
- * more of the map, or "auto": as big as whole numbers fit the 640x360 view (sprites grow with the window).
+ * The overworld's sprite size (world menu: ZOOM), in screen pixels per game pixel; null = as big as the window allows
+ * (`worldSpriteScale` in src/ui/view.ts).
  */
-export const WORLD_ZOOMS = [2, 3, "auto"] as const;
-export type WorldZoom = (typeof WORLD_ZOOMS)[number];
-
-export function worldZoom(): WorldZoom {
-  const saved = load(ZOOM_KEY);
-  return saved === "auto" ? "auto" : saved === "3" ? 3 : 2;
+export function worldZoom(): number | null {
+  const zoom = Number(load(ZOOM_KEY));
+  return Number.isInteger(zoom) && zoom >= 1 ? zoom : null;
 }
 
-export function setWorldZoom(zoom: WorldZoom): void {
+export function setWorldZoom(zoom: number): void {
   store(ZOOM_KEY, String(zoom));
 }
 

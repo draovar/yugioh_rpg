@@ -13,7 +13,7 @@ import { NPCS, type NpcDef } from "./npcs.ts";
 import { depthForY, isBaked, showMap } from "./sortedWalls.ts";
 import { Ambushes, loadAmbushes } from "./ambush.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
-import { setViewMode } from "../ui/view.ts";
+import { layoutScale, setViewMode, worldSpriteScale } from "../ui/view.ts";
 
 const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
@@ -85,6 +85,11 @@ export class Overworld extends Phaser.Scene {
   /** On-screen D-pad and X on touch devices. */
   private pad: TouchPad | null = null;
   private dialog!: DialogBox;
+  /**
+   * Screen-fixed HUD (chips, touch pad, dialog box), laid out in 640x360: scaled up to the game's size whatever the
+   * camera's zoom (layoutView). Its objects need scroll factor 0 too, for input hit tests.
+   */
+  private hud!: Phaser.GameObjects.Container;
   private talkHint!: Phaser.GameObjects.BitmapText;
   /** Spots used by facing them and pressing X: signs and shops (rectangles named "sign" / "shop", layer "objects"). */
   private spots: { area: Phaser.Geom.Rectangle; use: () => void }[] = [];
@@ -107,7 +112,7 @@ export class Overworld extends Phaser.Scene {
   }
 
   init(data: { duelResult?: { won: boolean } }) {
-    // A bigger window shows more of the map rather than bigger sprites (src/ui/view.ts).
+    // A smaller ZOOM than the window's scale makes the game as big as the screen (src/ui/view.ts).
     setViewMode(this.game, "world");
     this.duelResult = data?.duelResult;
     this.warping = false;
@@ -121,8 +126,10 @@ export class Overworld extends Phaser.Scene {
   create() {
     this.scene.launch("WorldMenu");
     if (import.meta.env.DEV) (window as unknown as { overworld: Overworld }).overworld = this;
+    this.hud = this.add.container(0, 0).setScrollFactor(0).setDepth(200);
     if (!this.cache.tilemap.exists(mapKey(currentMap))) {
-      text(this, Math.round(this.scale.width / 2), Math.round(this.scale.height / 2) - 10, "NO MAP: RUN NPM RUN BUILD-TILES (NEEDS VENDOR/PAID)", { color: WHITE, originX: 0.5 });
+      this.hud.add(text(this, 320, 170, "NO MAP: RUN NPM RUN BUILD-TILES (NEEDS VENDOR/PAID)", { color: WHITE, originX: 0.5 }).setScrollFactor(0));
+      this.hud.setScale(layoutScale(this));
       return;
     }
     // Empty cells stay null rather than becoming Tile objects: the main city's layers have ~590,000 cells, mostly
@@ -221,19 +228,28 @@ export class Overworld extends Phaser.Scene {
         this.warp(String(prop("map")), String(prop("spawn")), prop("keepY") === true));
     }
 
-    text(this, 8, 8, `CHIPS: ${this.chips}`, { color: WHITE, scale: 2 }).setScrollFactor(0).setDepth(100);
+    this.hud.add(text(this, 8, 8, `CHIPS: ${this.chips}`, { color: WHITE, scale: 2 }).setScrollFactor(0));
     this.talkHint = text(this, 0, 0, "X", { color: 0xffd75e, scale: 2 }).setDepth(150).setVisible(false);
     // On touch devices the dialog sits between the D-pad and the X button.
-    this.pad = TOUCH ? new TouchPad(this, (code) => this.handleKey(code)) : null;
-    this.dialog = new DialogBox(this, this.cameras.main, TOUCH
-      ? { left: DPAD.left + DPAD.r + 8, right: X_BUTTON.right + X_BUTTON.r + 8 } : undefined);
+    this.pad = TOUCH ? new TouchPad(this, this.hud, (code) => this.handleKey(code)) : null;
+    this.dialog = new DialogBox(this, this.hud, TOUCH
+      ? { left: DPAD.x + DPAD.r + 8, right: 640 - (X_BUTTON.x - X_BUTTON.r) + 8 } : undefined);
 
     // Key events rather than JustDown polling, so quick taps are never missed.
     this.input.keyboard!.on("keydown", (event: KeyboardEvent) => this.handleKey(event.code));
 
-    // roundPixels: startFollow's default (false) would switch off the game's pixel snapping for this camera, and at
-    // half-pixel scrolls the baked wall strips then leave 1px seams.
-    this.cameras.main.setBounds(0, 0, map.widthInPixels, map.heightInPixels).startFollow(this.player, true);
+    // The camera follows the player snapped to whole screen pixels (read as it renders, after physics moved them): zoomed
+    // in, a fraction of a game pixel of scroll would make some map pixels a screen pixel wider than others (roundPixels
+    // only snaps what the zoom leaves unscaled). roundPixels: startFollow's default (false) would switch off the game's
+    // pixel snapping for this camera, and at half-pixel scrolls the baked wall strips then leave 1px seams.
+    const cam = this.cameras.main, player = this.player;
+    const snap = (v: number) => Math.round(v * cam.zoom) / cam.zoom;
+    cam.startFollow({ get x() { return snap(player.x); }, get y() { return snap(player.y); } }, true);
+    // The game changes size with the window and the world menu's ZOOM.
+    this.layoutView();
+    const relayout = () => this.layoutView();
+    this.scale.on(Phaser.Scale.Events.RESIZE, relayout);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.scale.off(Phaser.Scale.Events.RESIZE, relayout));
     this.physics.world.setBounds(0, 0, map.widthInPixels, map.heightInPixels);
     // Coming back from a duel the card wave uncovers the map instead.
     if (!transitioning(this.game)) this.cameras.main.fadeIn(FADE_MS);
@@ -248,6 +264,23 @@ export class Overworld extends Phaser.Scene {
       const won = this.duelResult.won;
       this.dialog.open(opponent, won ? "Not bad... you got me this time." : "Better luck next time!", ["OK"], ambusherLeaves);
     } else ambusherLeaves();
+  }
+
+  /**
+   * For the game's size and the world menu's ZOOM (src/ui/view.ts): at full detail the camera zooms to the sprite
+   * size. The HUD and the talk hint stay at the 640x360 layout's scale: scroll-factor-0 objects zoom around the
+   * screen's centre too, so the HUD is scaled back around it. The camera's bounds on whole screen pixels (the scroll
+   * stays on them where it stops at an edge), a map smaller than the view in its middle.
+   */
+  layoutView() {
+    if (!this.talkHint?.active) return; // no map
+    const scale = layoutScale(this), zoom = scale === 1 ? 1 : worldSpriteScale(), cam = this.cameras.main;
+    const { width, height } = this.mapSize, back = 1 - 1 / zoom;
+    cam.setZoom(zoom);
+    this.hud.setScale(scale / zoom).setPosition(this.scale.width / 2 * back, this.scale.height / 2 * back);
+    this.talkHint.setScale(2 * scale / zoom);
+    const w = Math.max(width, this.scale.width / zoom), h = Math.max(height, this.scale.height / zoom);
+    cam.setBounds(Math.round((width - w) / 2 * zoom) / zoom, Math.round((height - h) / 2 * zoom) / zoom, w, h);
   }
 
   /** Warps to the target map's arrival point. */
