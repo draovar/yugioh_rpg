@@ -202,4 +202,6 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
 Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-6 (pool generator, hand-picked
 older card versions, full-size data + art, random-deck smoke, UI checks, May 2008 banlist) done, next is phase 7 (NPC decks as data files). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
 `docs/ai-reports.md`, only clear bugs are fixed right away. Overworld: the main city is built (`build-main-city`) and now edited by hand in Tiled, trainer line-of-sight challenges next.
-RPG loop: card collection, rewards/boosters, story, bosses, saving. Full list: `docs/roadmap.md`.
+RPG loop: card shop v1 done (`src/shop/`: twelve core boosters, pack opening; packs free, pulled cards not kept, no `shop`
+spot placed in main-city yet); next card collection (keep pulled cards, spend chips), rewards after duels, story, bosses,
+saving. Full list: `docs/roadmap.md`.
