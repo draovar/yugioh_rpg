@@ -359,7 +359,8 @@ The `Shop` scene (a `shop` spot in the overworld, or `?shop`), "fixed" 640x360. 
 theme's (the owner's choice: one real-shop look; colours in `C`; the checklist is always Runewood's board and paper,
 from `THEMES.runewood`, loaded under keys of its own), and Runewood list-row buttons (`button`: EXIT in dark brown with a white label, - / +, BUY).
 `boosters.ts` = the packs on
-sale (`BOOSTERS`: set code, price, the display box's colour), the first twelve core sets so far; their card lists come
+sale (`BOOSTERS`: set code, price, the display box's colour), all 27 core sets (LOB to LODT; later each shop spot will
+list which sets it sells); their card lists come
 from `public/data/boosters.json` (`data/boosters.json` from `build-pool`, copied by `build-data`: per set its name,
 release date and `[number, passcode, rarity]` per card).
 
@@ -394,8 +395,10 @@ release date and `[number, passcode, rarity]` per card).
   with the label in the middle, darker on hover, firing on release. A status (no card list) shows in the price's place.
 - BUY opens the packs (`PackOpening.ts`, one `pullPack` each), free for now: no chips are spent and the cards aren't
   kept (no collection yet).
-  `pullPack` (`boosters.ts`) deals `CARDS_PER_PACK` cards: one from the rare slot (roughly the era's odds: Secret 1 pack
-  in 24, Ultra 1 in 12, Super 1 in 6, else Rare; a rarity the set lacks gives the next lower one) and different
+  `pullPack` (`boosters.ts`) deals `CARDS_PER_PACK` cards: one from the rare slot (the same odds for every set from LOB to
+  LODT, Yugipedia's "Core Booster": Secret 1 pack in 24, Ultra 1 in 12, Super 1 in 4, else Rare; the sets without
+  Secret Rares, SOD to CDIP, had an Ultimate Rare there, so that roll picks any of their Rares, Super Rares and Ultra
+  Rares, shown with the card's own rarity) and different
   commons (a Short Print half as likely as a Common, a Super Short Print a quarter), in random order.
 - The opening is an overlay in the shop scene (depth 100, a zone over everything takes the clicks; the shop passes it
   its keys), laid out like the duel: the cards in the left 416 px, the duel's card info panel (`CardInfo` on the
