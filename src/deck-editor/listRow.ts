@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import { TYPE, type CardRecord } from "../duel/engine/cardData.ts";
 import { attributeNames, raceNames } from "../duel/engine/text.ts";
 import { spellTrapKind } from "../duel-screen/CardInfo.ts";
-import { INK, WHITE, text } from "../ui/pixel.ts";
+import { ART_ATLAS } from "../duel-screen/CardSprite.ts";
+import { FONT_UI, INK, INK_SOFT, WHITE, fit, text } from "../ui/pixel.ts";
 
 /** Colour strip on a list row by frame (the card frames' main colours). */
 const KIND_COLOR = { normal: 0xd8b04a, effect: 0xc8692c, ritual: 0x4f78c8, fusion: 0x8a54a8, spell: 0x2a9a7a, trap: 0xb04a8a };
@@ -13,6 +14,24 @@ export function kindColor(r: CardRecord): number {
   if (r.type & TYPE.RITUAL) return KIND_COLOR.ritual;
   if (r.type & TYPE.EFFECT) return KIND_COLOR.effect;
   return KIND_COLOR.normal;
+}
+
+/**
+ * A card's list row (the deck editor's card list, the deck shop's deck list) at (x, y), w wide, h tall: its
+ * frame-colour strip (on `g`), 32x32 art, the name (leaving `nameRoom` px free at the right for a count), the Level /
+ * Attribute / Type line (or the Spell / Trap kind) and ATK / DEF, in `ink` and `soft`; the art and texts go in `into`.
+ */
+export function cardRow(scene: Phaser.Scene, into: Phaser.GameObjects.Container, g: Phaser.GameObjects.Graphics, r: CardRecord,
+  x: number, y: number, w: number, h: number, nameRoom: number, ink: number, soft: number) {
+  g.fillStyle(kindColor(r)).fillRect(x + 1, y + 2, 2, h - 3);
+  const artX = x + 5, artY = y + 1;
+  if (scene.textures.get(ART_ATLAS).has(String(r.code))) into.add(scene.add.image(artX, artY, ART_ATLAS, String(r.code)).setOrigin(0));
+  else g.fillStyle(INK_SOFT).fillRect(artX, artY, 32, 32);
+  const tx = artX + 36, right = x + w - 2;
+  into.add(text(scene, tx, y + 4, fit(scene, FONT_UI, r.name.toUpperCase(), right - tx - nameRoom), { color: ink }));
+  const [line2, line3] = describe(r);
+  into.add(text(scene, tx, y + 14, fit(scene, FONT_UI, line2, right - tx), { color: soft }));
+  if (line3) into.add(text(scene, tx, y + 24, line3, { color: soft }));
 }
 
 /** A list row's second and third lines: "LV4 DARK SPELLCASTER" / "ATK 2500  DEF 2100", or "SPELL - QUICK-PLAY". */

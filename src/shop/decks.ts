@@ -1,7 +1,8 @@
 // The starter and structure decks the deck shop sells, in release order: name and TCG release (YGOPRODeck's set
 // list), the price (placeholders: a starter deck 200 chips, a structure deck 250). For now only the 12 whose box
 // pictures are cut out; the others (commented out) come back once theirs are.
-// Box pictures: public/deck-boxes/<code>.png (`npm run build-deck-boxes`).
+// Box pictures: public/deck-boxes/<code>.png (`npm run build-deck-boxes`); card lists: public/data/decks.json
+// (`npm run build-data`).
 
 export interface DeckStock {
   /** Set code; also the picture's name. */
@@ -12,6 +13,15 @@ export interface DeckStock {
   released: string;
   /** In chips. */
   price: number;
+}
+
+/** A deck's entry in public/data/decks.json (data/decks.json, from build-pool): each card is [number, passcode, rarity, copies]. */
+export interface DeckList {
+  code: string;
+  name: string;
+  /** TCG release date, YYYY-MM-DD. */
+  released: string;
+  cards: [string, number, string, number][];
 }
 
 const starter = (code: string, name: string, released: string): DeckStock => ({ code, name, kind: "starter", released, price: 200 });

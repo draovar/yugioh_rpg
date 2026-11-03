@@ -4,6 +4,7 @@
 //   public/data/scripts.json – { fileName: luaSource } for engine utility scripts + pool card scripts
 //   public/data/strings.json – { system: { id: text }, counter: { type: name }, victory: { reason: text } } from EDOPro's strings.conf
 //   public/data/boosters.json – the core booster sets' card lists with rarities (data/boosters.json, from build-pool)
+//   public/data/decks.json   – the starter and structure decks' card lists with rarities and copies (data/decks.json, from build-pool)
 // Run `npm run fetch-data` first.
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
@@ -150,6 +151,11 @@ for (const set of boosters) for (const [number, code] of set.cards) {
   if (!inPool.has(code)) throw new Error(`boosters.json: ${number} (${code}) isn't in the pool: rerun npm run build-pool`);
 }
 writeFileSync(path.join(OUT, "boosters.json"), JSON.stringify(boosters));
+const decks = JSON.parse(readFileSync(path.join(ROOT, "data/decks.json"), "utf-8")).decks;
+for (const deck of decks) for (const [number, code] of deck.cards) {
+  if (!inPool.has(code)) throw new Error(`decks.json: ${number} (${code}) isn't in the pool: rerun npm run build-pool`);
+}
+writeFileSync(path.join(OUT, "decks.json"), JSON.stringify(decks));
 console.log(`cards: ${cards.length - tokens.size} + ${tokens.size} tokens (${variants.size} in an older version: card-versions.json` +
   `), scripts: ${Object.keys(scripts).length}`);
 console.log(`banlist ${banlist.name}: ${cards.filter((c) => c.limit !== undefined).length} pool cards limited` +

@@ -15,10 +15,10 @@ import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import type { Deck } from "../duel/engine/DuelSession.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { CardInfo } from "../duel-screen/CardInfo.ts";
-import { ART_ATLAS, CardSprite } from "../duel-screen/CardSprite.ts";
+import { CardSprite } from "../duel-screen/CardSprite.ts";
 import { drawTable } from "../duel-screen/field.ts";
 import { CARD, INFO, INSET } from "../duel-screen/layout.ts";
-import { FONT_UI, INK_SOFT, fit, text } from "../ui/pixel.ts";
+import { FONT_UI, fit, text } from "../ui/pixel.ts";
 import { MAX_CUSTOM_DECKS, chosenDeck, customDeckKey, customDecks, deleteCustomDeck, saveCustomDeck, type CustomDeck } from "../ui/prefs.ts";
 import { createTextInput, type TextInput } from "../ui/textInput.ts";
 import { THEME, ui } from "../ui/theme.ts";
@@ -30,7 +30,7 @@ import {
   BAR, CLEAR_X, EXTRA_LABEL_Y, EXTRA_Y, FELT, GRID_W, GRID_X, LIST, LIST_H, MAIN_LABEL_Y, MAIN_Y, MAT, OVERLAY_DEPTH, PANEL,
   PITCH, ROW_PITCH, ROW_W, ROW_X, SCOPE, SCROLL, SEARCH, SPLIT, STATUS_Y, TOOLS_Y,
 } from "./layout.ts";
-import { describe, eyeIcon, kindColor, limitBadge } from "./listRow.ts";
+import { cardRow, eyeIcon, limitBadge } from "./listRow.ts";
 import { setViewMode } from "../ui/view.ts";
 
 /** Deck counts below the limits (the Main Deck under 40). */
@@ -459,19 +459,11 @@ export class DeckEditor extends Phaser.Scene {
       const y = LIST.y + INSET.paper + i * LIST.rowH;
       if (i === this.hoverRow) g.fillStyle(ink, 0.12).fillRect(ROW_X, y, ROW_W, LIST.rowH);
       if (i > 0) g.fillStyle(ink, 0.18).fillRect(ROW_X, y, ROW_W, 1);
-      g.fillStyle(kindColor(r)).fillRect(ROW_X + 1, y + 2, 2, LIST.rowH - 3);
-      const artX = ROW_X + 5, artY = y + 1;
-      if (this.textures.get(ART_ATLAS).has(String(r.code))) this.rows.add(this.add.image(artX, artY, ART_ATLAS, String(r.code)).setOrigin(0));
-      else g.fillStyle(INK_SOFT).fillRect(artX, artY, 32, 32);
-      if (i === this.hoverRow && this.hoverArt) this.rows.add(eyeIcon(this, artX, artY));
-      const tx = artX + 36, right = ROW_X + ROW_W - 2;
       const copies = inDeck.get(r.code) ?? 0;
-      const countW = copies ? 14 : 0;
-      this.rows.add(text(this, tx, y + 4, fit(this, FONT_UI, r.name.toUpperCase(), right - tx - countW), { color: ink }));
-      if (copies) this.rows.add(text(this, right, y + 4, `x${copies}`, { color: copies >= copiesAllowed(r) ? THEME.panel.error : ink, originX: 1 }));
-      const [line2, line3] = describe(r);
-      this.rows.add(text(this, tx, y + 14, fit(this, FONT_UI, line2, right - tx), { color: soft }));
-      if (line3) this.rows.add(text(this, tx, y + 24, line3, { color: soft }));
+      cardRow(this, this.rows, g, r, ROW_X, y, ROW_W, LIST.rowH, copies ? 14 : 0, ink, soft);
+      const artX = ROW_X + 5, artY = y + 1;
+      if (i === this.hoverRow && this.hoverArt) this.rows.add(eyeIcon(this, artX, artY));
+      if (copies) this.rows.add(text(this, ROW_X + ROW_W - 2, y + 4, `x${copies}`, { color: copies >= copiesAllowed(r) ? THEME.panel.error : ink, originX: 1 }));
       if (r.limit !== undefined) this.rows.add(limitBadge(this, artX - 1, artY - 1, r.limit));
     }
     if (!this.results.length) this.rows.add(text(this, LIST.x + LIST.w / 2, LIST.y + 20, "NO CARDS FOUND", { color: soft, originX: 0.5 }));

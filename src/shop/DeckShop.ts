@@ -8,13 +8,15 @@
 // Box pictures: public/deck-boxes/<CODE>.png (`npm run build-deck-boxes`: pixel art at half the cut-outs' size, with an
 // outline); a missing one shows as a blank box with its code.
 import Phaser from "phaser";
+import { sortDeck } from "../duel/decks/deckRules.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { text } from "../ui/pixel.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
 import { setViewMode } from "../ui/view.ts";
-import { DECKS, type DeckStock } from "./decks.ts";
+import { rarityLook } from "./boosters.ts";
+import { DECKS, type DeckList, type DeckStock } from "./decks.ts";
 import type { ShopData } from "./Shop.ts";
-import { ShopBoard } from "./ShopBoard.ts";
+import { ShopBoard, type BoardRow } from "./ShopBoard.ts";
 import { BUTTON_H, C, CASE, DRAG_PX, IN, MONTHS, ScrollingFixture, drawRoom, preloadShopButtons, shopButton } from "./shopParts.ts";
 
 /** Box pictures are drawn at 1x (tools/art/build-deck-boxes.mjs makes them this size, outline included). */
@@ -42,11 +44,13 @@ const PB = {
 };
 /** A box's shadow on the board: a black copy this far down-right, this opaque. */
 const SHADOW = { by: 2, alpha: 0.3 };
+const LISTS_KEY = "decks";
 
 const boxKey = (d: DeckStock) => `deck-box-${d.code}`;
 
 export class DeckShop extends Phaser.Scene {
   private engine!: Engine;
+  private lists = new Map<string, DeckList>();
   private chips = 0;
   private picked = 0;
   private boxes: Phaser.GameObjects.Container[] = [];
@@ -66,6 +70,7 @@ export class DeckShop extends Phaser.Scene {
   }
 
   preload() {
+    if (!this.cache.json.exists(LISTS_KEY)) this.load.json(LISTS_KEY, "data/decks.json");
     ShopBoard.preload(this);
     preloadShopButtons(this);
     for (const d of DECKS) if (!this.textures.exists(boxKey(d))) this.load.image(boxKey(d), `deck-boxes/${d.code}.png`);
@@ -74,6 +79,7 @@ export class DeckShop extends Phaser.Scene {
   async create() {
     setViewMode(this.game, "fixed");
     this.engine = await loadEngine();
+    this.lists = new Map(((this.cache.json.get(LISTS_KEY) as DeckList[] | undefined) ?? []).map((l) => [l.code, l]));
 
     // The pegboard's hardboard, a shadow under the frame's top; its holes scroll with the rows.
     drawRoom(this, "DECK SHOP", (g) => {
@@ -82,7 +88,9 @@ export class DeckShop extends Phaser.Scene {
     });
     this.drawWall();
     this.wall.makeCues();
-    this.board = new ShopBoard(this, this.engine, { maxQuantity: MAX_DECKS, busy: () => false, onBuy: () => this.buy() });
+    this.board = new ShopBoard(this, this.engine, {
+      maxQuantity: MAX_DECKS, busy: () => false, onBuy: () => this.buy(), rows: "cards",
+    });
 
     text(this, 10, 12, `CHIPS: ${this.chips}`, { color: C.light });
     shopButton(this, CASE.x + CASE.w - 40, 15 - Math.floor(BUTTON_H / 2), 40, "EXIT", "dark", () => this.exit());
@@ -172,9 +180,18 @@ export class DeckShop extends Phaser.Scene {
 
   /** The picked deck on the board. */
   private showDeck() {
-    const d = DECKS[this.picked], [year, month] = d.released.split("-").map(Number);
-    const facts = `${d.kind === "starter" ? "STARTER DECK" : "STRUCTURE DECK"}  -  ${MONTHS[month - 1]} ${year}`;
-    this.board.show(d.name, facts, [], d.price);
+    const d = DECKS[this.picked], [year, month] = d.released.split("-").map(Number), list = this.lists.get(d.code);
+    // Its cards as the deck editor sorts them by type, each with its copies and (above Common) its rarity chip.
+    const copies = new Map<number, { copies: number; rarity: string }>();
+    for (const [, code, rarity, n] of list?.cards ?? []) copies.set(code, { copies: (copies.get(code)?.copies ?? 0) + n, rarity });
+    const rows: BoardRow[] = sortDeck([...copies.keys()], this.engine.cards).map((code) => {
+      const c = copies.get(code)!, name = this.engine.cards.records.get(code)?.name ?? `#${code}`;
+      return { code, name, copies: c.copies, chip: c.rarity === "Common" ? null : rarityLook(c.rarity) };
+    });
+    const total = rows.reduce((n, r) => n + (r.copies ?? 0), 0);
+    const facts = `${d.kind === "starter" ? "STARTER DECK" : "STRUCTURE DECK"}  -  ${MONTHS[month - 1]} ${year}` +
+      (list ? `  -  ${total} CARDS` : "");
+    this.board.show(d.name, facts, rows, d.price);
     this.drawTags();
   }
 

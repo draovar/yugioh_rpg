@@ -18,7 +18,7 @@ src/lobby/             multiplayer Lobby scene
 src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition, view
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
 tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helpers
-data/                  pool.json (the card pool, generated) + pool-exceptions.json, boosters.json (booster set lists, generated), card-versions.json (older versions), banlist.json, maps, characters, palette
+data/                  pool.json (the card pool, generated) + pool-exceptions.json, boosters.json (booster set lists, generated), decks.json (starter / structure deck lists, generated), card-versions.json (older versions), banlist.json, maps, characters, palette
 vendor/                Project Ignis repos, art downloads, paid assets (gitignored)
 ```
 
@@ -345,7 +345,8 @@ table). Geometry in `layout.ts`.
 - Right, where the duel's info panel sits: the card list. Search box = an HTML input via `textInput.ts`, with an ALL /
   NAME toggle (card text too or names only); SORT drop-down; FILTERS (`filterPanel.ts`, shown in the list's place:
   toggle buttons per group on a 5-column grid, long labels two cells, LEVEL half cells in one row; `FILTER_COLUMNS = 0`
-  = buttons as wide as their labels); 8 rows with art (`listRow.ts`: frame-colour strip, text lines, the eye icon, the banlist badge `limitBadge`),
+  = buttons as wide as their labels); 8 rows with art (`listRow.ts`: `cardRow` = frame-colour strip, art, text lines,
+  shared with the deck shop's deck list; the eye icon, the banlist badge `limitBadge`),
   scroll by wheel / drag / scrollbar.
 - Click a listed card = add, a deck card = remove. Hovering a listed card's art shows an eye over it; clicking the art
   opens the card's details (`CardInfo`) over the list with ADD / CLOSE (Esc). Hovering a deck card (touch: holding it)
@@ -360,7 +361,8 @@ Two shop scenes, "fixed" 640x360, laid out alike: a fixture on a panelled wall o
 they share: `shopParts.ts` (colours `C`; `CASE` / `IN`, the fixture's frame and inside; `drawRoom`: wall, sign, frame,
 baked into one texture, the scene drawing the inside; `shopButton`: Runewood list-row buttons, EXIT in dark brown with
 a white label, - / +, BUY; `ScrollingFixture`: what's on the fixture, scrolling, described below) and `ShopBoard.ts` (the
-board on the right: name, facts, a card list with chips, details, price, - / +, BUY; described below). They have their
+board on the right: name, facts, a card list of chip rows or the deck editor's card rows, details, price, - / +, BUY;
+described below). They have their
 own look, not the UI theme's (the owner's choice: one real-shop look; the board is always Runewood's board and paper,
 from `THEMES.runewood`, loaded under keys of its own).
 
@@ -449,9 +451,14 @@ set code, name, kind (starter / structure), TCG release, price), the starter and
   the hanger hole cut out (`HOLE` in the build: a euro slot drawn as a pixel mask, its rim in the outline colour). The
   cut-outs share one 200x300 frame (the box at the same pixels in each), so the build crops them all to the same
   151x248 rectangle first and every box hangs from its peg at the same point.
-- Right: `ShopBoard` with the deck's name, kind and release month, the price, - / + (1 to `MAX_DECKS`) and BUY. Not
-  built yet: the deck lists on the board (copy counts from Yugipedia's set lists) and buying (BUY only says "NOT FOR
-  SALE YET").
+- Right: `ShopBoard` with the deck's name, kind, release month and size, its deck list, the price, - / + (1 to
+  `MAX_DECKS`) and BUY. The list (`rows: "cards"`) is the deck editor's rows (`cardRow` in `deck-editor/listRow.ts`:
+  frame-colour strip, 32x32 art, name, Level / Attribute / Type or Spell / Trap kind, ATK / DEF), 33 px tall so 8 fit
+  the paper, one card per row in the deck editor's type order (`sortDeck`), its copies right of the name and, above
+  Common, its rarity chip right of the ATK / DEF line; a click opens the card's details like the checklist's. The lists
+  come from `public/data/decks.json` (`data/decks.json` from `build-pool`, copied by `build-data`: per deck its name,
+  release and `[number, passcode, rarity, copies]` per card). Not built yet: buying (BUY only says "NOT FOR SALE
+  YET").
 
 ## Shared UI (`src/ui/`)
 
@@ -493,9 +500,12 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   from YGOPRODeck set lists, mapped to BabelCDB passcodes (an alias with the same name is an alt art, one with another
   name a card of its own, e.g. Harpie Lady 1), ± `pool-exceptions.json` by name → `data/pool.json`; and the core
   booster sets' card lists → `data/boosters.json`: per card the original print's number and rarity (LOB-001, else -EN,
-  else -E), variant rarities like Ultimate / Ghost Rare left out, the highest base rarity when a print lists several), `build-data` (pool → `public/data/*.json`, modern versions except the GOAT / pre-errata ones `card-versions.json` picks, under the real passcodes,
+  else -E), variant rarities like Ultimate / Ghost Rare left out, the highest base rarity when a print lists several;
+  the same for the starter and structure decks → `data/decks.json`, plus each card's copies from Yugipedia's set list:
+  its API, cached in `vendor/yugipedia/`, a pause between requests; `Set list` lines `NUMBER; NAME; RARITIES; PRINT;
+  QTY`, PRINT sometimes left out), `build-data` (pool → `public/data/*.json`, modern versions except the GOAT / pre-errata ones `card-versions.json` picks, under the real passcodes,
   plus the tokens pool scripts create; `data/banlist.json` → each card's `limit` in `cards.json`; `data/boosters.json` →
-  `boosters.json`, every card checked to be in the pool), `check-cards`.
+  `boosters.json` and `data/decks.json` → `decks.json`, every card checked to be in the pool), `check-cards`.
 - `art/`: `fetch-art` / `build-art` (YGOPRODeck crops → the shared palette, `art32` atlas + `art128`), `build-palette`,
   `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `make-gif`, `build-boosters`
   (`vendor/paid/booster-packs/<SET>.png`, pack pictures saved by hand, in the private assets repo; the deploy runs it

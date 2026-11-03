@@ -1,7 +1,9 @@
 // Generates data/pool.json: every card printed in a TCG product released on or before CUTOFF, plus/minus the
 // hand-picked cards in data/pool-exceptions.json; and data/boosters.json: the core booster sets' card lists with each
-// card's rarity (the card shop's packs). Card lists come from YGOPRODeck (cached in vendor/ygoprodeck/;
-// `--refresh` downloads them again), passcodes from BabelCDB (run `npm run fetch-data` first).
+// card's rarity (the card shop's packs); and data/decks.json: the starter and structure decks' card lists with each
+// card's rarity and copies (the deck shop). Card lists come from YGOPRODeck (cached in vendor/ygoprodeck/;
+// `--refresh` downloads them again), copy counts from Yugipedia (cached in vendor/yugipedia/), passcodes from BabelCDB
+// (run `npm run fetch-data` first).
 // Usage: npm run build-pool [-- --refresh]
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
@@ -119,3 +121,97 @@ writeFileSync(path.join(ROOT, "data/boosters.json"),
     s.cards.map((c) => `      ${JSON.stringify(c)}`).join(",\n") + "\n    ] }").join(",\n")}\n  ]\n}\n`);
 console.log(`${boosterSets.length} booster sets -> data/boosters.json (${boosterSets.reduce((n, s) => n + s.cards.length, 0)} cards)`);
 if (notInPool.length) console.log(`left out of booster lists, not in the pool: ${notInPool.join(", ")}`);
+
+// Starter and structure decks up to CUTOFF, in release order (the deck shop's stock), by their Yugipedia set names.
+// Each card's number and rarity come from YGOPRODeck's prints like the boosters'; how many copies a deck holds from
+// Yugipedia's set list (YGOPRODeck has no counts): `{{Set list|...|rarities=R|qty=N|` then a line per card,
+// "NUMBER; NAME; RARITIES; PRINT; QTY" (some leave PRINT out), empty fields taking the list's defaults. Cached in
+// vendor/yugipedia/.
+const DECK_SETS = [
+  ["SDY", "Starter Deck: Yugi"], ["SDK", "Starter Deck: Kaiba"], ["SDJ", "Starter Deck: Joey"], ["SDP", "Starter Deck: Pegasus"],
+  ["SYE", "Starter Deck: Yugi Evolution"], ["SKE", "Starter Deck: Kaiba Evolution"], ["SD1", "Structure Deck: Dragon's Roar"],
+  ["SD2", "Structure Deck: Zombie Madness"], ["SD3", "Structure Deck: Blaze of Destruction"], ["SD4", "Structure Deck: Fury from the Deep"],
+  ["SD5", "Structure Deck: Warrior's Triumph"], ["SD6", "Structure Deck: Spellcaster's Judgment"], ["YSD", "Starter Deck 2006"],
+  ["SD7", "Structure Deck: Invincible Fortress"], ["SD8", "Structure Deck: Lord of the Storm"], ["SD09", "Structure Deck: Dinosaur's Rage"],
+  ["SD10", "Structure Deck: Machine Re-Volt"], ["YSDJ", "Starter Deck: Jaden Yuki"], ["YSDS", "Starter Deck: Syrus Truesdale"],
+  ["SDRL", "Rise of the Dragon Lords Structure Deck"], ["SDDE", "The Dark Emperor Structure Deck"],
+];
+const YUGIPEDIA = path.join(ROOT, "vendor/yugipedia");
+
+/** The wikitext of a set's English card list (TCG-EN, else TCG-NA for the oldest), cached. */
+async function setList(name) {
+  const file = path.join(YUGIPEDIA, `${name.replace(/[^A-Za-z0-9]+/g, "_")}.txt`);
+  if (!refresh && existsSync(file)) return readFileSync(file, "utf-8");
+  for (const region of ["TCG-EN", "TCG-NA"]) {
+    const page = `Set_Card_Lists:${name} (${region})`.replace(/ /g, "_");
+    const url = `https://yugipedia.com/api.php?action=parse&page=${encodeURIComponent(page)}&prop=wikitext&format=json`;
+    console.log(`downloading ${url}`);
+    // Yugipedia turns away requests without a browser's user agent, and rate-limits: a pause before each request, and
+    // on "too many requests" (429) longer waits and again.
+    let res;
+    for (let wait = 2000; ; wait *= 2) {
+      await new Promise((r) => setTimeout(r, wait));
+      res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36" } });
+      if (res.status !== 429 || wait > 60000) break;
+    }
+    if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+    const text = (await res.json()).parse?.wikitext?.["*"];
+    if (!text) continue;
+    mkdirSync(YUGIPEDIA, { recursive: true });
+    writeFileSync(file, text);
+    return text;
+  }
+  throw new Error(`Yugipedia: no English card list for ${name}`);
+}
+
+/** Copies per card number from a set list's wikitext. */
+function copies(wikitext) {
+  const qty = new Map();
+  for (const block of wikitext.matchAll(/\{\{Set list\|([^\n]*)\n([\s\S]*?)\}\}/g)) {
+    const defaultQty = Number(block[1].match(/qty=(\d+)/)?.[1] ?? 1);
+    for (const line of block[2].split("\n")) {
+      const f = line.split(";").map((s) => s.trim());
+      if (f.length < 2 || !/^[A-Z0-9]+-[A-Z]*\d+$/.test(f[0])) continue;
+      // Some lists leave the print column out ("C; 2"); a print is a word ("New"), so the copies are the first number.
+      qty.set(f[0], Number(f.slice(3).find((s) => /^\d+$/.test(s)) ?? defaultQty));
+    }
+  }
+  return qty;
+}
+
+const deckSets = [];
+const deckNotes = [];
+for (const [code, name] of DECK_SETS) {
+  // The set with this code holding the most cards (SD1 is also "Structure Deck: Deluxe Edition"'s code).
+  const set = sets.filter((s) => s.set_code === code && s.tcg_date).sort((a, b) => b.num_of_cards - a.num_of_cards)[0];
+  if (!set) throw new Error(`cardsets.json: no deck ${code}`);
+  const qty = copies(await setList(name));
+  const list = [];
+  for (const card of allCards) {
+    const prints = (card.card_sets ?? []).filter((p) => p.set_name === set.set_name)
+      .map((p) => ({ ...p, region: p.set_code.match(/^[A-Z0-9]+-([A-Z]*)\d+$/)?.[1] }))
+      .filter((p) => REGIONS.includes(p.region));
+    if (!prints.length) continue;
+    const region = REGIONS.find((r) => prints.some((p) => p.region === r));
+    const own = prints.filter((p) => p.region === region);
+    const base = own.map((p) => p.set_rarity).filter((r) => RARITIES.includes(r));
+    const rarity = base.length ? base.reduce((a, b) => (RARITIES.indexOf(b) > RARITIES.indexOf(a) ? b : a)) : own[0].set_rarity;
+    const id = passcode(card);
+    if (!id || !pool.has(id)) { deckNotes.push(`${card.name} (${code}): not in the pool, left out`); continue; }
+    const n = qty.get(own[0].set_code);
+    if (n === undefined) deckNotes.push(`${own[0].set_code} ${card.name}: not on Yugipedia's list, 1 copy`);
+    list.push([own[0].set_code, id, rarity, n ?? 1]);
+  }
+  list.sort((a, b) => a[0].localeCompare(b[0]));
+  for (const number of qty.keys()) if (!list.some((c) => c[0] === number)) deckNotes.push(`${number} (${code}): on Yugipedia's list, not YGOPRODeck's`);
+  deckSets.push({ code, name, released: set.tcg_date, cards: list });
+}
+const deckComment = "Generated by tools/data/build-pool.mjs from YGOPRODeck's set lists and Yugipedia's copy counts; " +
+  "don't edit by hand. Each card: [number, passcode, rarity, copies].";
+writeFileSync(path.join(ROOT, "data/decks.json"),
+  `{\n  "_comment": ${JSON.stringify(deckComment)},\n  "decks": [\n${deckSets.map((s) =>
+    `    { "code": ${JSON.stringify(s.code)}, "name": ${JSON.stringify(s.name)}, "released": ${JSON.stringify(s.released)}, "cards": [\n` +
+    s.cards.map((c) => `      ${JSON.stringify(c)}`).join(",\n") + "\n    ] }").join(",\n")}\n  ]\n}\n`);
+console.log(`${deckSets.length} decks -> data/decks.json: ` +
+  deckSets.map((s) => `${s.code} ${s.cards.reduce((n, c) => n + c[3], 0)}`).join(", ") + " cards");
+if (deckNotes.length) console.log(`deck lists: ${deckNotes.join("; ")}`);
