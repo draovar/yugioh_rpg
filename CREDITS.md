@@ -23,6 +23,7 @@
   by **Darkbolt99** (The Spriters Resource); sliced by `tools/art/build-characters.mjs`.
 - Card frames, card back, attribute icons, Spell/Trap kind icons and level star — made for this project.
 - **tiny5** pixel font — made for this project.
+- Chips glove (the overworld's chip count) and its digits — made for this project.
 
 ## Card artwork
 Card names, text and artwork are © Konami. Artwork is downloaded from [YGOPRODeck](https://ygoprodeck.com)

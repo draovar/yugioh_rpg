@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import { DialogBox } from "./DialogBox.ts";
+import { ChipsGlove } from "../ui/chipsGlove.ts";
 import { WHITE, text } from "../ui/pixel.ts";
 import { PLAYER_LOOKS, chosenDeck, playerLook } from "../ui/prefs.ts";
 import { DPAD, TouchPad, X_BUTTON } from "./TouchPad.ts";
@@ -229,7 +230,7 @@ export class Overworld extends Phaser.Scene {
         this.warp(String(prop("map")), String(prop("spawn")), prop("keepY") === true));
     }
 
-    this.hud.add(text(this, 8, 8, `CHIPS: ${this.chips}`, { color: WHITE, scale: 2 }).setScrollFactor(0));
+    new ChipsGlove(this, 8, 8, this.chips, this.hud);
     this.talkHint = text(this, 0, 0, "X", { color: 0xffd75e, scale: 2 }).setDepth(150).setVisible(false);
     // On touch devices the dialog sits between the D-pad and the X button.
     this.pad = TOUCH ? new TouchPad(this, this.hud, (code) => this.handleKey(code)) : null;

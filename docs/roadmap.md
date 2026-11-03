@@ -57,6 +57,8 @@
    opens over the shop onto the deck editor's mat (foils last with the pack effects), SAVE AS DECK makes it a custom
    deck slot (free for now, one at a time). Next: the other 9 decks once their box pictures are cut (SDY,
    SDK, SDJ, SDP and the five on white).
+   Chips: at most 99 (`MAX_CHIPS`), shown on the overworld's glove (`src/ui/chipsGlove.ts`; the shops still write
+   them as text); the placeholder prices (packs 50-60, decks 200-250) need to fit that cap.
    Next: card collection (keep pulled cards, spend chips), rewards/boosters after duels,
    story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.

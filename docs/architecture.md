@@ -15,7 +15,7 @@ src/duel-screen/       DuelScene, duelPrompts and the duel UI (cards, modal, inf
 src/deck-editor/       DeckEditor scene, its layout, list rows, filter panel, dialogs
 src/shop/              Shop scene (the card shop), boosters (the packs it sells), DeckShop scene (the deck shop), decks (the decks it sells); shopParts + ShopBoard shared by both
 src/lobby/             multiplayer Lobby scene
-src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition, view
+src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition, view, chipsGlove
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
 tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helpers
 data/                  pool.json (the card pool, generated) + pool-exceptions.json, boosters.json (booster set lists, generated), decks.json (starter / structure deck lists, generated), card-versions.json (older versions), banlist.json, maps, characters, palette
@@ -227,7 +227,7 @@ passes the `NetDuel` to `Duel`.
   big as the screen's 16:9 area (1280x720 / 1920x1080) and zooms the camera to the size, so every size is drawn at full
   detail. A chosen size the window can't fit falls back to the biggest it can (kept for a bigger window). The camera
   follows the player snapped to whole screen pixels (a getter target read as it renders), its bounds too (a map
-  smaller than the view sits in its middle). The screen-fixed HUD (CHIPS, touch pad, dialog box) is one container,
+  smaller than the view sits in its middle). The screen-fixed HUD (chips glove, touch pad, dialog box) is one container,
   `hud`, laid out in 640x360 and kept at the layout's scale whatever the camera's zoom (`layoutView`, on every resize:
   scroll-factor-0 objects zoom around the screen's centre, so it is scaled back around it; its objects keep scroll
   factor 0 for input hit tests, the touch pad divides pointer positions by `layoutScale`); the talk hint is scaled
@@ -485,6 +485,12 @@ drop-downs), `theme.ts` (see Themes above), `prefs.ts` (everything saved in loca
 in the canvas: an invisible HTML input over the drawn field for phone keyboards and paste; it pauses Phaser's global
 key capture while it exists; card search, lobby room code, deck names), `touch.ts`.
 
+`chipsGlove.ts`: the chip count, top-left in the overworld's HUD (the shops still write `CHIPS: N`): a red glove
+(`data/ui/chips-glove.png`, drawn for the game) with the number on the back of the hand in its own digit font
+(`glove-digits`: bold 6x8, white with a pale lower half, a dark outline, the colours in the font so it's drawn
+untinted), centred under the knuckles; the cuff's three stars fill in gold from 10, 20 and 30 chips (sheet frames 0-3).
+Chips stop at `MAX_CHIPS` (99), two digits. Sheet and font from `build-chips-glove`.
+
 `Transition.ts`: the scene switch between the overworld and duels (both ways, also a duel back to the Lobby). A scene
 Boot launches once and keeps on top: `transitionTo(from, key, data)` flips card backs (`CARD_BACK`, a 17x7 grid)
 in, diagonal by diagonal from the top-left, until they cover the screen, starts `key` underneath, and flips them away in the same
@@ -528,7 +534,8 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   plus the tokens pool scripts create; `data/banlist.json` → each card's `limit` in `cards.json`; `data/boosters.json` →
   `boosters.json` and `data/decks.json` → `decks.json`, every card checked to be in the pool), `check-cards`.
 - `art/`: `fetch-art` / `build-art` (YGOPRODeck crops → the shared palette, `art32` atlas + `art128`), `build-palette`,
-  `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `make-gif`, `build-boosters`
+  `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `build-chips-glove` (the
+  glove's four star frames, the stars drawn in code on `data/ui/chips-glove.png`, + its digit font), `make-gif`, `build-boosters`
   (`vendor/paid/booster-packs/<SET>.png`, pack pictures saved by hand, in the private assets repo; the deploy runs it
   after `build-tiles` → `public/boosters/`, each 64x110, the card shop's 1x
   size: transparent padding cut, other shapes stretched; plus `public/boosters/large/` at 100x172 for opening packs),

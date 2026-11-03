@@ -1,6 +1,7 @@
-// Writes a 1-bit glyph set as a Phaser-loadable bitmap font: <name>.png (white glyphs, tint in
-// Phaser) + <name>.xml (AngelCode BMFont). Glyph bitmaps are rows of 0/1, `rowTop` is the
-// glyph's first row below the cap line.
+// Writes a glyph set as a Phaser-loadable bitmap font: <name>.png (white glyphs, tint in Phaser)
+// + <name>.xml (AngelCode BMFont). Glyph bitmaps are rows of 0/1, `rowTop` is the glyph's first
+// row below the cap line, `xoffset` (default 0) its first column right of the pen. A `palette`
+// makes a coloured font instead (left white in Phaser): bitmap values index it, 0 = empty.
 import { writeFileSync } from "node:fs";
 import path from "node:path";
 import sharp from "sharp";
@@ -8,10 +9,10 @@ import sharp from "sharp";
 /**
  * @param {string} outDir
  * @param {string} name
- * @param {{ code: number, bits: number[][], rowTop: number, advance: number }[]} glyphs
- * @param {{ capHeight: number, lineHeight: number }} metrics
+ * @param {{ code: number, bits: number[][], rowTop: number, advance: number, xoffset?: number }[]} glyphs
+ * @param {{ capHeight: number, lineHeight: number, palette?: (number[] | null)[] }} metrics
  */
-export async function writeBitmapFont(outDir, name, glyphs, { capHeight, lineHeight }) {
+export async function writeBitmapFont(outDir, name, glyphs, { capHeight, lineHeight, palette = [null, [255, 255, 255]] }) {
   const pad = 1;
   let x = pad;
   const placed = glyphs.map((g) => {
@@ -26,12 +27,12 @@ export async function writeBitmapFont(outDir, name, glyphs, { capHeight, lineHei
     g.bits.forEach((row, r) => row.forEach((on, c) => {
       if (!on) return;
       const i = ((pad + r) * W + g.x + c) * 4;
-      rgba[i] = rgba[i + 1] = rgba[i + 2] = rgba[i + 3] = 255;
+      rgba.set([...palette[on], 255], i);
     }));
   }
   await sharp(rgba, { raw: { width: W, height: H, channels: 4 } }).png().toFile(path.join(outDir, `${name}.png`));
   const chars = placed.map((g) =>
-    `    <char id="${g.code}" x="${g.x}" y="${pad}" width="${g.cols}" height="${g.rows}" xoffset="0" yoffset="${g.rowTop}" xadvance="${g.advance}" page="0" chnl="15"/>`);
+    `    <char id="${g.code}" x="${g.x}" y="${pad}" width="${g.cols}" height="${g.rows}" xoffset="${g.xoffset ?? 0}" yoffset="${g.rowTop}" xadvance="${g.advance}" page="0" chnl="15"/>`);
   writeFileSync(path.join(outDir, `${name}.xml`), `<?xml version="1.0"?>
 <font>
   <info face="${name}" size="${capHeight}" bold="0" italic="0" charset="" unicode="1" stretchH="100" smooth="0" aa="0" padding="0,0,0,0" spacing="0,0"/>
