@@ -204,7 +204,8 @@ passes the `NetDuel` to `Duel`.
   X / Enter / Space; the X hint shows over the spot, and a faced spot wins over a nearby NPC. `sign` = a sign to read
   (properties `text`, `title` = the dialog's header, "SIGN" if empty); `shop` = the card shop, `deckshop` = the deck
   shop (`enterShop`: the card wave over to the `Shop` / `DeckShop` scene with the player's chips; EXIT comes back to
-  the same spot).
+  the same spot); `cardshop` = both, the shopkeeper asks first (PACKS / DECKS / LEAVE; optional properties `title`,
+  "SHOPKEEPER" if empty, and `text`). Main-city's is on the mall's right door.
 - NPCs (`NPCS` in `npcs.ts`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn
   to the player while talking) talk with X / Enter / Space in a `DialogBox` (tiny5 at 2x, clickable options); YES
   starts a duel, and the player comes back to the same spot (`savePosition`) with the NPC's line about the result.

@@ -110,7 +110,8 @@ Dev:
 - `&theme=NAME` picks the UI theme (`runewood`, `hologram`).
 - `/?shop` starts in the card shop (`src/shop/`; in the overworld: a `shop` rectangle in a map's `objects` layer, X);
   `&anims` there makes BUY deal one card of each rarity, lowest first, to preview every reveal animation.
-- `/?deckshop` starts in the deck shop (`src/shop/DeckShop.ts`; in the overworld: a `deckshop` rectangle, X).
+- `/?deckshop` starts in the deck shop (`src/shop/DeckShop.ts`; in the overworld: a `deckshop` rectangle, X; a `cardshop`
+  rectangle asks which of the two: main-city's mall door).
 - `&map=NAME` starts on another map instead of the island's main city (`main-city`): `overworld` = the old town, `maze`,
   or any island map (`castle`, `forest-south`... see `data/maps/island/layout.json`); the player starts at its `spawn` point object, else at 400,520.
 - `&ambush` makes the first maze hedge ambush happen at the first spot that fits (walk along a hedge).
@@ -208,8 +209,8 @@ tiles a map uses reach the build (`build-tiles`, output in gitignored `public/ma
 Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-6 (pool generator, hand-picked
 older card versions, full-size data + art, random-deck smoke, UI checks, May 2008 banlist) done, next is phase 7 (NPC decks as data files). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
 `docs/ai-reports.md`, only clear bugs are fixed right away. Overworld: the main city is built (`build-main-city`) and now edited by hand in Tiled, trainer line-of-sight challenges next.
-RPG loop: card shop v1 done (`src/shop/`: all 27 core boosters, pack opening; packs free, pulled cards not kept, no `shop`
-spot placed in main-city yet); deck shop v1 done (`DeckShop.ts`: 12 starter / structure decks as pixel art on a pegboard, their
+RPG loop: card shop v1 done (`src/shop/`: all 27 core boosters, pack opening; packs free, pulled cards not kept; entered
+with the deck shop at main-city's mall door, a `cardshop` spot); deck shop v1 done (`DeckShop.ts`: 12 starter / structure decks as pixel art on a pegboard, their
 deck lists on the board, BUY opens the box onto the deck editor's mat and saves it as a custom deck slot; free, one at a
 time); next card collection (keep pulled cards, spend chips), rewards after duels, story,
 bosses, saving. Full list: `docs/roadmap.md`.

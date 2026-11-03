@@ -119,6 +119,18 @@
                  "y":1792
                 }, 
                 {
+                 "height":72,
+                 "id":8,
+                 "name":"cardshop",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"",
+                 "visible":true,
+                 "width":48,
+                 "x":1815,
+                 "y":1692
+                }, 
+                {
                  "height":2048,
                  "id":2,
                  "name":"area",
@@ -228,12 +240,12 @@
                 }],
          "opacity":1,
          "type":"objectgroup",
-         "visible":false,
+         "visible":true,
          "x":0,
          "y":0
         }],
  "nextlayerid":20,
- "nextobjectid":8,
+ "nextobjectid":9,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.2",

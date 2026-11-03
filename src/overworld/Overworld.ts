@@ -92,7 +92,7 @@ export class Overworld extends Phaser.Scene {
    */
   private hud!: Phaser.GameObjects.Container;
   private talkHint!: Phaser.GameObjects.BitmapText;
-  /** Spots used by facing them and pressing X: signs and shops (rectangles named "sign" / "shop" / "deckshop", layer "objects"). */
+  /** Spots used by facing them and pressing X: signs and shops (rectangles named "sign" / "shop" / "deckshop" / "cardshop", layer "objects"). */
   private spots: { area: Phaser.Geom.Rectangle; use: () => void }[] = [];
   private facing: Facing = "down";
   /** The player's walk and run sprites (world menu: PLAYER). */
@@ -207,7 +207,8 @@ export class Overworld extends Phaser.Scene {
 
     // Signs: rectangles named "sign" (layer "objects") with properties text and title (the dialog's header, "SIGN"
     // if empty); read by facing them and pressing X. Shops: rectangles named "shop" (a counter, a door: the card
-    // shop) or "deckshop" (the deck shop) open the same way.
+    // shop) or "deckshop" (the deck shop) open the same way; "cardshop" asks first which one (the shopkeeper's dialog,
+    // optional properties title and text).
     this.spots = [];
     for (const o of map.getObjectLayer("objects")?.objects ?? []) {
       const area = new Phaser.Geom.Rectangle(o.x!, o.y!, o.width!, o.height!);
@@ -217,6 +218,12 @@ export class Overworld extends Phaser.Scene {
         this.spots.push({ area, use: () => this.dialog.open(title, body, ["OK"], () => {}) });
       } else if (o.name === "shop") this.spots.push({ area, use: () => this.enterShop("Shop") });
       else if (o.name === "deckshop") this.spots.push({ area, use: () => this.enterShop("DeckShop") });
+      else if (o.name === "cardshop") {
+        const title = String(prop("title") || "Shopkeeper"), body = String(prop("text") || "Welcome! Booster packs, or a whole deck?");
+        this.spots.push({ area, use: () => this.dialog.open(title, body, ["Packs", "Decks", "Leave"], (choice) => {
+          if (choice !== "Leave") this.enterShop(choice === "Packs" ? "Shop" : "DeckShop");
+        }) });
+      }
     }
 
     // Warps: rectangles named "warp" (layer "objects") with properties map (target map) and spawn (the point to

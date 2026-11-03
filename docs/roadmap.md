@@ -46,7 +46,8 @@
 5. **RPG loop**: ✅ deck editor v1 (every pool card, custom deck slots, both themes; later: limited to your collection).
    ✅ card shop v1 (`src/shop/`: a scrolling display case with all 27 core boosters (LOB to LODT), a checklist of each set's cards with
    rarities (`data/boosters.json`), entered at a `shop` spot; BUY opens the pack: tear, deal, flip with rarity effects;
-   free for now, the cards aren't kept).
+   free for now, the cards aren't kept). ✅ Main-city's mall door is the card shop (a `cardshop` spot: the shopkeeper
+   asks PACKS / DECKS / LEAVE, then the card shop or the deck shop).
    Later for the shop: each `shop` spot lists the sets it sells (towns carry different eras); the other store packs of
    the era (Duelist Packs, Dark Beginning / Dark Revelation, Retro Pack, Premium Packs, Gold Series: other pack sizes
    and rarity mixes, pictures saved by hand); prize packs and promos as rewards rather than stock.
