@@ -1,7 +1,8 @@
 // The chips glove, the chip count in the overworld's HUD (src/ui/chipsGlove.ts): data/ui/chips-glove.png (drawn by
 // hand, 64x64, three empty star holes on the cuff) → public/assets/ui/chips-glove.png, four frames side by side, each
-// the glove cut out of its drawing: 0 to 3 of the cuff's stars (left, centre, right) filled in gold, a dark amber
-// border around a light gold inside, the right one a shade darker in the cuff's shadow. Also the number's font,
+// the glove cut out of its drawing with a light outline and a shadow: 0 to 3 of the cuff's stars (left, centre,
+// right) filled in gold, a dark amber border around a light gold inside, the right one a shade darker in the cuff's
+// shadow. Also the number's font,
 // "glove-digits": bold 6x8 digits, white with a pale lower half and a 1px dark outline, the colours in the font (left
 // white in Phaser) → public/assets/fonts/glove-digits.png + .xml.
 // Usage: node tools/art/build-chips-glove.mjs
@@ -49,19 +50,30 @@ function withStars(stars) {
   return d;
 }
 
-// Cut to the glove (its opaque pixels' box), the four frames side by side.
+// Cut to the glove (its opaque pixels' box) with room for a 1px light outline around it and the outlined shape's
+// shadow 2px down-right, so it stands out on any ground; the four frames side by side.
+const OUTLINE = [255, 244, 214], SHADOW_ALPHA = 128, PAD = { left: 1, top: 1, right: 3, bottom: 3 };
 let left = W, top = info.height, right = 0, bottom = 0;
 for (let y = 0; y < info.height; y++) for (let x = 0; x < W; x++) {
   if (data[(y * W + x) * 4 + 3] < 128) continue;
   left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y);
 }
-const fw = right - left + 1, fh = bottom - top + 1;
-const frames = await Promise.all([0, 1, 2, 3].map((n) =>
-  sharp(withStars(n), { raw: { width: W, height: info.height, channels: 4 } })
-    .extract({ left, top, width: fw, height: fh }).png().toBuffer()));
-await sharp({ create: { width: fw * 4, height: fh, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-  .composite(frames.map((input, n) => ({ input, left: n * fw, top: 0 }))).png().toFile(OUT);
-console.log(`chips-glove: 4 frames of ${fw}x${fh}, cut at ${left},${top} of the drawing (FRAME / NUMBER in src/ui/chipsGlove.ts)`);
+const fw = right - left + 1 + PAD.left + PAD.right, fh = bottom - top + 1 + PAD.top + PAD.bottom;
+const sheet = Buffer.alloc(fw * 4 * fh * 4);
+for (let n = 0; n < 4; n++) {
+  const d = withStars(n);
+  const at = (x, y) => ((y - PAD.top + top) * W + x - PAD.left + left) * 4;
+  const glove = (x, y) => x >= PAD.left && x < fw - PAD.right && y >= PAD.top && y < fh - PAD.bottom && d[at(x, y) + 3] >= 128;
+  const outlined = (x, y) => [-1, 0, 1].some((dy) => [-1, 0, 1].some((dx) => glove(x + dx, y + dy)));
+  for (let y = 0; y < fh; y++) for (let x = 0; x < fw; x++) {
+    const px = glove(x, y) ? [...d.subarray(at(x, y), at(x, y) + 3), 255]
+      : outlined(x, y) ? [...OUTLINE, 255] : outlined(x - 2, y - 2) ? [0, 0, 0, SHADOW_ALPHA] : null;
+    if (px) sheet.set(px, (y * fw * 4 + n * fw + x) * 4);
+  }
+}
+await sharp(sheet, { raw: { width: fw * 4, height: fh, channels: 4 } }).png().toFile(OUT);
+console.log(`chips-glove: 4 frames of ${fw}x${fh}, the glove cut at ${left},${top} of the drawing and placed at ` +
+  `${PAD.left},${PAD.top} (FRAME / NUMBER in src/ui/chipsGlove.ts)`);
 
 // --- The digits ---------------------------------------------------------------------------------------------------
 const DIGITS = {

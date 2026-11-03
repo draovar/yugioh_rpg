@@ -10,10 +10,13 @@ export const FONT_GLOVE = "glove-digits";
 export const MAX_CHIPS = 99;
 /** Chips per star on the cuff: 10-19 the left one, 20-29 the centre one too, 30 and up all three. */
 const STAR_STEP = 10;
-/** A frame of the sheet: the glove, cut out of its 64x64 drawing at 10,3. */
-const FRAME = { w: 41, h: 58 };
+/**
+ * A frame of the sheet: the glove, cut out of its 64x64 drawing at 10,3 and placed at 1,1, with a 1px light outline
+ * and a shadow 2px down-right (to stand out from the map).
+ */
+const FRAME = { w: 45, h: 62 };
 /** The number's centre in a frame: under the middle of the four knuckles, halfway down the back of the hand. */
-const NUMBER = { x: 22, y: 25 };
+const NUMBER = { x: 23, y: 26 };
 const DIGIT_H = 8;
 
 export function loadChipsGlove(load: Phaser.Loader.LoaderPlugin) {

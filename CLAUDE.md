@@ -62,7 +62,7 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/art/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/`; `shop` = the card shop's green and dark brown Runewood list buttons (`public/assets/ui/shop/`) |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/art/build-tiny5-font.mjs`) |
-| `node tools/art/build-chips-glove.mjs` | the chips glove (`data/ui/chips-glove.png`, hand-drawn) → `public/assets/ui/chips-glove.png`, 4 frames with 0-3 gold stars on the cuff (drawn in code), + its digit font `public/assets/fonts/glove-digits` |
+| `node tools/art/build-chips-glove.mjs` | the chips glove (`data/ui/chips-glove.png`, hand-drawn) → `public/assets/ui/chips-glove.png`, 4 frames with 0-3 gold stars on the cuff, a light outline and a shadow (drawn in code), + its digit font `public/assets/fonts/glove-digits` |
 | `npm run smoke [-- N]` | play N headless bot-vs-bot duels through `DuelSession` (bots in `AiSeat`s); fails on RETRY/crash |
 | `npm run smoke-random [-- --passes N] [-- --seed S] [-- --duel K] [-- --unplayed F]` | the whole pool dealt into random decks, bot vs bot on all cores; fails on RETRY/crash/hang/new `[ocgcore]` error, reports how many cards got played |
 | `npm run smoke-p2p [-- N]` | play N peer-to-peer lockstep duels (two `DuelController`s on an in-memory link); fails if the machines disagree |

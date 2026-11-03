@@ -486,7 +486,8 @@ in the canvas: an invisible HTML input over the drawn field for phone keyboards 
 key capture while it exists; card search, lobby room code, deck names), `touch.ts`.
 
 `chipsGlove.ts`: the chip count, top-left in the overworld's HUD (the shops still write `CHIPS: N`): a red glove
-(`data/ui/chips-glove.png`, drawn for the game) with the number on the back of the hand in its own digit font
+(`data/ui/chips-glove.png`, drawn for the game; a 1px light outline and a soft shadow set it apart from the map)
+with the number on the back of the hand in its own digit font
 (`glove-digits`: bold 6x8, white with a pale lower half, a dark outline, the colours in the font so it's drawn
 untinted), centred under the knuckles; the cuff's three stars fill in gold from 10, 20 and 30 chips (sheet frames 0-3).
 Chips stop at `MAX_CHIPS` (99), two digits. Sheet and font from `build-chips-glove`.
