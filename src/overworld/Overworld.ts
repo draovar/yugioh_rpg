@@ -91,7 +91,7 @@ export class Overworld extends Phaser.Scene {
    */
   private hud!: Phaser.GameObjects.Container;
   private talkHint!: Phaser.GameObjects.BitmapText;
-  /** Spots used by facing them and pressing X: signs and shops (rectangles named "sign" / "shop", layer "objects"). */
+  /** Spots used by facing them and pressing X: signs and shops (rectangles named "sign" / "shop" / "deckshop", layer "objects"). */
   private spots: { area: Phaser.Geom.Rectangle; use: () => void }[] = [];
   private facing: Facing = "down";
   /** The player's walk and run sprites (world menu: PLAYER). */
@@ -205,8 +205,8 @@ export class Overworld extends Phaser.Scene {
     });
 
     // Signs: rectangles named "sign" (layer "objects") with properties text and title (the dialog's header, "SIGN"
-    // if empty); read by facing them and pressing X. Shops: rectangles named "shop" (a counter, a door), the card
-    // shop opens the same way.
+    // if empty); read by facing them and pressing X. Shops: rectangles named "shop" (a counter, a door: the card
+    // shop) or "deckshop" (the deck shop) open the same way.
     this.spots = [];
     for (const o of map.getObjectLayer("objects")?.objects ?? []) {
       const area = new Phaser.Geom.Rectangle(o.x!, o.y!, o.width!, o.height!);
@@ -214,7 +214,8 @@ export class Overworld extends Phaser.Scene {
       if (o.name === "sign") {
         const title = String(prop("title") || "Sign"), body = String(prop("text") ?? "");
         this.spots.push({ area, use: () => this.dialog.open(title, body, ["OK"], () => {}) });
-      } else if (o.name === "shop") this.spots.push({ area, use: () => this.enterShop() });
+      } else if (o.name === "shop") this.spots.push({ area, use: () => this.enterShop("Shop") });
+      else if (o.name === "deckshop") this.spots.push({ area, use: () => this.enterShop("DeckShop") });
     }
 
     // Warps: rectangles named "warp" (layer "objects") with properties map (target map) and spawn (the point to
@@ -410,11 +411,11 @@ export class Overworld extends Phaser.Scene {
     void transitionTo(this, "Duel", data, { onCovered: () => this.scene.stop("WorldMenu") });
   }
 
-  /** The card shop, behind the card-wave transition; afterwards the player is back here. */
-  private enterShop() {
+  /** A shop (the card shop "Shop" or the deck shop "DeckShop"), behind the card-wave transition; afterwards the player is back here. */
+  private enterShop(scene: "Shop" | "DeckShop") {
     this.savePosition();
     const data: ShopData = { chips: this.chips };
-    void transitionTo(this, "Shop", data, { onCovered: () => this.scene.stop("WorldMenu") });
+    void transitionTo(this, scene, data, { onCovered: () => this.scene.stop("WorldMenu") });
   }
 
   update() {

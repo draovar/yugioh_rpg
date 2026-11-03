@@ -25,6 +25,7 @@
     "build-art": "node tools/art/build-art.mjs",
     "build-palette": "node tools/art/build-palette.mjs",
     "build-boosters": "node tools/art/build-boosters.mjs",
+    "build-deck-boxes": "node tools/art/build-deck-boxes.mjs",
     "build-tiles": "node tools/maps/build-tiles.mjs",
     "build-characters": "node tools/art/build-characters.mjs && node tools/art/build-ambush.mjs"
   },

@@ -16,6 +16,7 @@ public/maps/
 public/cards/
 # Booster pack pictures (Konami's pack art) — rebuild with `npm run build-boosters` (needs vendor/paid/booster-packs)
 public/boosters/
+public/deck-boxes/
 # Third-party asset packs (sources for tools/import-ui.mjs); only the sprites we use are copied to public/
 /assets/
 # Dev frame captures / GIFs (src/dev/capture.ts, tools/make-gif.mjs)

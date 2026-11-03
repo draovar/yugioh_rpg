@@ -25,7 +25,7 @@ src/net/               peer-to-peer networking, no Phaser
 src/overworld/         Overworld scene, WorldMenu, DialogBox, TouchPad, characters, npcs, sortedWalls
 src/duel-screen/       DuelScene, duelPrompts and the duel UI (cards, modal, info panel, animator, field, layout)
 src/deck-editor/       DeckEditor scene, its layout, list rows, filter panel, dialogs
-src/shop/              Shop scene (the card shop), boosters (the packs it sells)
+src/shop/              Shop scene (the card shop), boosters (the packs it sells), DeckShop scene (the deck shop), decks (the decks it sells); shopParts + ShopBoard shared by both
 src/lobby/             multiplayer Lobby scene
 src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
@@ -57,6 +57,7 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run build-characters` | overworld sprites from `data/characters/` (per `characters.json`) → `public/assets/overworld/` + the contact sheet `docs/characters.png`, then the hedge ambush sheets (`tools/art/build-ambush.mjs`) |
 | `node tools/art/build-yugioh-sheet.mjs` | the custom sheet's generated pieces (in code: `PIECES`, each at a fixed tile position: billboards, shop signs, mall ads, drawn on bases from the sheet or the pack) → `vendor/paid/custom/yugioh_tileset.png` (20 tiles wide; rows 0-14 hand-made, kept) + `yugioh.tsj`'s size; then `build-tiles` |
 | `npm run build-boosters` | booster pack pictures for the card shop: `vendor/paid/booster-packs/<SET>.png` (saved by hand, any size; in the private assets repo) → `public/boosters/<SET>.png`, each 64x110 (the shelf), and `public/boosters/large/<SET>.png`, 100x172 (opening a pack); both drawn at 1x |
+| `npm run build-deck-boxes` | deck box pictures for the deck shop: `vendor/paid/deck-boxes/<CODE>.png` (cut out by hand; the cut-outs share one 200x300 frame, the box at the same pixels in each; in the private assets repo) → `public/deck-boxes/<CODE>.png`, 78x126 pixel art (half size, each box's own 32 colours, a 1px outline, the hanger hole cut through: `DECK_BOX_STYLE` in `tools/lib/art-style.mjs`), drawn at 1x |
 | `npm run build-palette` | **rarely**: regenerate the frozen shared palette `data/palette.gpl` from ~400 sampled GOAT arts (+ frames) |
 | `node tools/art/import-ui.mjs [theme]` | copy each theme's UI sprites from the Crusenho pack (`assets/`, gitignored) into `public/assets/ui/<theme>/`; `shop` = the card shop's green and dark brown Runewood list buttons (`public/assets/ui/shop/`) |
 | `npm run build-fonts` | rebuild bitmap fonts in `public/assets/fonts/` (nerds3 from the TTF, tiny5 from `tools/art/build-tiny5-font.mjs`) |
@@ -70,9 +71,9 @@ vendor/                Project Ignis repos, art downloads, paid assets (gitignor
 | `npm run test-ai [-- N]` | the AI can't see hidden cards: hand-made `redact()` cases + N real duels (default 30) |
 
 Fresh clone: `npm install && npm run fetch-data && npm run build-data && npm run fetch-art && npm run build-art`, then
-`git clone https://github.com/Draovar/yugioh_rpg-assets.git vendor/paid && npm run build-tiles && npm run build-boosters`
-(private repo with the paid art packs and the card shop's pack pictures; without it the overworld shows a "no map"
-message and the shop blank packs, duels still work).
+`git clone https://github.com/Draovar/yugioh_rpg-assets.git vendor/paid && npm run build-tiles && npm run build-boosters && npm run build-deck-boxes`
+(private repo with the paid art packs and the shops' pack and deck box pictures; without it the overworld shows a "no
+map" message and the shops blank packs and boxes, duels still work).
 After changing `data/pool-exceptions.json` (or the cutoff; `card-versions.json` needs only `build-data` + `smoke`), rerun `build-pool`, then `build-data`, `check-cards`, `fetch-art`, `build-art`, then `smoke` (it validates
 the decks in `src/duel/decks/decks.ts` and plays every deck pairing). `fetch-art`/`build-art` read `public/data/cards.json`, so
 tokens get art too.
@@ -107,6 +108,7 @@ Dev:
 - `&theme=NAME` picks the UI theme (`runewood`, `hologram`).
 - `/?shop` starts in the card shop (`src/shop/`; in the overworld: a `shop` rectangle in a map's `objects` layer, X);
   `&anims` there makes BUY deal one card of each rarity, lowest first, to preview every reveal animation.
+- `/?deckshop` starts in the deck shop (`src/shop/DeckShop.ts`; in the overworld: a `deckshop` rectangle, X).
 - `&map=NAME` starts on another map instead of the island's main city (`main-city`): `overworld` = the old town, `maze`,
   or any island map (`castle`, `forest-south`... see `data/maps/island/layout.json`); the player starts at its `spawn` point object, else at 400,520.
 - `&ambush` makes the first maze hedge ambush happen at the first spot that fits (walk along a hedge).
@@ -205,5 +207,6 @@ Card pool (`docs/card-pool-plan.md`): every TCG card before Synchros; phases 1-6
 older card versions, full-size data + art, random-deck smoke, UI checks, May 2008 banlist) done, next is phase 7 (NPC decks as data files). Opponent AI rework (`docs/ai-rework-plan.md`): next is phase 3 (more fitting, then retune); user reports go into
 `docs/ai-reports.md`, only clear bugs are fixed right away. Overworld: the main city is built (`build-main-city`) and now edited by hand in Tiled, trainer line-of-sight challenges next.
 RPG loop: card shop v1 done (`src/shop/`: all 27 core boosters, pack opening; packs free, pulled cards not kept, no `shop`
-spot placed in main-city yet); next card collection (keep pulled cards, spend chips), rewards after duels, story, bosses,
-saving. Full list: `docs/roadmap.md`.
+spot placed in main-city yet); deck shop started (`DeckShop.ts`: 12 starter / structure decks as pixel art on a pegboard; next the
+deck lists on the board, then buying); next card collection (keep pulled cards, spend chips), rewards after duels, story,
+bosses, saving. Full list: `docs/roadmap.md`.

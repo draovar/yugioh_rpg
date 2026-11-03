@@ -13,7 +13,7 @@ src/net/               peer-to-peer networking, no Phaser
 src/overworld/         Overworld scene, WorldMenu, DialogBox, TouchPad, characters, npcs, ambush, sortedWalls
 src/duel-screen/       DuelScene, duelPrompts and the duel UI (cards, modal, info panel, animator, field, layout)
 src/deck-editor/       DeckEditor scene, its layout, list rows, filter panel, dialogs
-src/shop/              Shop scene (the card shop), boosters (the packs it sells)
+src/shop/              Shop scene (the card shop), boosters (the packs it sells), DeckShop scene (the deck shop), decks (the decks it sells); shopParts + ShopBoard shared by both
 src/lobby/             multiplayer Lobby scene
 src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition, view
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
@@ -202,8 +202,9 @@ passes the `NetDuel` to `Duel`.
 - Spots (`spots`): rectangles in the `objects` layer over any tile (the art stays a normal tile), used only while
   facing them (`facedSpot`: a point `READ_REACH` px in front of the feet box must be inside the rectangle) with
   X / Enter / Space; the X hint shows over the spot, and a faced spot wins over a nearby NPC. `sign` = a sign to read
-  (properties `text`, `title` = the dialog's header, "SIGN" if empty); `shop` = the card shop (`enterShop`: the card
-  wave over to the `Shop` scene with the player's chips; EXIT comes back to the same spot).
+  (properties `text`, `title` = the dialog's header, "SIGN" if empty); `shop` = the card shop, `deckshop` = the deck
+  shop (`enterShop`: the card wave over to the `Shop` / `DeckShop` scene with the player's chips; EXIT comes back to
+  the same spot).
 - NPCs (`NPCS` in `npcs.ts`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn
   to the player while talking) talk with X / Enter / Space in a `DialogBox` (tiny5 at 2x, clickable options); YES
   starts a duel, and the player comes back to the same spot (`savePosition`) with the NPC's line about the result.
@@ -353,12 +354,19 @@ table). Geometry in `layout.ts`.
   changes ask SAVE / DISCARD / CANCEL); the message and rename dialogs are in `dialogs.ts`.
 - Custom decks live in localStorage (`prefs.ts`: `customDecks`, up to `MAX_CUSTOM_DECKS`).
 
-## Card shop (`src/shop/`)
+## Card shop and deck shop (`src/shop/`)
 
-The `Shop` scene (a `shop` spot in the overworld, or `?shop`), "fixed" 640x360. It has its own look, not the UI
-theme's (the owner's choice: one real-shop look; colours in `C`; the checklist is always Runewood's board and paper,
-from `THEMES.runewood`, loaded under keys of its own), and Runewood list-row buttons (`button`: EXIT in dark brown with a white label, - / +, BUY).
-`boosters.ts` = the packs on
+Two shop scenes, "fixed" 640x360, laid out alike: a fixture on a panelled wall on the left, a board on the right. What
+they share: `shopParts.ts` (colours `C`; `CASE` / `IN`, the fixture's frame and inside; `drawRoom`: wall, sign, frame,
+baked into one texture, the scene drawing the inside; `shopButton`: Runewood list-row buttons, EXIT in dark brown with
+a white label, - / +, BUY; `ScrollingFixture`: what's on the fixture, scrolling, described below) and `ShopBoard.ts` (the
+board on the right: name, facts, a card list with chips, details, price, - / +, BUY; described below). They have their
+own look, not the UI theme's (the owner's choice: one real-shop look; the board is always Runewood's board and paper,
+from `THEMES.runewood`, loaded under keys of its own).
+
+### Card shop (`Shop.ts`)
+
+The `Shop` scene (a `shop` spot in the overworld, or `?shop`). `boosters.ts` = the packs on
 sale (`BOOSTERS`: set code, price, the display box's colour), all 27 core sets (LOB to LODT; later each shop spot will
 list which sets it sells); their card lists come
 from `public/data/boosters.json` (`data/boosters.json` from `build-pool`, copied by `build-data`: per set its name,
@@ -368,18 +376,20 @@ release date and `[number, passcode, rarity]` per card).
   overworld). Shelves of three booster displays: a box (lid standing up behind, packs inside: the front pack plus two
   darker ones behind, the set code on the front lip), a price label on the shelf edge, faint light streaks on the glass
   over it all (they don't move). The room and case are baked into one texture; everything on the shelves sits in
-  `shelfRows`, clipped to the case's inside by a Mask filter on its parent. Two shelves are in view (`VISIBLE_ROWS`);
-  with more stock the shelves scroll a whole row at a time, smoothly (`scrollShelves`, `SCROLL_MS`): the wheel over
-  the case (a row per `WHEEL_STEP` units), a swipe on it (touch or mouse drag, `SWIPE_PX`; a press that drags never
-  picks a pack), the scroll cues (`makeCues`: a small tab like the shop's sign on the case's top / bottom frame, a gold
-  arrow in it bobbing a pixel toward the rows out of view, shown only while the shelves can scroll that way; clicking
-  one scrolls a row), or picking a pack out of view with the arrow keys. Only packs on the rows in view take clicks
-  (`setZones`).
+  a `ScrollingFixture` (`shopParts.ts`; lines of items along an axis: here rows of three down the case, axis y; the
+  deck shop's is one long row of single-deck columns, axis x): its `content`, clipped to the case's inside by a Mask
+  filter on its parent. Two lines are in view (`VISIBLE_LINES`); with more stock they scroll a whole line at a time,
+  smoothly (`scroll`, `SCROLL_MS`): the wheel over the fixture (a line per `WHEEL_STEP` units; sideways wheels too on
+  axis x), a swipe on it along the axis (touch or mouse drag, `SWIPE_PX`; a press that drags never picks), the scroll
+  cues (`makeCues`: a small tab like the shop's sign on the fixture's frame, top / bottom or left / right, a gold arrow
+  in it bobbing a pixel toward the lines out of view, shown only while they can scroll that way; clicking one scrolls a
+  line), or picking an item out of view with the arrow keys (`show`). Only items on the lines in view take clicks
+  (`addZone`, `setZones`).
 - Pack pictures are drawn at 1x: 64x110 (`public/boosters/<SET>.png` from `npm run build-boosters`, loaded in
   `preload`; a missing one shows as a blank pack with its code). Clicking a pack (its hit zone covers the lifted spot
   too) or the arrow keys (rows and columns) pick it: its front pack lifts `LIFT` px out of the box, its label turns
   yellow.
-- Right: the checklist on Runewood's info board (the duel's info panel size, 224 px): set name (2x, wrapped by word,
+- Right: the checklist on Runewood's info board (`ShopBoard`, the duel's info panel size, 224 px): set name (2x, wrapped by word,
   light with a drop shadow like a card name in the info panel), release month, set size, cards per pack, then on the
   paper inset every card of the set with a rarity chip (`RARITIES` in `boosters.ts`: SCR, UR, SR, R, SSP, SP, C), highest rarity
   first, then by number; 30 rows at a time, down to just above the bottom row (wheel, drag the list, or grab the scrollbar's thumb and drag it: pressing
@@ -390,7 +400,7 @@ release date and `[number, passcode, rarity]` per card).
   pack or buying closes it too). Under the list: the price (the packs' total) in the set name's lettering (light, drop
   shadow), the pack count in plain black at the buttons' label size (centred on its glyphs between - and +), - / +
   (keys - / =, 1 to `MAX_PACKS`) and BUY (X / Enter /
-  Space). These are list-row buttons like the info panel's CLOSE, always Runewood's (`LIST_BUTTONS`): its wood one
+  Space). These are list-row buttons like the info panel's CLOSE, always Runewood's (`LIST_BUTTONS` in `shopParts.ts`): its wood one
   for - / +, a darker green copy for BUY (`public/assets/ui/shop/`, `import-ui.mjs shop`); 2px taller than a list row
   with the label in the middle, darker on hover, firing on release. A status (no card list) shows in the price's place.
 - BUY opens the packs (`PackOpening.ts`, one `pullPack` each), free for now: no chips are spent and the cards aren't
@@ -417,6 +427,31 @@ release date and `[number, passcode, rarity]` per card).
   played out: with more packs bought, NEXT PACK fades this pack's layer (its pieces, cards, effects; looping effects
   stopped) away, empties the panel and opens the next one (the title counts them, "2/3"); after the last, DONE (Esc)
   closes the overlay (`CardInfo.clear()` drops its scroll listeners).
+
+### Deck shop (`DeckShop.ts`)
+
+The `DeckShop` scene (a `deckshop` spot in the overworld, or `?deckshop`). `decks.ts` = the decks on sale (`DECKS`:
+set code, name, kind (starter / structure), TCG release, price), the starter and structure decks up to The Dark Emperor
+(2008), in release order; for now only the 12 whose box pictures are cut out (the other 9 commented out).
+
+- Left: a pegboard on the panelled wall (sign DECK SHOP, CHIPS, EXIT / Esc): brown hardboard (baked with the room) and
+  its holes, `HOLE` px apart (in the `ScrollingFixture` content, so they scroll with the rows; `ROW_H` is 13 holes and
+  `COL_W` 8, so every peg sits in a hole). Four decks to a row (`COLS`, pegs `COL_W` apart from `PEG_X`), two rows in
+  view, scrolling down a row at a time like the card shop's shelves (axis y). Per deck: the box (78x126 at 1x, over a
+  30% black copy 2px down-right as its shadow on the board; the board shows through its hanger hole), its peg in front
+  (`PEG`, 5x5 pixels, outlined like the boxes: it comes straight out of a hole through the bump of the box's hole,
+  `PEG_AT`), a price label under it. Clicking a box or the arrow keys (four columns) pick it: it lifts `LIFT` px (still
+  on its peg), its label turns yellow.
+- Box pictures: `public/deck-boxes/<CODE>.png` from `npm run build-deck-boxes` (a missing one: a blank box with its
+  code), pixel art: the product shots are small soft photos that looked smeary shown big, so the build makes them like
+  card art (`DECK_BOX_STYLE` in `tools/lib/art-style.mjs`): half the size, the large card art's boost, each box's own 32
+  colours (k-means in Oklab, no dither), hard edges, a 1px dark outline (the picture is 76x124 art + the outline), and
+  the hanger hole cut out (`HOLE` in the build: a euro slot drawn as a pixel mask, its rim in the outline colour). The
+  cut-outs share one 200x300 frame (the box at the same pixels in each), so the build crops them all to the same
+  151x248 rectangle first and every box hangs from its peg at the same point.
+- Right: `ShopBoard` with the deck's name, kind and release month, the price, - / + (1 to `MAX_DECKS`) and BUY. Not
+  built yet: the deck lists on the board (copy counts from Yugipedia's set lists) and buying (BUY only says "NOT FOR
+  SALE YET").
 
 ## Shared UI (`src/ui/`)
 
@@ -465,7 +500,10 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `make-gif`, `build-boosters`
   (`vendor/paid/booster-packs/<SET>.png`, pack pictures saved by hand, in the private assets repo; the deploy runs it
   after `build-tiles` → `public/boosters/`, each 64x110, the card shop's 1x
-  size: transparent padding cut, other shapes stretched; plus `public/boosters/large/` at 100x172 for opening packs).
+  size: transparent padding cut, other shapes stretched; plus `public/boosters/large/` at 100x172 for opening packs),
+  `build-deck-boxes` (`vendor/paid/deck-boxes/<CODE>.png`, the deck shop's box pictures, in the private assets repo; the
+  deploy runs it after `build-boosters` → `public/deck-boxes/`, each 78x126 pixel art: the shared 200x300 frame's cut-outs cropped
+  to one rectangle, other pictures trimmed and fitted in, top centred; then half size, own 32 colours, outline).
   - `build-characters`: `data/characters/reshef-sheet.png` (every Reshef of Destruction character, green cells on a
     purple grid) sliced per `data/characters/characters.json` (name → 3x3 block or explicit cells per direction,
     `nudge` = move single frames by pixels; `{ "sheet": "x.png" }` = a ready-made 96x96 sheet in the same layout, drawn

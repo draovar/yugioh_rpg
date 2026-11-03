@@ -49,7 +49,12 @@
    free for now, the cards aren't kept).
    Later for the shop: each `shop` spot lists the sets it sells (towns carry different eras); the other store packs of
    the era (Duelist Packs, Dark Beginning / Dark Revelation, Retro Pack, Premium Packs, Gold Series: other pack sizes
-   and rarity mixes, pictures saved by hand); prize packs, structure decks and promos as rewards rather than stock.
+   and rarity mixes, pictures saved by hand); prize packs and promos as rewards rather than stock.
+   Deck shop (`src/shop/DeckShop.ts`, a `deckshop` spot or `?deckshop`): ✅ the 12 starter and structure decks whose box
+   pictures are cut out (by hand; `build-deck-boxes` makes them pixel art: half size, own 32 colours, outline) hanging
+   on a pegboard, 8 in view, scrolling a row at a time; picking, the board with name and price. Next: the deck lists on the board (copy counts from Yugipedia's
+   set lists), then buying (opening the box; a bought deck becomes a ready deck slot); the other 9 decks once their
+   box pictures are cut (SDY, SDK, SDJ, SDP and the five on white).
    Next: card collection (keep pulled cards, spend chips), rewards/boosters after duels,
    story progression and gym-like bosses, save to localStorage.
 6. Move the duel to a Web Worker if long chains cause frame hitches.

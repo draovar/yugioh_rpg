@@ -38,8 +38,8 @@ jobs:
           key: art-${{ hashFiles('data/pool.json') }}
           restore-keys: art-
 
-      # Paid tilesets and pack pictures → vendor/paid, packed into public/maps/ by build-tiles and public/boosters/ by
-      # build-boosters. Fails here if the deploy key is missing.
+      # Paid tilesets, pack and deck box pictures → vendor/paid, packed into public/maps/ by build-tiles, public/boosters/
+      # by build-boosters and public/deck-boxes/ by build-deck-boxes. Fails here if the deploy key is missing.
       - uses: actions/checkout@v4
         with:
           repository: Draovar/yugioh_rpg-assets
@@ -52,6 +52,7 @@ jobs:
       - run: npm run build-art
       - run: npm run build-tiles
       - run: npm run build-boosters
+      - run: npm run build-deck-boxes
       - run: npm run smoke -- 3
       - run: npm run smoke-p2p -- 3
       - run: npm run test-ai

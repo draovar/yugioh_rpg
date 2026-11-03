@@ -9,6 +9,13 @@ export const ART_STYLE = {
   large: { size: 128, saturation: 1.2, contrast: 1.08, brightness: -8, sharpen: 0.5, dither: 32 },
 };
 
+/**
+ * Deck box pictures (the deck shop, build-deck-boxes): half the cut-outs' resolution, the large card art's boost, each
+ * box's own `colors`-colour palette (k-means, no dither; the shared one shifts their colours), hard edges and a 1px
+ * dark outline around the box.
+ */
+export const DECK_BOX_STYLE = { scale: 0.5, saturation: 1.2, contrast: 1.08, brightness: -8, sharpen: 0.5, colors: 32, outline: [26, 20, 16] };
+
 /** Applies the saturation / contrast / sharpen boost of a style to a sharp pipeline. */
 export function boost(img, s) {
   return img.modulate({ saturation: s.saturation }).linear(s.contrast, s.brightness).sharpen({ sigma: s.sharpen });
