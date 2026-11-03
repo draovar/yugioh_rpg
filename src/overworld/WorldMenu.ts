@@ -1,13 +1,13 @@
 import Phaser from "phaser";
 import { WHITE, border, text } from "../ui/pixel.ts";
 import {
-  aiDeck, chosenDeck, deckEntries, playerLook, revealAiCards, setAiDeck, setChosenDeck, setPlayerLook, setRevealAiCards,
-  setWorldZoom,
+  aiDeck, chosenDeck, deckEntries, playerLook, revealAiCards, setAiDeck, setChosenDeck, setIntegerScale, setPlayerLook,
+  setRevealAiCards, setWorldZoom,
 } from "../ui/prefs.ts";
 import { THEME, THEMES, setTheme } from "../ui/theme.ts";
 import { enterFullscreen } from "../ui/touch.ts";
 import { makeButton, makeDropDown, type Button } from "../ui/widgets.ts";
-import { HEIGHT, WIDTH, fitView, scaleWithView, viewScale, worldSpriteScale } from "../ui/view.ts";
+import { HEIGHT, WIDTH, fitView, integerScaling, scaleWithView, viewScale, worldSpriteScale } from "../ui/view.ts";
 import type { Overworld } from "./Overworld.ts";
 
 /** ACTION_COLOR: buttons that leave the overworld (DECK EDITOR, MULTIPLAYER, QUICK DUEL), a lighter blue than the settings. */
@@ -16,7 +16,7 @@ const BUTTON_COLOR = 0x2d4a7a, PICKED_COLOR = 0x3f7a3a, ACTION_COLOR = 0x4a72b0;
  * The settings panel: centred, one row per setting; labels on the left, controls in a column from `controlX` on, all
  * `controlW` wide (a pair of buttons with the `gap` between them included). `h` counts the ZOOM row.
  */
-const PANEL = { w: 230, h: 250, row: 22, controlX: 100, controlW: 120, gap: 6 };
+const PANEL = { w: 230, h: 272, row: 22, controlX: 100, controlW: 120, gap: 6 };
 
 /** The prebuilt decks and your custom decks as drop-down choices. */
 const deckOptions = () => deckEntries().map((e) => ({ value: e.key, label: e.label }));
@@ -24,7 +24,7 @@ const deckOptions = () => deckEntries().map((e) => ({ value: e.key, label: e.lab
 /**
  * Overlay on the Overworld (its own scene, so it doesn't scroll with the map camera): a MENU button at the top right
  * that opens the settings panel (also M): the player character (boy / girl), your deck, the quick duel's AI deck (NPCs bring their own decks), whether
- * the AI's hand and set cards are shown, the duel UI theme, the overworld's ZOOM; then DECK EDITOR, MULTIPLAYER, QUICK DUEL and FULL SCREEN.
+ * the AI's hand and set cards are shown, the duel UI theme, integer SCALING or FIT, the overworld's ZOOM; then DECK EDITOR, MULTIPLAYER, QUICK DUEL and FULL SCREEN.
  */
 export class WorldMenu extends Phaser.Scene {
   isOpen = false;
@@ -120,17 +120,23 @@ export class WorldMenu extends Phaser.Scene {
       this.loadingTheme = true;
       void setTheme(this, themes[i]).then(() => (this.loadingTheme = false));
     });
-    // The sprite size, 1X up to the window's scale: the map shows as much more as the sprites are smaller
-    // (src/ui/view.ts). Applied once this click is done: the game may change size (the panel is then built again for
-    // it, the resize handler above), the overworld's camera zooms.
+    // Applied once the click is done: the game may change size or zoom (the panel is then built again for it, the
+    // resize handler above), the overworld's camera zooms.
+    const refit = () => this.time.delayedCall(0, () => {
+      fitView(this.game);
+      (this.scene.get("Overworld") as Overworld).layoutView();
+    });
+    // Whole screen pixels only (borders around), or the whole window filled at any scale (src/ui/view.ts).
+    choices(row("SCALING:"), ["INTEGER", "FIT"], () => (integerScaling() ? 0 : 1), (i) => {
+      setIntegerScale(i === 0);
+      refit();
+    });
+    // The sprite size, 1X up to the window's scale: the map shows as much more as the sprites are smaller.
     if (most >= 2) {
       const sizes = Array.from({ length: most }, (_, i) => i + 1);
       choices(row("ZOOM:"), sizes.map((s) => `${s}X`), () => worldSpriteScale() - 1, (i) => {
         setWorldZoom(sizes[i]);
-        this.time.delayedCall(0, () => {
-          fitView(this.game);
-          (this.scene.get("Overworld") as Overworld).layoutView();
-        });
+        refit();
       });
     }
 

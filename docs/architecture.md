@@ -234,7 +234,7 @@ passes the `NetDuel` to `Duel`.
   the same way.
 - `WorldMenu`: overlay scene launched by Overworld (so it doesn't scroll; laid out in 640x360, its camera scales it up with the full-detail game, `scaleWithView`). MENU (M) button top right opens the settings
   panel: PLAYER (boy / girl), your deck (drop-down lists, `makeDropDown` in `src/ui/widgets.ts`, saved in localStorage
-  via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place), ZOOM (1X up to the window's scale, only from 2x windows on; the game may change size, the panel is rebuilt on resize),
+  via `src/ui/prefs.ts`, used vs NPCs and in multiplayer), THEME (switch in place), SCALING (INTEGER / FIT, `src/ui/view.ts`), ZOOM (1X up to the window's scale, only from 2x windows on; the game may change size, the panel is rebuilt on resize),
   DECK EDITOR, MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and set cards in duels
   (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards drawn face-up at 60%
   alpha), QUICK DUEL, FULL SCREEN where the browser supports it.
@@ -499,7 +499,10 @@ window stays at 1x), only a window under 640x360 gets a fractional fit. "world" 
 the game is 640x360 times that scale at zoom 1 / `devicePixelRatio` and the camera zooms to the sprite size. Overlay scenes laid out in 640x360
 (WorldMenu, Transition) scale their camera with it (`scaleWithView`, `layoutScale`). `fitView` runs on window resizes
 and mode / ZOOM changes (resize, then setZoom: Phaser's resize skips the canvas's CSS size when it equals the game
-size). Scenes under the card transition switch size while it covers the screen.
+size). Scenes under the card transition switch size while it covers the screen. The world menu's SCALING turns
+whole numbers off (`integerScaling`; FIT, the default on touch devices, INTEGER on the others): the result is then
+stretched to fill the window, still 16:9 and nearest-neighbour (a smaller ZOOM's full-detail game too, so its sprites
+are no longer whole screen pixels).
 
 Phones: the page is `100dvh` tall (100vh = the height without the browser bar, which pushed the canvas under it), and
 count by their full resolution (a landscape phone is about 3x; with the browser bar showing 2x); the first tap goes full screen (`fullscreenOnFirstTap`, Android /

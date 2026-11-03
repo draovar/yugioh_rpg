@@ -133,6 +133,20 @@ export function setWorldZoom(zoom: number): void {
   store(ZOOM_KEY, String(zoom));
 }
 
+const INTEGER_KEY = "view.integerScale";
+/**
+ * Whether the game is scaled up by whole numbers of screen pixels only (world menu: SCALING, INTEGER / FIT); null =
+ * not chosen, the device's default (`integerScaling` in src/ui/view.ts).
+ */
+export function integerScale(): boolean | null {
+  const saved = load(INTEGER_KEY);
+  return saved === "1" ? true : saved === "0" ? false : null;
+}
+
+export function setIntegerScale(on: boolean): void {
+  store(INTEGER_KEY, on ? "1" : "0");
+}
+
 const CHAIN_KEY = "duel.chainMode";
 export const CHAIN_MODES: ChainMode[] = ["auto", "all", "off"];
 

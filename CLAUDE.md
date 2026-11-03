@@ -2,7 +2,8 @@
 
 A Pokémon-style overworld RPG (Phaser 4.2) in which every battle is a real Yu-Gi-Oh duel.
 Rendered natively at **640x360** pixel art (`pixelArt: true`), scaled up by whole numbers of screen pixels only
-(1x/2x/3x, borders around; `src/ui/view.ts`); the duel screen follows `docs/layout-sketch.png` exactly. From 2x windows
+(1x/2x/3x, borders around; `src/ui/view.ts`), unless the world menu's SCALING is FIT (the default on phones and
+tablets: stretched to fill the window, still 16:9); the duel screen follows `docs/layout-sketch.png` exactly. From 2x windows
 on, the world menu's ZOOM picks the overworld's sprite size, 1X up to the window's scale: the map shows as much more as
 the sprites are smaller (1080p: 3X = 640x360 of map, 2X = 960x540, 1X = 1920x1080), every size at full detail (smaller
 sizes draw at the screen's resolution).
