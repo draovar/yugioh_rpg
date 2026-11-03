@@ -2,7 +2,8 @@
 // loses its top along a jagged line, the cards rise out of it and are dealt face down in two rows. Clicking (tapping) a
 // card flips it; Enter / Space / X flip the next one, REVEAL ALL (Esc) the rest. A Rare flashes; Super Rares and up
 // first shake with a glow in their rarity's colour, then flash and burst into sparkles; Ultra and Secret Rares also
-// flash the screen and get a shine across them now and then; a Secret Rare's glow and sparkles run through the colours.
+// flash the screen and get a shine across them now and then; a Secret Rare's glow and sparkles run through the colours
+// (revealFx.ts, shared with the deck unboxing).
 // A card's rarity chip shows under it once it's up. On the right, where the shop's checklist is, the duel's card info
 // panel shows each card as it turns over, then whichever face-up card is hovered or tapped.
 // Several packs bought at once open one after another (the title counts them): NEXT PACK clears the cards away and
@@ -17,6 +18,7 @@ import { text } from "../ui/pixel.ts";
 import { THEME, ui } from "../ui/theme.ts";
 import { makeButton, type Button } from "../ui/widgets.ts";
 import { rarityLook, type Pull } from "./boosters.ts";
+import { glow, revealShow, shake, type FxHost } from "./revealFx.ts";
 
 /** The pack while it's opened, drawn at 1x (public/boosters/large/, `npm run build-boosters`). */
 export const LARGE_PACK = { w: 100, h: 172 };
@@ -25,7 +27,7 @@ const TEAR_Y = 16;
 const JAG = [0, 1, 2, 1, 2, 0, -1, 0, 1, -1, 0, 2, 1, -1];
 /** The card info panel on the right (the duel's info panel: board, then the details inside its rim). */
 const SPLIT = 640 - INFO.w;
-const DETAILS = { x: SPLIT + INSET.board + 2, w: INFO.w - 2 * (INSET.board + 2), top: INSET.board + 2, bottom: 360 - INSET.board - 2 };
+export const DETAILS = { x: SPLIT + INSET.board + 2, w: INFO.w - 2 * (INSET.board + 2), top: INSET.board + 2, bottom: 360 - INSET.board - 2 };
 /** Cards at 2x in two rows left of the panel, each one's rarity chip under it. */
 const SCALE = 2, CARD_W = CARD.w * SCALE, CARD_H = CARD.h * SCALE, GAP = 6;
 const ROW_TOPS = [28, 160];
@@ -35,10 +37,8 @@ const CENTER = { x: SPLIT / 2, y: 184 };
 const DEPTH = 100;
 const T = {
   shade: 150, enter: 200, wiggle: 50, tear: 350, bits: 450, rise: 300, deal: 140, dealStagger: 70,
-  flip: 70, shake: 45, flash: 250, screenFlash: 300, sparkle: 550, shine: 450, shineEvery: 2600, revealAllStagger: 150, close: 150,
+  flip: 70, revealAllStagger: 150, close: 150,
 };
-/** Sparkles a reveal bursts into, by rarity tier (0 = commons ... 4 = Secret Rare). */
-const SPARKLES = [0, 0, 8, 12, 16];
 
 interface Dealt {
   pull: Pull;
@@ -78,7 +78,7 @@ export class PackOpening {
   private cards: Dealt[] = [];
   private button: Button | null = null;
   /** Effects that run until the pack is put away: shine timers, glow and shine tweens. */
-  private loops: (Phaser.Time.TimerEvent | Phaser.Tweens.Tween)[] = [];
+  private readonly loops: (Phaser.Time.TimerEvent | Phaser.Tweens.Tween)[] = [];
   private dealt = false;
   private closed = false;
 
@@ -297,10 +297,11 @@ export class PackOpening {
     c.revealed = true;
     c.sprite.y = c.y;
     this.layer!.bringToTop(c.sprite);
-    const look = rarityLook(c.pull.rarity);
+    const look = rarityLook(c.pull.rarity), host = this.fxHost();
+    const card = { x: c.x, y: c.y, w: CARD_W, h: CARD_H, sprite: c.sprite };
     if (look.tier >= 2) {
-      this.glow(c, look.color, look.tier >= 4);
-      await this.shake(c.sprite, c.x);
+      glow(host, card, look.color, look.tier >= 4);
+      await shake(host, card);
     }
     await this.tween({ targets: c.sprite, scaleX: 0, duration: T.flip });
     if (this.closed || !c.sprite.active) return;
@@ -309,13 +310,7 @@ export class PackOpening {
     if (!quiet || look.tier >= 1) this.showDetails(c);
     await this.tween({ targets: c.sprite, scaleX: SCALE, duration: T.flip });
     if (this.closed || !c.sprite.active) return;
-    if (look.tier >= 1) this.flash(c);
-    if (look.tier >= 2) this.sparkles(c, look.color, SPARKLES[look.tier], look.tier >= 4);
-    if (look.tier >= 3) {
-      this.screenFlash();
-      this.shine(c);
-      this.loops.push(this.scene.time.addEvent({ delay: T.shineEvery, loop: true, callback: () => this.shine(c) }));
-    }
+    revealShow(host, card, look);
     this.chip(c, look);
     c.settled = true;
     if (this.cards.every((d) => d.settled)) this.button?.setLabel(this.pack < this.opts.packs.length - 1 ? "NEXT PACK" : "DONE");
@@ -326,79 +321,6 @@ export class PackOpening {
     if (this.closed) return;
     this.hint.setVisible(false);
     if (this.info.code !== c.pull.code) this.info.show(c.pull.code);
-  }
-
-  /** Anticipation: the card trembles a pixel each way. */
-  private async shake(sprite: CardSprite, x: number) {
-    for (const dx of [1, -1, 1, -1, 1, -1, 0]) {
-      sprite.x = x + dx;
-      await this.wait(T.shake);
-    }
-  }
-
-  /** A pulsing 2px border around the card; a Secret Rare's runs through the colours. */
-  private glow(c: Dealt, color: number, rainbow: boolean) {
-    const g = this.scene.add.graphics();
-    this.layer!.add(g);
-    const draw = (col: number) => {
-      const l = c.x - CARD_W / 2 - 2, t = c.y - CARD_H / 2 - 2, w = CARD_W + 4, h = CARD_H + 4;
-      g.clear().fillStyle(col).fillRect(l, t, w, 2).fillRect(l, t + h - 2, w, 2).fillRect(l, t + 2, 2, h - 4).fillRect(l + w - 2, t + 2, 2, h - 4);
-    };
-    draw(color);
-    this.loops.push(this.scene.tweens.add({ targets: g, alpha: 0.4, duration: 500, yoyo: true, repeat: -1 }));
-    if (rainbow) {
-      const hue = { h: 0 };
-      this.loops.push(this.scene.tweens.add({
-        targets: hue, h: 1, duration: 1200, repeat: -1, onUpdate: () => draw(Phaser.Display.Color.HSVToRGB(hue.h, 0.55, 1).color),
-      }));
-    }
-  }
-
-  private flash(c: Dealt) {
-    const r = this.scene.add.rectangle(c.x, c.y, CARD_W, CARD_H, 0xffffff, 0.8);
-    this.layer!.add(r);
-    void this.tween({ targets: r, alpha: 0, duration: T.flash, onComplete: () => r.destroy() });
-  }
-
-  private screenFlash() {
-    const r = this.scene.add.rectangle(0, 0, 640, 360, 0xffffff, 0.35).setOrigin(0);
-    this.layer!.add(r);
-    void this.tween({ targets: r, alpha: 0, duration: T.screenFlash, onComplete: () => r.destroy() });
-  }
-
-  /** Plus-shaped sparkles flying out from the card, in its rarity's colour and white (any colour for a Secret Rare). */
-  private sparkles(c: Dealt, color: number, n: number, rainbow: boolean) {
-    for (let i = 0; i < n; i++) {
-      const angle = (i / n) * Math.PI * 2 + Math.random() * 0.4, dist = 60 + Math.random() * 40;
-      const col = rainbow ? Phaser.Display.Color.HSVToRGB(Math.random(), 0.55, 1).color : i % 2 ? 0xffffff : color;
-      const g = this.scene.add.graphics({ x: c.x, y: c.y }).fillStyle(col).fillRect(-2, 0, 5, 1).fillRect(0, -2, 1, 5);
-      this.layer!.add(g);
-      void this.tween({
-        targets: g, x: c.x + Math.cos(angle) * dist, y: c.y + Math.sin(angle) * dist, alpha: 0,
-        duration: T.sparkle * (0.8 + Math.random() * 0.4), ease: "Quad.Out", onComplete: () => g.destroy(),
-      });
-    }
-  }
-
-  /** A slanted band of light sweeping across the card face (clipped to the card). */
-  private shine(c: Dealt) {
-    if (this.closed || !c.sprite.active) return;
-    const g = this.scene.add.graphics();
-    this.layer!.add(g);
-    const left = c.x - CARD_W / 2, top = c.y - CARD_H / 2, band = 10, slant = 0.4;
-    const sweep = { p: 0 };
-    this.loops.push(this.scene.tweens.add({
-      targets: sweep, p: 1, duration: T.shine,
-      onUpdate: () => {
-        const start = left - band - CARD_H * slant + sweep.p * (CARD_W + band + CARD_H * slant);
-        g.clear().fillStyle(0xffffff, 0.45);
-        for (let r = 0; r < CARD_H; r++) {
-          const x0 = Math.max(left, Math.round(start + r * slant)), x1 = Math.min(left + CARD_W, Math.round(start + r * slant) + band);
-          if (x1 > x0) g.fillRect(x0, top + r, x1 - x0, 1);
-        }
-      },
-      onComplete: () => g.destroy(),
-    }));
   }
 
   /** The rarity chip under a turned card. */
@@ -412,9 +334,15 @@ export class PackOpening {
     void this.tween({ targets: [g, t], alpha: 1, duration: 150 });
   }
 
+  /** Where the reveal effects draw: this pack's layer; their running effects in `loops`. */
+  private fxHost(): FxHost {
+    return { scene: this.scene, layer: this.layer!, loops: this.loops, closed: () => this.closed };
+  }
+
+  /** Stops the running effects (emptying `loops` in place: effects still hold it). */
   private stopLoops() {
     for (const l of this.loops) l instanceof Phaser.Time.TimerEvent ? l.remove() : l.stop();
-    this.loops = [];
+    this.loops.length = 0;
   }
 
   private close() {

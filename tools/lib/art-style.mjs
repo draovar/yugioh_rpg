@@ -10,9 +10,9 @@ export const ART_STYLE = {
 };
 
 /**
- * Deck box pictures (the deck shop, build-deck-boxes): half the cut-outs' resolution, the large card art's boost, each
- * box's own `colors`-colour palette (k-means, no dither; the shared one shifts their colours), hard edges and a 1px
- * dark outline around the box.
+ * Deck box pictures (the deck shop, build-deck-boxes): half the cut-outs' resolution (their own size too, for opening
+ * a deck), the large card art's boost, each box's own `colors`-colour palette (k-means, no dither; the shared one
+ * shifts their colours), hard edges and a 1px dark outline around the box.
  */
 export const DECK_BOX_STYLE = { scale: 0.5, saturation: 1.2, contrast: 1.08, brightness: -8, sharpen: 0.5, colors: 32, outline: [26, 20, 16] };
 

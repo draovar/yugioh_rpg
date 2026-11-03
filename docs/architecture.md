@@ -342,6 +342,8 @@ The `DeckEditor` scene (world menu → DECK EDITOR); themed like the duel, both 
 table). Geometry in `layout.ts`.
 
 - Left: the deck (Main Deck 4 rows of 10, squeezed together past 40; Extra Deck under it). Nothing ever covers the deck.
+  The table, bar plate and mat (`drawDeckTable`), the labels and empty slots (`deckSlots`) and each card's place
+  (`deckPlaces`) are in `deckMat.ts`, shared with the deck shop's unboxing.
 - Right, where the duel's info panel sits: the card list. Search box = an HTML input via `textInput.ts`, with an ALL /
   NAME toggle (card text too or names only); SORT drop-down; FILTERS (`filterPanel.ts`, shown in the list's place:
   toggle buttons per group on a 5-column grid, long labels two cells, LEVEL half cells in one row; `FILTER_COLUMNS = 0`
@@ -422,7 +424,8 @@ release date and `[number, passcode, rarity]` per card).
   to its centre line, swap the face): a Rare flashes; a Super Rare and up (`tier` in `RARITIES`) first shakes with a
   pulsing 2px glow in its rarity's colour, then flashes and bursts into plus-shaped sparkles; an Ultra or Secret Rare
   also flashes the screen and gets a light band sweeping across it every few seconds; a Secret Rare's glow and
-  sparkles run through the colours. Each turned card gets its rarity chip under it. The info panel shows each card as
+  sparkles run through the colours (`revealFx.ts`, any card size: shared with the deck unboxing; the effects that run
+  on go in the opening's `loops`, emptied in place when they stop). Each turned card gets its rarity chip under it. The info panel shows each card as
   its face comes up (during REVEAL ALL only the pack's one Rare-or-better card: commons leave it alone, so it doesn't
   flicker), then any face-up card hovered or tapped ("TURN A CARD OVER" before the first; no rarity line: the chips
   under the cards show it). REVEAL ALL (Esc) turns the rest over one by one. Once every card's reveal has
@@ -433,8 +436,9 @@ release date and `[number, passcode, rarity]` per card).
 ### Deck shop (`DeckShop.ts`)
 
 The `DeckShop` scene (a `deckshop` spot in the overworld, or `?deckshop`). `decks.ts` = the decks on sale (`DECKS`:
-set code, name, kind (starter / structure), TCG release, price), the starter and structure decks up to The Dark Emperor
-(2008), in release order; for now only the 12 whose box pictures are cut out (the other 9 commented out).
+set code, name, `short` (the saved deck's name, at most 16 characters like the deck editor's), kind (starter /
+structure), TCG release, price), the starter and structure decks up to The Dark Emperor (2008), in release order; for
+now only the 12 whose box pictures are cut out (the other 9 commented out).
 
 - Left: a pegboard on the panelled wall (sign DECK SHOP, CHIPS, EXIT / Esc): brown hardboard (baked with the room) and
   its holes, `HOLE` px apart (in the `ScrollingFixture` content, so they scroll with the rows; `ROW_H` is 13 holes and
@@ -449,16 +453,30 @@ set code, name, kind (starter / structure), TCG release, price), the starter and
   card art (`DECK_BOX_STYLE` in `tools/lib/art-style.mjs`): half the size, the large card art's boost, each box's own 32
   colours (k-means in Oklab, no dither), hard edges, a 1px dark outline (the picture is 76x124 art + the outline), and
   the hanger hole cut out (`HOLE` in the build: a euro slot drawn as a pixel mask, its rim in the outline colour). The
+  same at the cut-outs' own size goes to `large/` (153x250, the hole's pixels doubled, its rim 2px) for the unboxing. The
   cut-outs share one 200x300 frame (the box at the same pixels in each), so the build crops them all to the same
   151x248 rectangle first and every box hangs from its peg at the same point.
-- Right: `ShopBoard` with the deck's name, kind, release month and size, its deck list, the price, - / + (1 to
-  `MAX_DECKS`) and BUY. The list (`rows: "cards"`) is the deck editor's rows (`cardRow` in `deck-editor/listRow.ts`:
+- Right: `ShopBoard` with the deck's name, kind, release month and size, its deck list, the price and BUY (one deck at a
+  time, `MAX_DECKS` = 1: with one at most, the board leaves out - / + and the count; more copies are worth having once
+  the card collection exists). The list (`rows: "cards"`) is the deck editor's rows (`cardRow` in `deck-editor/listRow.ts`:
   frame-colour strip, 32x32 art, name, Level / Attribute / Type or Spell / Trap kind, ATK / DEF), 33 px tall so 8 fit
   the paper, one card per row in the deck editor's type order (`sortDeck`), its copies right of the name and, above
   Common, its rarity chip right of the ATK / DEF line; a click opens the card's details like the checklist's. The lists
   come from `public/data/decks.json` (`data/decks.json` from `build-pool`, copied by `build-data`: per deck its name,
-  release and `[number, passcode, rarity, copies]` per card). Not built yet: buying (BUY only says "NOT FOR SALE
-  YET").
+  release and `[number, passcode, rarity, copies]` per card).
+- BUY (X / Enter / Space) opens the deck (`DeckOpening.ts`, free for now: no chips spent): an overlay like the pack
+  opening (depth 100, a zone over everything takes the clicks, the shop passes it its keys), the deck editor's left side
+  (`drawDeckTable`, the deck's name on the bar, `deckSlots`) and the duel's card info panel on the right. The box comes
+  in on the mat at its full size (`public/deck-boxes/large/<CODE>.png`, 153x250 at 1x; without it the pegboard's at
+  2x), wiggles, squashes and flashes: its cards (a passcode per copy, Fusions to the Extra Deck, `goesToExtra`) rise out
+  face down while it drops away, are dealt one by one to their deck editor places (`deckPlaces`), and turn over in a
+  wave; the foils (Rare and up) last, one at a time, with the pack opening's effects (`revealFx.ts` at 1x size; `tight`:
+  the glow runs along the card's own edge, and the effects on a card sit just above its sprite, so the cards after it
+  in a squeezed row cover them as they cover the card), each shown in the info panel, glows kept. Hovering or tapping
+  a face-up card shows it.
+  A click, Esc, Enter, Space or X hurries the rest (`HURRY`: later steps play faster). Then the bar offers SAVE AS
+  DECK (a custom deck slot named `short`, while fewer than `MAX_CUSTOM_DECKS` are used; the result shows left of the
+  buttons) and DONE (Esc).
 
 ## Shared UI (`src/ui/`)
 
@@ -513,7 +531,8 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   size: transparent padding cut, other shapes stretched; plus `public/boosters/large/` at 100x172 for opening packs),
   `build-deck-boxes` (`vendor/paid/deck-boxes/<CODE>.png`, the deck shop's box pictures, in the private assets repo; the
   deploy runs it after `build-boosters` → `public/deck-boxes/`, each 78x126 pixel art: the shared 200x300 frame's cut-outs cropped
-  to one rectangle, other pictures trimmed and fitted in, top centred; then half size, own 32 colours, outline).
+  to one rectangle, other pictures trimmed and fitted in, top centred; then half size, own 32 colours, outline; and
+  `large/`, the same at full size, 153x250, for opening a deck).
   - `build-characters`: `data/characters/reshef-sheet.png` (every Reshef of Destruction character, green cells on a
     purple grid) sliced per `data/characters/characters.json` (name → 3x3 block or explicit cells per direction,
     `nudge` = move single frames by pixels; `{ "sheet": "x.png" }` = a ready-made 96x96 sheet in the same layout, drawn

@@ -71,7 +71,7 @@ export class ShopBoard {
   private factsText: Phaser.GameObjects.BitmapText;
   private priceText: Phaser.GameObjects.BitmapText;
   private priceShadow: Phaser.GameObjects.BitmapText;
-  private countText: Phaser.GameObjects.BitmapText;
+  private countText: Phaser.GameObjects.BitmapText | null = null;
   private statusText: Phaser.GameObjects.BitmapText;
   private statusTimer: Phaser.Time.TimerEvent | null = null;
   private rows: BoardRow[] = [];
@@ -122,14 +122,16 @@ export class ShopBoard {
     }
     this.scrollbar = scene.add.graphics();
 
-    // Price (the total) in the name's lettering; the count plain black, the buttons' size and line; - / + change it.
-    // A status (rare: no card list) shows in the price's place for a moment.
+    // Price (the total) in the name's lettering; the count plain black, the buttons' size and line; - / + change it
+    // (none when only one can be bought). A status (rare: no card list) shows in the price's place for a moment.
     this.statusText = text(scene, left, BOTTOM.top + (BUTTON_H - 5) / 2, "", { color: panel.inkSoft });
     this.priceShadow = text(scene, left + 1, BOTTOM.textY + 1, "", { color: RUNEWOOD.cardName.shadow, scale: 2 });
     this.priceText = text(scene, left, BOTTOM.textY, "", { color: RUNEWOOD.cardName.ink, scale: 2 });
-    this.countText = text(scene, BOTTOM.count, BOTTOM.top + (BUTTON_H - 5) / 2, "", { color: INK });
-    shopButton(scene, BOTTOM.minus, BOTTOM.top, BOTTOM.step, "-", "wood", () => this.setQuantity(this.quantity - 1));
-    shopButton(scene, BOTTOM.plus, BOTTOM.top, BOTTOM.step, "+", "wood", () => this.setQuantity(this.quantity + 1));
+    if (opts.maxQuantity > 1) {
+      this.countText = text(scene, BOTTOM.count, BOTTOM.top + (BUTTON_H - 5) / 2, "", { color: INK });
+      shopButton(scene, BOTTOM.minus, BOTTOM.top, BOTTOM.step, "-", "wood", () => this.setQuantity(this.quantity - 1));
+      shopButton(scene, BOTTOM.plus, BOTTOM.top, BOTTOM.step, "+", "wood", () => this.setQuantity(this.quantity + 1));
+    }
     shopButton(scene, BOTTOM.buy, BOTTOM.top, BOTTOM.buyW, "BUY", "green", () => opts.onBuy());
 
     // The list scrolls by the wheel (over the board: three chip rows or one card row a notch) or by dragging it (touch);
@@ -192,7 +194,7 @@ export class ShopBoard {
     this.quantity = Phaser.Math.Clamp(n, 1, this.opts.maxQuantity);
     // Centred on its glyphs (measure leaves out the font's trailing spacing, which `width` counts).
     const count = String(this.quantity);
-    this.countText.setText(count).setX(Math.round(BOTTOM.count - measure(this.scene, FONT_UI, count) / 2));
+    this.countText?.setText(count).setX(Math.round(BOTTOM.count - measure(this.scene, FONT_UI, count) / 2));
     const price = `${this.unitPrice * this.quantity} CHIPS`;
     this.priceText.setText(price);
     this.priceShadow.setText(price);

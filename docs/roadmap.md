@@ -53,8 +53,9 @@
    Deck shop (`src/shop/DeckShop.ts`, a `deckshop` spot or `?deckshop`): ✅ the 12 starter and structure decks whose box
    pictures are cut out (by hand; `build-deck-boxes` makes them pixel art: half size, own 32 colours, outline) hanging
    on a pegboard, 8 in view, scrolling a row at a time; picking; the board with name, price and the deck list (the deck
-   editor's card rows, copies, rarity chips; `data/decks.json`, copy counts from Yugipedia's set lists). Next: buying
-   (opening the box; a bought deck becomes a ready deck slot); the other 9 decks once their box pictures are cut (SDY,
+   editor's card rows, copies, rarity chips; `data/decks.json`, copy counts from Yugipedia's set lists); buying: the box
+   opens over the shop onto the deck editor's mat (foils last with the pack effects), SAVE AS DECK makes it a custom
+   deck slot (free for now, one at a time). Next: the other 9 decks once their box pictures are cut (SDY,
    SDK, SDJ, SDP and the five on white).
    Next: card collection (keep pulled cards, spend chips), rewards/boosters after duels,
    story progression and gym-like bosses, save to localStorage.

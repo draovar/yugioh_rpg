@@ -3,21 +3,25 @@
 // to a row, two rows in view; with more, the rows scroll a row at a time (wheel, swipe, the arrow tabs on the frame, or
 // the arrow keys picking a deck out of view; shopParts.ts ScrollingFixture). Clicking (tapping) a box, or the arrow
 // keys, picks it: it lifts a little on its peg. On the right Runewood's board (ShopBoard.ts): the picked deck's name,
-// kind and release, the price, how many (- / +) and BUY. Not built yet: the deck lists on the board and buying.
+// kind, release and size, its deck list (the deck editor's card rows), the price and BUY: the box opens over the shop
+// (DeckOpening.ts) and the deck can be saved as one of the custom deck slots. One deck at a time, free for now: the card
+// collection isn't built yet, so there's no - / + and no chips are spent.
 // The room, buttons and scrolling are shared with the card shop (shopParts.ts).
 // Box pictures: public/deck-boxes/<CODE>.png (`npm run build-deck-boxes`: pixel art at half the cut-outs' size, with an
 // outline); a missing one shows as a blank box with its code.
 import Phaser from "phaser";
-import { sortDeck } from "../duel/decks/deckRules.ts";
+import { goesToExtra, sortDeck } from "../duel/decks/deckRules.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { text } from "../ui/pixel.ts";
+import { MAX_CUSTOM_DECKS, customDecks, saveCustomDeck } from "../ui/prefs.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
 import { setViewMode } from "../ui/view.ts";
 import { rarityLook } from "./boosters.ts";
+import { DeckOpening } from "./DeckOpening.ts";
 import { DECKS, type DeckList, type DeckStock } from "./decks.ts";
 import type { ShopData } from "./Shop.ts";
 import { ShopBoard, type BoardRow } from "./ShopBoard.ts";
-import { BUTTON_H, C, CASE, DRAG_PX, IN, MONTHS, ScrollingFixture, drawRoom, preloadShopButtons, shopButton } from "./shopParts.ts";
+import { BUTTON_H, C, CASE, DRAG_PX, IN, MONTHS, RUNEWOOD, ScrollingFixture, drawRoom, preloadShopButtons, shopButton } from "./shopParts.ts";
 
 /** Box pictures are drawn at 1x (tools/art/build-deck-boxes.mjs makes them this size, outline included). */
 const DECK_BOX = { w: 78, h: 126 };
@@ -35,8 +39,8 @@ const PEG = [".ooo.", "ollmo", "olmdo", "omddo", ".ooo."];
 /** A picked box lifts this far: it still hangs in its hole, now on the hole's bottom. */
 const LIFT = 3, LIFT_MS = 80;
 const TAG = { w: 24, h: 9 };
-/** Decks bought at once, at most. */
-const MAX_DECKS = 3;
+/** Decks bought at once, at most (one until the card collection makes more copies worth having: no - / +). */
+const MAX_DECKS = 1;
 /** The pegboard (brown hardboard, its holes with a light lower lip), the pegs' metal, the boxes' shadows. */
 const PB = {
   board: 0xa8835a, boardShadow: 0x8f6e4a, hole: 0x4e3622, holeLip: 0xc29a6e, shadow: 0x000000,
@@ -47,6 +51,8 @@ const SHADOW = { by: 2, alpha: 0.3 };
 const LISTS_KEY = "decks";
 
 const boxKey = (d: DeckStock) => `deck-box-${d.code}`;
+/** The box at its full size (public/deck-boxes/large/), for opening it. */
+const largeKey = (d: DeckStock) => `deck-box-large-${d.code}`;
 
 export class DeckShop extends Phaser.Scene {
   private engine!: Engine;
@@ -58,6 +64,8 @@ export class DeckShop extends Phaser.Scene {
   /** The pegboard's rows: everything on them, scrolling a row at a time. */
   private wall!: ScrollingFixture;
   private board!: ShopBoard;
+  /** A deck being opened over the shop; the shop ignores input meanwhile. */
+  private opening: DeckOpening | null = null;
 
   constructor() {
     super("DeckShop");
@@ -67,13 +75,17 @@ export class DeckShop extends Phaser.Scene {
     this.chips = data.chips ?? 0;
     this.picked = 0;
     this.boxes = [];
+    this.opening = null;
   }
 
   preload() {
     if (!this.cache.json.exists(LISTS_KEY)) this.load.json(LISTS_KEY, "data/decks.json");
     ShopBoard.preload(this);
     preloadShopButtons(this);
-    for (const d of DECKS) if (!this.textures.exists(boxKey(d))) this.load.image(boxKey(d), `deck-boxes/${d.code}.png`);
+    for (const d of DECKS) {
+      if (!this.textures.exists(boxKey(d))) this.load.image(boxKey(d), `deck-boxes/${d.code}.png`);
+      if (!this.textures.exists(largeKey(d))) this.load.image(largeKey(d), `deck-boxes/large/${d.code}.png`);
+    }
   }
 
   async create() {
@@ -89,7 +101,7 @@ export class DeckShop extends Phaser.Scene {
     this.drawWall();
     this.wall.makeCues();
     this.board = new ShopBoard(this, this.engine, {
-      maxQuantity: MAX_DECKS, busy: () => false, onBuy: () => this.buy(), rows: "cards",
+      maxQuantity: MAX_DECKS, busy: () => !!this.opening, onBuy: () => this.buy(), rows: "cards",
     });
 
     text(this, 10, 12, `CHIPS: ${this.chips}`, { color: C.light });
@@ -118,7 +130,9 @@ export class DeckShop extends Phaser.Scene {
    * a hit zone (covering the lifted box too).
    */
   private drawWall() {
-    this.wall = new ScrollingFixture(this, { count: DECKS.length, perLine: COLS, lineSize: ROW_H, axis: "y", busy: () => false });
+    this.wall = new ScrollingFixture(this, {
+      count: DECKS.length, perLine: COLS, lineSize: ROW_H, axis: "y", busy: () => !!this.opening,
+    });
     const content = this.wall.content;
 
     const g = this.add.graphics();
@@ -195,22 +209,21 @@ export class DeckShop extends Phaser.Scene {
     this.drawTags();
   }
 
-  /** Arrows pick a deck (columns, then rows), - / + set how many, Enter / Space / X buy, Esc closes a card's details or leaves. */
+  /** Arrows pick a deck (columns, then rows), Enter / Space / X buy, Esc closes a card's details or leaves; while a deck opens, its keys. */
   private handleKey(code: string) {
+    if (this.opening) return this.opening.handleKey(code);
     if (code === "Escape" && this.board.detailsOpen) return this.board.closeDetails();
     const col = this.picked % COLS;
     if (code === "ArrowLeft" && col > 0) this.pick(this.picked - 1);
     else if (code === "ArrowRight" && col < COLS - 1) this.pick(this.picked + 1);
     else if (code === "ArrowUp") this.pick(this.picked - COLS);
     else if (code === "ArrowDown") this.pick(this.picked + COLS);
-    else if (code === "Minus" || code === "NumpadSubtract") this.board.setQuantity(this.board.quantity - 1);
-    else if (code === "Equal" || code === "NumpadAdd") this.board.setQuantity(this.board.quantity + 1);
     else if (code === "Enter" || code === "Space" || code === "KeyX") this.buy();
     else if (code === "Escape") this.exit();
   }
 
   private pick(i: number) {
-    if (transitioning(this.game) || i === this.picked || i < 0 || i >= DECKS.length) return;
+    if (transitioning(this.game) || this.opening || i === this.picked || i < 0 || i >= DECKS.length) return;
     const lift = (i: number, up: boolean) => {
       const box = this.boxes[i];
       this.tweens.killTweensOf(box);
@@ -224,12 +237,36 @@ export class DeckShop extends Phaser.Scene {
     this.showDeck();
   }
 
-  /** Not yet: the deck lists and opening a bought deck come next. */
+  /**
+   * Opens the picked deck over the shop (free for now: no chips are spent): a passcode per copy, Fusions to the Extra
+   * Deck; SAVE AS DECK there makes it a custom deck slot named `short`, while one is free.
+   */
   private buy() {
-    if (!transitioning(this.game)) this.board.setStatus("NOT FOR SALE YET");
+    if (transitioning(this.game) || this.opening) return;
+    const d = DECKS[this.picked], list = this.lists.get(d.code);
+    if (!list) return this.board.setStatus("NO DECK LIST: RUN BUILD-DATA", RUNEWOOD.panel.error);
+    this.board.closeDetails();
+    const main: number[] = [], extra: number[] = [], rarity = new Map<number, string>();
+    for (const [, code, r, copies] of list.cards) {
+      const record = this.engine.cards.records.get(code);
+      for (let i = 0; i < copies; i++) (record && goesToExtra(record) ? extra : main).push(code);
+      rarity.set(code, r);
+    }
+    // The box at its full size, else the pegboard's at 2x.
+    const box = this.textures.exists(largeKey(d)) ? { key: largeKey(d), scale: 1 }
+      : this.textures.exists(boxKey(d)) ? { key: boxKey(d), scale: 2 } : null;
+    this.opening = new DeckOpening(this, {
+      box, title: d.name, main, extra, rarity, engine: this.engine,
+      onSave: () => {
+        if (customDecks().length >= MAX_CUSTOM_DECKS) return { saved: false, message: `ALL ${MAX_CUSTOM_DECKS} DECK SLOTS ARE USED` };
+        saveCustomDeck({ id: Date.now().toString(36), name: d.short, main, extra });
+        return { saved: true, message: `SAVED AS ${d.short}` };
+      },
+      onClose: () => { this.opening = null; },
+    });
   }
 
   private exit() {
-    if (!transitioning(this.game)) void transitionTo(this, "Overworld");
+    if (!transitioning(this.game) && !this.opening) void transitionTo(this, "Overworld");
   }
 }

@@ -9,14 +9,13 @@
 import Phaser from "phaser";
 import { TYPE, type CardRecord } from "../duel/engine/cardData.ts";
 import {
-  CardList, DECK_RULES, SORT_KEYS, addProblem, copiesAllowed, countKinds, filterCount, goesToExtra, sortDeck, type FilterState, type SortKey,
+  CardList, DECK_RULES, SORT_KEYS, addProblem, copiesAllowed, filterCount, goesToExtra, type FilterState, type SortKey,
 } from "../duel/decks/deckRules.ts";
 import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import type { Deck } from "../duel/engine/DuelSession.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { CardInfo } from "../duel-screen/CardInfo.ts";
 import { CardSprite } from "../duel-screen/CardSprite.ts";
-import { drawTable } from "../duel-screen/field.ts";
 import { CARD, INFO, INSET } from "../duel-screen/layout.ts";
 import { FONT_UI, fit, text } from "../ui/pixel.ts";
 import { MAX_CUSTOM_DECKS, chosenDeck, customDeckKey, customDecks, deleteCustomDeck, saveCustomDeck, type CustomDeck } from "../ui/prefs.ts";
@@ -26,15 +25,11 @@ import { TOUCH } from "../ui/touch.ts";
 import { LIST_BUTTON_H, makeListButton, makeListDropDown, type ListButton } from "../ui/widgets.ts";
 import { messageDialog, nameDialog, type Overlay } from "./dialogs.ts";
 import { createFilterPanel } from "./filterPanel.ts";
-import {
-  BAR, CLEAR_X, EXTRA_LABEL_Y, EXTRA_Y, FELT, GRID_W, GRID_X, LIST, LIST_H, MAIN_LABEL_Y, MAIN_Y, MAT, OVERLAY_DEPTH, PANEL,
-  PITCH, ROW_PITCH, ROW_W, ROW_X, SCOPE, SCROLL, SEARCH, SPLIT, STATUS_Y, TOOLS_Y,
-} from "./layout.ts";
+import { BAR, CLEAR_X, LIST, LIST_H, OVERLAY_DEPTH, PANEL, ROW_W, ROW_X, SCOPE, SCROLL, SEARCH, SPLIT, STATUS_Y, TOOLS_Y } from "./layout.ts";
+import { deckPlaces, deckSlots, drawDeckTable } from "./deckMat.ts";
 import { cardRow, eyeIcon, limitBadge } from "./listRow.ts";
 import { setViewMode } from "../ui/view.ts";
 
-/** Deck counts below the limits (the Main Deck under 40). */
-const SHORT_COLOR = 0xff8a70;
 /** A press held this long shows the card's details instead of adding/removing it (touch screens). */
 const HOLD_MS = 350;
 /** Pointer travel that turns a press on the list into a scroll. */
@@ -133,14 +128,7 @@ export class DeckEditor extends Phaser.Scene {
 
   private drawStatic() {
     const parts = this.make.container({}, false);
-    drawTable(this, parts, 0);
-    const pr = INSET.plate;
-    parts.add(this.add.nineslice(BAR.x, BAR.y, ui("menu-back"), undefined, BAR.w, BAR.h, pr, pr, pr, pr).setOrigin(0));
-    // "mat" template: a framed felt mat under the deck; "open": the deck straight on the table (slot plates, drawDeck).
-    if (THEME.template === "mat") {
-      parts.add(this.add.nineslice(MAT.x, MAT.y, ui("menu-back"), undefined, MAT.w, MAT.h, pr, pr, pr, pr).setOrigin(0));
-      parts.add(this.add.graphics().fillStyle(THEME.field.felt).fillRect(FELT.x, FELT.y, FELT.w, FELT.h));
-    }
+    drawDeckTable(this, parts);
     parts.add(this.add.nineslice(SPLIT, 0, ui("info-frame"), undefined, INFO.w, 360, ...THEME.panel.infoSlice).setOrigin(0));
     const ps = THEME.panel.paperSlice;
     parts.add(this.add.nineslice(SEARCH.x, SEARCH.y, ui("panel-paper"), undefined, SEARCH.w, SEARCH.h, ps, ps, ps, ps).setOrigin(0));
@@ -298,39 +286,8 @@ export class DeckEditor extends Phaser.Scene {
     const L = this.deckLayer;
     L.removeAll(true);
     const cards = this.engine.cards;
-    const main = sortDeck(this.deck.main, cards), extra = sortDeck(this.deck.extra, cards);
-    const label = THEME.field.label;
-    const k = countKinds(main, cards);
-    L.add(text(this, GRID_X, MAIN_LABEL_Y, "MAIN DECK", { color: label }));
-    L.add(text(this, GRID_X + 40, MAIN_LABEL_Y, String(main.length), { color: main.length < DECK_RULES.mainMin ? SHORT_COLOR : THEME.plate.ink }));
-    L.add(text(this, GRID_X + GRID_W, MAIN_LABEL_Y, `MONSTERS ${k.monsters}   SPELLS ${k.spells}   TRAPS ${k.traps}`, { color: label, originX: 1 }));
-    L.add(text(this, GRID_X, EXTRA_LABEL_Y, "EXTRA DECK", { color: label }));
-    L.add(text(this, GRID_X + 44, EXTRA_LABEL_Y, String(extra.length), { color: THEME.plate.ink }));
-
-    // The empty slots of the first 40 Main / 10 Extra, like the duel's zones: outlined on the mat, or plates on the
-    // table ("zone-monster" for the Main Deck, "menu-back" for the Extra Deck, as the duel's monster / other zones).
-    const empty: [number, number, boolean][] = [];
-    for (let i = main.length; i < 40; i++) empty.push([GRID_X + (i % 10) * PITCH, MAIN_Y + Math.floor(i / 10) * ROW_PITCH, true]);
-    for (let i = extra.length; i < 10; i++) empty.push([GRID_X + i * PITCH, EXTRA_Y, false]);
-    if (THEME.template === "mat") {
-      const g = this.add.graphics().lineStyle(1, THEME.field.line);
-      for (const [x, y] of empty) g.strokeRect(x + 0.5, y + 0.5, CARD.w - 1, CARD.h - 1);
-      L.add(g);
-    } else {
-      const rim = THEME.plate.slice;
-      for (const [x, y, inMain] of empty) {
-        L.add(this.add.nineslice(x, y, ui(inMain ? "zone-monster" : "menu-back"), undefined, CARD.w, CARD.h, rim, rim, rim, rim).setOrigin(0));
-      }
-    }
-
-    // Past 10 a row (Main Deck over 40, Extra over 10) the cards squeeze together, each overlapping the last.
-    const perRow = Math.max(10, Math.ceil(main.length / 4));
-    const pitchOf = (n: number) => (n > 10 ? (GRID_W - CARD.w) / (n - 1) : PITCH);
-    main.forEach((code, i) => {
-      const col = i % perRow, row = Math.floor(i / perRow);
-      this.deckCard(code, GRID_X + Math.round(col * pitchOf(perRow)), MAIN_Y + row * ROW_PITCH, "main");
-    });
-    extra.forEach((code, i) => this.deckCard(code, GRID_X + Math.round(i * pitchOf(extra.length)), EXTRA_Y, "extra"));
+    deckSlots(this, L, this.deck.main, this.deck.extra, cards);
+    for (const p of deckPlaces(this.deck.main, this.deck.extra, cards)) this.deckCard(p.code, p.x, p.y, p.part);
   }
 
   /** One card of the deck (top-left at x, y): click / tap takes a copy out, hover / hold shows it over the list. */
