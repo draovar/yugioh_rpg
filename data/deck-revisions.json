@@ -1,15 +1,25 @@
 {
   "_comment": "This game's revisions of the starter and structure decks (data/decks.json keeps them as printed), by set code: `copies` copies (default all) of the card named `out` become `in`, in the same slot (number and rarity), like a reprint. Each says why. Applied by tools/data/build-data.mjs to public/data/decks.json, the lists the shops show and sell; smoke checks every deck is legal.",
   "SDY": [
-    { "out": "Last Will", "in": "Kuriboh", "why": "1 Forbidden card per deck: the four starters all keep Change of Heart (owner's pick); Kuriboh is Yugi's own, a weak card for the strongest starter." }
+    { "out": "Last Will", "in": "Kuriboh", "why": "1 Forbidden card per deck: the four starters all keep Change of Heart (owner's pick); Kuriboh is Yugi's own, a weak card for the strongest starter." },
+    { "out": "Monster Reborn", "in": "Premature Burial", "why": "Starter nerf, the same in all four (owner's pick): Premature Burial costs 800 LP and the monster dies with it." },
+    { "out": "Dark Hole", "in": "Hammer Shot", "why": "Starter nerf, the same in all four (owner's pick): Hammer Shot destroys only the strongest Attack Position monster, maybe your own." }
   ],
   "SDK": [
-    { "out": "The Inexperienced Spy", "in": "Change of Heart", "why": "The four starters all hold Change of Heart (owner's pick); the Spy only looks at a card." }
+    { "out": "The Inexperienced Spy", "in": "Change of Heart", "why": "The four starters all hold Change of Heart (owner's pick); the Spy only looks at a card." },
+    { "out": "Monster Reborn", "in": "Premature Burial", "why": "Starter nerf, the same in all four (owner's pick): Premature Burial costs 800 LP and the monster dies with it." },
+    { "out": "Dark Hole", "in": "Hammer Shot", "why": "Starter nerf, the same in all four (owner's pick): Hammer Shot destroys only the strongest Attack Position monster, maybe your own." }
+  ],
+  "SDJ": [
+    { "out": "Monster Reborn", "in": "Premature Burial", "why": "Starter nerf, the same in all four (owner's pick): Premature Burial costs 800 LP and the monster dies with it." },
+    { "out": "Dark Hole", "in": "Hammer Shot", "why": "Starter nerf, the same in all four (owner's pick): Hammer Shot destroys only the strongest Attack Position monster, maybe your own." }
   ],
   "SDP": [
     { "out": "Graceful Charity", "in": "Toon Table of Contents", "why": "1 Forbidden card per deck: the four starters all keep Change of Heart (owner's pick); Toon Table of Contents fetches the deck's only Toon World." },
     { "out": "Gryphon Wing", "in": "Toon Defense", "why": "Gryphon Wing only answers Harpie's Feather Duster, which is Forbidden (owner's pick for evening out the starters)." },
-    { "out": "Hiro's Shadow Scout", "in": "Toon Gemini Elf", "why": "Evening out the starters (owner's pick): Pegasus won 30%; the Scout's Flip draws the opponent 3 cards, Toon Gemini Elf is a 1900 ATK Level 4." }
+    { "out": "Hiro's Shadow Scout", "in": "Toon Gemini Elf", "why": "Evening out the starters (owner's pick): Pegasus won 30%; the Scout's Flip draws the opponent 3 cards, Toon Gemini Elf is a 1900 ATK Level 4." },
+    { "out": "Monster Reborn", "in": "Premature Burial", "why": "Starter nerf, the same in all four (owner's pick): Premature Burial costs 800 LP and the monster dies with it." },
+    { "out": "Dark Hole", "in": "Hammer Shot", "why": "Starter nerf, the same in all four (owner's pick): Hammer Shot destroys only the strongest Attack Position monster, maybe your own." }
   ],
   "SYE": [
     { "out": "Pot of Greed", "in": "Jar of Greed", "why": "1 Forbidden card per deck: keeps Change of Heart, like the starters (owner's OK); Jar of Greed draws too." },
