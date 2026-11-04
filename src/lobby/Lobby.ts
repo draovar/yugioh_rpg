@@ -5,6 +5,7 @@ import { CODE_LENGTH, hostDuel, joinDuel, type DuelEntry, type NetDuel, type Pen
 import { chosenDeck } from "../ui/prefs.ts";
 import { WHITE, border, text } from "../ui/pixel.ts";
 import { createTextInput } from "../ui/textInput.ts";
+import { transitionTo } from "../ui/Transition.ts";
 import { makeButton } from "../ui/widgets.ts";
 import { setViewMode } from "../ui/view.ts";
 import type { DuelSceneData } from "../duel-screen/DuelScene.ts";
@@ -75,7 +76,7 @@ export class Lobby extends Phaser.Scene {
     this.header("DUEL A FRIEND ON ANOTHER COMPUTER.");
     this.button(150, "HOST A DUEL", () => this.host());
     this.button(172, "JOIN A DUEL", () => this.showJoin());
-    this.button(210, "BACK", () => this.scene.start("Overworld"));
+    this.button(210, "BACK", () => void transitionTo(this, "Overworld"));
     if (error) this.view.add(text(this, CX, 250, error.toUpperCase(), { color: ERROR, originX: 0.5, maxWidth: 440 }));
   }
 
@@ -150,7 +151,8 @@ export class Lobby extends Phaser.Scene {
         if (this.pending !== pending) return net.close(); // cancelled meanwhile
         this.pending = null; // the Duel scene owns the connection now
         const data: DuelSceneData = { net, opponentName: "Opponent", returnScene: "Lobby" };
-        this.scene.start("Duel", data);
+        // Answers the other side sends while the cards flip in are kept until the duel listens (net/p2p.ts).
+        void transitionTo(this, "Duel", data);
       },
       (e: Error) => { if (this.pending === pending) this.showMenu(e.message); },
     );

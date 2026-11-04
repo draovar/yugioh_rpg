@@ -7,6 +7,7 @@ import { COIN_SHEET, DICE_SHEET } from "./duel-screen/DuelAnimator.ts";
 import { RPS_SHEET } from "./duel-screen/RpsIntro.ts";
 import { loadOverworld } from "./overworld/Overworld.ts";
 import { loadChipsGlove } from "./ui/chipsGlove.ts";
+import { transitionTo } from "./ui/Transition.ts";
 import { FONT_CARD, FONT_UI, WHITE, text } from "./ui/pixel.ts";
 import { loadThemeSprites } from "./ui/theme.ts";
 
@@ -51,23 +52,26 @@ export class Boot extends Phaser.Scene {
         if (first === "opp") goFirst = false;
         else if (first === "you" || seed !== undefined) goFirst = true;
         const ai = params.get("ai") ?? "";
-        // Card-wave transitions between scenes (ui/Transition.ts): runs on top for the whole game.
+        // Card-wave transitions between scenes (ui/Transition.ts): runs on top for the whole game; the first one leaves
+        // this loading screen once it's there.
         this.scene.launch("Transition");
+        const start = (key: string, data?: object) => this.scene.get("Transition").events
+          .once(Phaser.Scenes.Events.CREATE, () => void transitionTo(this, key, data));
         // Invite link from a multiplayer host: ?join=CODE (dropped from the address so a reload doesn't rejoin).
         const join = params.get("join");
         if (join) {
           params.delete("join");
           history.replaceState(null, "", `${location.pathname}${params.size ? `?${params}` : ""}`);
-          this.scene.start("Lobby", { join });
-        } else if (params.has("mp")) this.scene.start("Lobby");
-        else if (params.has("shop")) this.scene.start("Shop");
-        else if (params.has("deckshop")) this.scene.start("DeckShop");
+          start("Lobby", { join });
+        } else if (params.has("mp")) start("Lobby");
+        else if (params.has("shop")) start("Shop");
+        else if (params.has("deckshop")) start("DeckShop");
         else if (params.has("duel")) {
-          this.scene.start("Duel", {
+          start("Duel", {
             opponentName: "Test Opponent", startingLP: lp, seed, setup, goFirst, ai: isBrainName(ai) ? ai : undefined,
             playerDeck: deckByName(params.get("deck"), "yugi"), opponentDeck: deckByName(params.get("opp"), "kaiba"),
           });
-        } else this.scene.start("Overworld");
+        } else start("Overworld");
       })
       .catch((e) => {
         console.error(e);

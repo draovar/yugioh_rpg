@@ -23,6 +23,7 @@ import { MAX_CUSTOM_DECKS, chosenDeck, customDeckKey, customDecks, deleteCustomD
 import { createTextInput, type TextInput } from "../ui/textInput.ts";
 import { THEME, ui } from "../ui/theme.ts";
 import { TOUCH } from "../ui/touch.ts";
+import { transitionTo } from "../ui/Transition.ts";
 import { LIST_BUTTON_H, makeListButton, makeListDropDown, type ListButton } from "../ui/widgets.ts";
 import { messageDialog, nameDialog, type Overlay } from "./dialogs.ts";
 import { createFilterPanel } from "./filterPanel.ts";
@@ -263,7 +264,7 @@ export class DeckEditor extends Phaser.Scene {
       ...(Object.keys(DECKS) as DeckName[]).map((n) => ({ value: n as DeckName | "", label: DECKS[n].label })),
     ];
     this.bar.add(makeListDropDown(this, x, y, 48, prebuilt, null, (n) => this.loadPrebuilt(n), { label: "LOAD" }));
-    this.bar.add(makeListButton(this, BAR.x + BAR.w - INSET.plate - 32, y, 32, "EXIT", () => this.guard(() => this.scene.start("Overworld"))));
+    this.bar.add(makeListButton(this, BAR.x + BAR.w - INSET.plate - 32, y, 32, "EXIT", () => this.guard(() => void transitionTo(this, "Overworld"))));
   }
 
   /** Replaces the deck's cards with a prebuilt deck's (or none). */

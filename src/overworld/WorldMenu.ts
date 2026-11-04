@@ -6,6 +6,7 @@ import {
 } from "../ui/prefs.ts";
 import { THEME, THEMES, setTheme } from "../ui/theme.ts";
 import { enterFullscreen } from "../ui/touch.ts";
+import { transitionTo, transitioning } from "../ui/Transition.ts";
 import { makeButton, makeDropDown, type Button } from "../ui/widgets.ts";
 import { HEIGHT, WIDTH, fitView, integerScaling, scaleWithView, viewScale, worldSpriteScale } from "../ui/view.ts";
 import type { Overworld } from "./Overworld.ts";
@@ -160,11 +161,14 @@ export class WorldMenu extends Phaser.Scene {
     add(makeButton(this, mid, row(""), PANEL.controlW, 14, "CLOSE (M)", () => this.close()));
   }
 
-  /** Leaves the overworld for the deck editor, the lobby or a quick duel; the player comes back to the same spot. */
+  /**
+   * Leaves the overworld for the deck editor, the lobby or a quick duel behind the card wave; the player comes back to
+   * the same spot.
+   */
   private leave(scene: string, data?: object) {
-    if (this.loadingTheme) return;
-    (this.scene.get("Overworld") as Overworld).savePosition();
-    this.scene.stop("Overworld");
-    this.scene.start(scene, data);
+    if (this.loadingTheme || transitioning(this.game)) return;
+    const overworld = this.scene.get("Overworld") as Overworld;
+    overworld.savePosition();
+    void transitionTo(overworld, scene, data, { onCovered: () => this.scene.stop() });
   }
 }

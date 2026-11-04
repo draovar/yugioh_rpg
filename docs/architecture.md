@@ -501,8 +501,9 @@ with the number on the back of the hand in its own digit font
 untinted), centred under the knuckles; the cuff's three stars fill in gold from 10, 20 and 30 chips (sheet frames 0-3).
 Chips stop at `MAX_CHIPS` (99), two digits. Sheet and font from `build-chips-glove`.
 
-`Transition.ts`: the scene switch between the overworld and duels (both ways, also a duel back to the Lobby). A scene
-Boot launches once and keeps on top: `transitionTo(from, key, data)` flips card backs (`CARD_BACK`, a 17x7 grid)
+`Transition.ts`: every scene switch (the owner's wish: from the loading screen on, overworld, duels, shops, deck
+editor, lobby, both ways; only `transitionTo` calls `scene.start`). Map to map in the overworld is not a scene switch:
+it keeps its fade. A scene Boot launches once and keeps on top (Boot's first switch waits for it to be created): `transitionTo(from, key, data)` flips card backs (`CARD_BACK`, a 17x7 grid)
 in, diagonal by diagonal from the top-left, until they cover the screen, starts `key` underneath, and flips them away in the same
 order once that scene is created. While it plays
 (`transitioning(game)`) a full-screen zone takes all clicks and the overworld ignores keys and keeps the player still
