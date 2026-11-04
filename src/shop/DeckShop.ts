@@ -9,12 +9,14 @@
 // Box pictures: public/deck-boxes/<CODE>.png (`npm run build-deck-boxes`: pixel art at half the cut-outs' size, with an
 // outline); a missing one shows as a blank box with its code.
 import Phaser from "phaser";
+import type { DeckList } from "../duel/decks/decks.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { MAX_CUSTOM_DECKS, customDecks, saveCustomDeck } from "../ui/prefs.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
 import { setViewMode } from "../ui/view.ts";
 import { DeckOpening } from "./DeckOpening.ts";
-import { DECKS, deckCards, deckLists, deckRows, preloadDeckLists, type DeckList, type DeckStock } from "./decks.ts";
+import { deckCards, deckRows } from "./decks.ts";
+import { DECKS, type DeckStock } from "./deckStock.ts";
 import type { ShopData } from "./Shop.ts";
 import { ShopBoard } from "./ShopBoard.ts";
 import {
@@ -75,7 +77,6 @@ export class DeckShop extends Phaser.Scene {
   }
 
   preload() {
-    preloadDeckLists(this);
     ShopBoard.preload(this);
     preloadShopButtons(this);
     for (const d of DECKS) {
@@ -87,7 +88,7 @@ export class DeckShop extends Phaser.Scene {
   async create() {
     setViewMode(this.game, "fixed");
     this.engine = await loadEngine();
-    this.lists = deckLists(this);
+    this.lists = this.engine.deckLists;
 
     // The pegboard's hardboard, a shadow under the frame's top; its holes scroll with the rows.
     drawRoom(this, "DECK SHOP", (g) => {

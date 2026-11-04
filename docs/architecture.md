@@ -7,7 +7,7 @@ the details per module. Keep it in sync when moving or reworking code.
 src/main.ts, Boot.ts   game config, preload, dev URL routing
 src/duel/              engine layer, no Phaser: DuelController, rps
   engine/              DuelSession, loadEngine, cardData, text, hash, rng
-  decks/               decks (prebuilt), deckRules (deck editor rules + card list), cardSearch
+  decks/               decks (prebuilt + the shop decks by set code), deckRules (deck editor rules + card list), cardSearch
   ai/                  the opponent AI (+ autoBot, boardText)
 src/net/               peer-to-peer networking, no Phaser
 src/overworld/         Overworld scene, WorldMenu, DialogBox, TouchPad, characters, npcs, ambush, sortedWalls
@@ -18,7 +18,7 @@ src/lobby/             multiplayer Lobby scene
 src/ui/                shared UI: pixel text, widgets, theme, prefs, textInput, touch, Transition, view, chipsGlove
 src/dev/               dev-only: &anims / &dialogs previews, &setup boards, frame capture
 tools/data|art|maps|ai|test/   Node scripts by purpose; tools/lib/ shared helpers
-data/                  pool.json (the card pool, generated) + pool-exceptions.json, boosters.json (booster set lists, generated), decks.json (starter / structure deck lists, generated), card-versions.json (older versions), banlist.json, maps, characters, palette
+data/                  pool.json (the card pool, generated) + pool-exceptions.json, boosters.json (booster set lists, generated), decks.json (starter / structure deck lists as printed, generated) + deck-revisions.json (this game's swaps in them, by hand), card-versions.json (older versions), banlist.json, maps, characters, palette
 vendor/                Project Ignis repos, art downloads, paid assets (gitignored)
 ```
 
@@ -49,14 +49,18 @@ No Phaser imports: runs unchanged in Node (tools) and the browser.
 - `engine/rng.ts`: `mulberry32`, `shuffle`: seeded randomness (deck shuffle, the AI's rng from the duel seed).
 - `engine/cardData.ts`: `CardRecord` (JSON shape) → `OcgCardData`; `CardDb` lookup + names; `TYPE` = named card type bits.
 - `engine/hash.ts`: `fnv1a`, used for board checksums and the data fingerprint (both machines must hash the same way).
-- `engine/loadEngine.ts`: browser only: fetches `public/data/*.json`, inits the core once.
-- `decks/decks.ts`: prebuilt decks (NPCs, the AI, the deck editor's LOAD): `yugi`, `kaiba`, `goat` + Extra Decks;
-  starter decks `kaibaEvolution`, `yugiEvolution` (the Evolution starter decks with the owner's swaps); structure
-  decks `zombieMadness` (as printed), `dragonsRoar` (owner's swaps); NPC decks `plants`, `insects` (early game, owner's picks). `deckProblems()` = legality check (40-60 main,
-  ≤15 extra, no tokens, all in the pool, and the copy limits per name: `banlistProblems()` unless the deck is exactly a
-  prebuilt one, which keeps its banned cards (`smoke` only lists them) and is held to 3 a name).
+- `engine/loadEngine.ts`: browser only: fetches `public/data/*.json`, inits the core once; registers the shops' deck
+  lists (`setShopDecks`) and keeps them as `Engine.deckLists`.
+- `decks/decks.ts`: decks with a name (NPCs, the AI, the world menu, the deck editor's LOAD): the prebuilt NPC decks
+  `plants`, `insects` (early game, owner's picks; the older Yugi / Kaiba / Goat / Evolution / structure decks were
+  deleted 2026-11-04), and the shops' starter / structure decks by set code (`DeckList`, `deckFromList`, registered by
+  `setShopDecks`: loadEngine, tools/lib/engine.ts). `namedDecks()`, `deckByName(name, fallback)`, `deckNameOf`.
+  `deckProblems()` = legality check (40-60 main, ≤15 extra, no tokens, all in the pool, and `banlistProblems()`: the
+  copy limits per name, and at most `DECK_RULES.forbidden` (1) Forbidden card in all). Every deck follows it, the
+  named ones too (`smoke` fails otherwise).
 - `decks/deckRules.ts`: the deck editor's rules and card list: `DECK_RULES`, `addProblem` (3 copies or the card's banlist
-  `limit` via `copiesAllowed`, 60 main, 15 extra; Fusions go to the Extra Deck). Copies are counted per name
+  `limit` via `copiesAllowed`; a Forbidden card once if the deck holds no other, `forbiddenCopies`; 60 main, 15 extra;
+  Fusions go to the Extra Deck). Copies are counted per name
   (`nameCounts`, `nameCopies`): a card "always treated as" another (its `alias`: Harpie Lady 1 as Harpie Lady, A
   Legendary Ocean as Umi) shares that card's limit, also in deck building, and the deck editor's ADD (n/3) and red xN
   count them together; `CardList.find` (every word in the name or, after the name matches, in the
@@ -209,7 +213,8 @@ passes the `NetDuel` to `Duel`.
   shop (`enterShop`: the card wave over to the `Shop` / `DeckShop` scene with the player's chips; EXIT comes back to
   the same spot); `cardshop` = both, the shopkeeper asks first (PACKS / DECKS / LEAVE; optional properties `title`,
   "SHOPKEEPER" if empty, and `text`). Main-city's is on the mall's right door.
-- NPCs (`NPCS` in `npcs.ts`, per map: name, `sprite` = character name, optional `facing`, text, their own deck; they turn
+- NPCs (`NPCS` in `npcs.ts`, per map: name, `sprite` = character name, optional `facing`, text, their own deck by name:
+  the old town's Yugi / Kaiba / Joey / Bonz play Starter Deck: Yugi / Kaiba / Joey and Zombie Madness; they turn
   to the player while talking) talk with X / Enter / Space in a `DialogBox` (tiny5 at 2x, clickable options); YES
   starts a duel, and the player comes back to the same spot (`savePosition`) with the NPC's line about the result.
 - Hedge ambushes (`ambush.ts`, `AMBUSHERS` in `npcs.ts` per map): every tile walked in the maze has a 1/150
@@ -242,8 +247,10 @@ passes the `NetDuel` to `Duel`.
   DECK EDITOR, MULTIPLAYER; testing aids: AI DECK (only for QUICK DUEL; NPCs bring their own decks), AI CARDS = show the AI's hand and set cards in duels
   (`DuelControllerOptions.revealOpponent`: the human's view only, never in multiplayer; set cards drawn face-up at 60%
   alpha), QUICK DUEL, FULL SCREEN where the browser supports it.
-- Decks offered everywhere come from `prefs.ts`: `deckEntries()` = prebuilt + custom decks with 40+ Main Deck cards,
-  keyed `custom:<id>`, which YOUR DECK / AI DECK, NPC duels and multiplayer use (`chosenDeck()` / `aiDeck()` return
+- Decks offered everywhere come from `prefs.ts`: `deckEntries()` = the named decks (`namedDeckEntries()`: prebuilt,
+  then the shops' under their short names from `src/shop/deckStock.ts`) + custom decks with 40+ Main Deck cards, keyed
+  `custom:<id>`; defaults Starter Deck: Yugi (yours) and Starter Deck: Kaiba (AI). A drop-down list too long for the
+  screen wraps into columns (`dropColumns` in `widgets.ts`), which YOUR DECK / AI DECK, NPC duels and multiplayer use (`chosenDeck()` / `aiDeck()` return
   the deck itself).
 
 ## Duel screen (`src/duel-screen/`)
@@ -358,7 +365,7 @@ table). Geometry in `layout.ts`.
 - Click a listed card = add, a deck card = remove. Hovering a listed card's art shows an eye over it; clicking the art
   opens the card's details (`CardInfo`) over the list with ADD / CLOSE (Esc). Hovering a deck card (touch: holding it)
   shows its details over the list while hovered (and closes an opened card: the list is back afterwards).
-- Top bar: deck slot drop-down (+ NEW DECK), RENAME, SAVE, DELETE, LOAD (a prebuilt deck or empty), EXIT (unsaved
+- Top bar: deck slot drop-down (+ NEW DECK), RENAME, SAVE, DELETE, LOAD (a named deck: prebuilt or a shop's; or empty), EXIT (unsaved
   changes ask SAVE / DISCARD / CANCEL); the message and rename dialogs are in `dialogs.ts`.
 - Custom decks live in localStorage (`prefs.ts`: `customDecks`, up to `MAX_CUSTOM_DECKS`).
 
@@ -555,9 +562,10 @@ home-screen app open without the browser bar).
 
 Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAUDE.md lists the commands.
 
-- `lib/engine.ts`: shared core + card data loader, `newDuel`, `runDuel` (AI vs AI to the end), `seedFrom(n)` (four
+- `lib/engine.ts`: shared core + card data loader (registers the shop decks, as the game does), `newDuel`, `runDuel` (AI vs AI to the end), `seedFrom(n)` (four
   64-bit seed words from one number). `lib/match.ts`: brain vs brain matches on worker threads (`matchJobs`,
-  `runMatch`, `winRate`, `PassivityStats`; also the workers' entry), used by arena and tune. `lib/args.ts`: `--name
+  `runMatch`, `winRate`, `PassivityStats`; also the workers' entry), used by arena and tune. `lib/decks.ts`: `deckNamed` (throws on an unknown name), `AI_TEST_DECKS` (arena / tune default: `plants`, `insects` and the
+  four starters). `lib/args.ts`: `--name
   value` option parsing. `lib/palette.mjs` / `art-style.mjs` / `bmfont.mjs` / `indexed-png.mjs`: art quantisation, style knobs, BMFont output, lossless indexed PNG output (card art, deck boxes).
 - `data/`: `fetch-data` (CardScripts at the pinned commit + BabelCDB), `build-pool` (TCG products up to the cutoff
   from YGOPRODeck set lists, mapped to BabelCDB passcodes (an alias with the same name is an alt art, one with another
@@ -568,7 +576,8 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   its API, cached in `vendor/yugipedia/`, a pause between requests; `Set list` lines `NUMBER; NAME; RARITIES; PRINT;
   QTY`, PRINT sometimes left out), `build-data` (pool → `public/data/*.json`, modern versions except the GOAT / pre-errata ones `card-versions.json` picks, under the real passcodes,
   plus the tokens pool scripts create; `data/banlist.json` → each card's `limit` in `cards.json`; `data/boosters.json` →
-  `boosters.json` and `data/decks.json` → `decks.json`, every card checked to be in the pool), `check-cards`.
+  `boosters.json` and `data/decks.json` → `decks.json`, every card checked to be in the pool; the decks get
+  `data/deck-revisions.json`'s swaps, each copies of `out` → `in` in the same slot (number, rarity) with a `why`), `check-cards`.
 - `art/`: `fetch-art` / `build-art` (YGOPRODeck crops → the shared palette, `art32` atlas + `art128`), `build-palette`,
   `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `build-chips-glove` (the
   glove's four star frames, the stars drawn in code on `data/ui/chips-glove.png`, + its digit font), `build-boosters`
@@ -656,7 +665,7 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     everything (main-city: 7 ground layers before; 97% of its cells need one terrain tile). Walls layers untouched.
 - `ai/`:
   - `arena`: brain vs brain win rates over seeded duels (every deck pairing, both seat orders) on all CPU cores.
-    `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--sim-trace` adds what happened
+    `--losses` lists A's lost duels, `--only K --trace` replays one duel's decisions, `--no-mirror` skips a deck against itself and `--seed random` takes fresh shuffles each run (deck balance), `--sim-trace` adds what happened
     inside each simulated copy, `--stats` prints passivity per side (skipped summons, empty field, unused
     Spells/Traps, attacks into set cards), `--record` writes each turn's starting position (as the turn player sees
     it) and who won, for `fit-eval`. `--a baseline` = the planner in `vendor/baseline` (an older checkout).
@@ -670,7 +679,8 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     planned fix (`docs/ai-rework-plan.md`) and don't fail the run; positions can place Graveyard cards (`grave()`) and
     script the opponent's turn (`opponentSetsThenBattles`, `opponentAttacks`).
   - `test-ai`: the AI can't see hidden cards: hand-made `redact()` cases + N real duels.
-- `test/`: `smoke-duel` (bot-vs-bot duels through `DuelSession`, every deck pairing, deck legality), `smoke-p2p`
+- `test/`: `smoke-duel` (first every named deck's legality, the shops' included; then bot-vs-bot duels through
+  `DuelSession`, duel i = named deck i against the next one, so the first N duels bring N decks), `smoke-p2p`
   (lockstep duels on an in-memory link), `smoke-random` (the pool shuffled into random decks, autoBot duels on worker
   threads with a hang timeout; known script errors in its `KNOWN_ERRORS`; see `docs/card-pool-plan.md` phase 4).
 - `patch-ocgcore.mjs`: npm `postinstall` fix for ocgcore-wasm's message parser (see CLAUDE.md, Engine facts).

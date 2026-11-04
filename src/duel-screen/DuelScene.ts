@@ -14,7 +14,7 @@ import { AiSeat, type AiPlayer } from "../duel/ai/AiSeat.ts";
 import { BRAINS, DEFAULT_BRAIN, type BrainName } from "../duel/ai/brains.ts";
 import { formatTrace, type TraceEntry } from "../duel/ai/trace.ts";
 import { AiWorkerClient } from "../duel/ai/worker/AiWorkerClient.ts";
-import { DECKS } from "../duel/decks/decks.ts";
+import { deckByName } from "../duel/decks/decks.ts";
 import { aiRpsOpponent } from "../duel/rps.ts";
 import { animSpeed, chainMode, revealAiCards } from "../ui/prefs.ts";
 import type { NetDuel } from "../net/p2p.ts";
@@ -235,8 +235,8 @@ export class DuelScene extends Phaser.Scene {
     // Seat 0 goes first: rock-paper-scissors decides who takes it.
     this.me = (await this.decideFirst()) ? 0 : 1;
     if (this.ended) return;
-    const mine = net ? net.deck : this.sceneData.playerDeck ?? DECKS.yugi.deck;
-    const theirs = net ? net.opponentDeck : this.sceneData.opponentDeck ?? DECKS.kaiba.deck;
+    const mine = net ? net.deck : this.sceneData.playerDeck ?? deckByName(null, "SDY");
+    const theirs = net ? net.opponentDeck : this.sceneData.opponentDeck ?? deckByName(null, "SDK");
     const bySeat: [Deck, Deck] = this.me === 0 ? [mine, theirs] : [theirs, mine];
     const decks = net ? bySeat : withDevSetup(bySeat, this.sceneData.setup);
     // Duels vs the AI always get a seed that fits `&seed=N`, so a traced one can be replayed.

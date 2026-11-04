@@ -40,7 +40,7 @@ export class Boot extends Phaser.Scene {
     loadEngine()
       .then(() => {
         // Dev shortcut: /?duel jumps straight into a duel; &lp=1000 for a short one, &seed=N to replay one,
-        // &setup=NAME to start from a test board (devSetups.ts), &deck=NAME / &opp=NAME pick the decks (decks.ts),
+        // &setup=NAME to start from a test board (devSetups.ts), &deck=NAME / &opp=NAME pick the decks (decks.ts: a prebuilt deck or a shop deck by set code),
         // &first=you / &first=opp skip rock-paper-scissors (a replay with &seed goes first unless &first=opp),
         // &ai=NAME picks the opponent's brain (ai/brains.ts).
         const params = new URLSearchParams(location.search);
@@ -70,7 +70,7 @@ export class Boot extends Phaser.Scene {
         else if (params.has("duel")) {
           start("Duel", {
             opponentName: "Test Opponent", startingLP: lp, seed, setup, goFirst, ai: isBrainName(ai) ? ai : undefined,
-            playerDeck: deckByName(params.get("deck"), "yugi"), opponentDeck: deckByName(params.get("opp"), "kaiba"),
+            playerDeck: deckByName(params.get("deck"), "SDY"), opponentDeck: deckByName(params.get("opp"), "SDK"),
           });
         } else start("Overworld");
       })

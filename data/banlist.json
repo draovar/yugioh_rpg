@@ -1,5 +1,5 @@
 {
-  "_comment": "The Forbidden/Limited list (by card name, as in BabelCDB). forbidden/limited/semiLimited are the TCG May 2008 list as published (Yugipedia \"May 2008 Lists\", in effect 2008-05-09 to 2008-08-31). \"changes\" moves cards to another status for this game (\"unlimited\" takes a card off the list), e.g. because the pool plays a card's modern, errata'd version; each says why. Built into public/data/cards.json (`limit`) by tools/data/build-data.mjs.",
+  "_comment": "The Forbidden/Limited list (by card name, as in BabelCDB). forbidden/limited/semiLimited are the TCG May 2008 list as published (Yugipedia \"May 2008 Lists\", in effect 2008-05-09 to 2008-08-31). \"changes\" moves cards to another status for this game (\"unlimited\" takes a card off the list), e.g. because the pool plays a card's modern, errata'd version; each says why. On top of the list, every deck may hold 1 Forbidden card (DECK_RULES.forbidden in src/duel/decks/deckRules.ts). Built into public/data/cards.json (`limit`) by tools/data/build-data.mjs.",
   "name": "TCG May 2008",
   "forbidden": [
     "Breaker the Magical Warrior",
@@ -174,6 +174,22 @@
     "Call of the Haunted": {
       "to": "limited",
       "why": "Owner's choice for this game (no errata)."
+    },
+    "Chaos Sorcerer": {
+      "to": "limited",
+      "why": "Owner's choice for this game (no errata)."
+    },
+    "Tribe-Infecting Virus": {
+      "to": "limited",
+      "why": "Owner's choice for this game (no errata)."
+    },
+    "Level Limit - Area B": {
+      "to": "semiLimited",
+      "why": "Owner's choice for this game (no errata): Structure Deck: Blaze of Destruction / Fury from the Deep print 2."
+    },
+    "Gravity Bind": {
+      "to": "semiLimited",
+      "why": "Owner's choice for this game (no errata): Structure Deck: Blaze of Destruction / Fury from the Deep print 2."
     }
   }
 }

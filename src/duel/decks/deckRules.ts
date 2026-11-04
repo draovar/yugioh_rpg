@@ -5,10 +5,14 @@ import { normalize } from "./cardSearch.ts";
 import type { Deck } from "../engine/DuelSession.ts";
 import { ATTRIBUTES, RACES } from "../engine/text.ts";
 
-/** Deck size and copy limits (the same as `deckProblems` checks); the banlist lowers `copies` per card (`limit`). */
-export const DECK_RULES = { mainMin: 40, mainMax: 60, extraMax: 15, copies: 3 };
+/**
+ * Deck size and copy limits (the same as `deckProblems` checks); the banlist lowers `copies` per card (`limit`).
+ * `forbidden`: this game's own rule on top of the banlist, a deck may still hold that many Forbidden cards (copies,
+ * all names together).
+ */
+export const DECK_RULES = { mainMin: 40, mainMax: 60, extraMax: 15, copies: 3, forbidden: 1 };
 
-/** Copies of `r` a deck may hold: the banlist's limit, else `DECK_RULES.copies`. */
+/** Copies of `r` a deck may hold by the banlist: its limit (0 = Forbidden), else `DECK_RULES.copies`. */
 export const copiesAllowed = (r: CardRecord) => r.limit ?? DECK_RULES.copies;
 
 /** Banlist statuses by copies allowed (a card's `limit`). */
@@ -40,16 +44,30 @@ export function nameCounts(deck: Deck, cards: CardDb): Map<number, number> {
   return counts;
 }
 
-/** Copies of `r`'s name in the deck `counts` were taken from, and how many it may hold (the named card's limit). */
+/** Forbidden cards in the deck `counts` were taken from (copies, all names together; `DECK_RULES.forbidden` allowed). */
+export function forbiddenCopies(counts: Map<number, number>, cards: CardDb): number {
+  let n = 0;
+  for (const [key, copies] of counts) if (cards.records.get(key)?.limit === 0) n += copies;
+  return n;
+}
+
+/**
+ * Copies of `r`'s name in the deck `counts` were taken from, and how many it may hold: the named card's limit, or for
+ * a Forbidden card what `DECK_RULES.forbidden` leaves next to the deck's other Forbidden cards.
+ */
 export function nameCopies(r: CardRecord, counts: Map<number, number>, cards: CardDb): { copies: number; allowed: number } {
   const key = nameKey(r);
-  return { copies: counts.get(key) ?? 0, allowed: copiesAllowed(cards.records.get(key) ?? r) };
+  const copies = counts.get(key) ?? 0;
+  const allowed = copiesAllowed(cards.records.get(key) ?? r);
+  if (allowed > 0) return { copies, allowed };
+  return { copies, allowed: Math.max(0, DECK_RULES.forbidden - (forbiddenCopies(counts, cards) - copies)) };
 }
 
 /** Why `r` can't be added to `deck` right now (copies, a full deck), or null. */
 export function addProblem(deck: Deck, r: CardRecord, cards: CardDb): string | null {
   const { copies, allowed } = nameCopies(r, nameCounts(deck, cards), cards);
-  if (allowed === 0) return "FORBIDDEN";
+  const listed = copiesAllowed(cards.records.get(nameKey(r)) ?? r);
+  if (listed === 0 && copies >= allowed) return DECK_RULES.forbidden ? `${DECK_RULES.forbidden} FORBIDDEN PER DECK` : "FORBIDDEN";
   if (copies >= allowed) return allowed < DECK_RULES.copies ? `${LIMIT_NAMES[allowed]} (${allowed})` : `${allowed} COPIES MAX`;
   if (goesToExtra(r)) return (deck.extra?.length ?? 0) >= DECK_RULES.extraMax ? `EXTRA DECK FULL (${DECK_RULES.extraMax})` : null;
   return deck.main.length >= DECK_RULES.mainMax ? `MAIN DECK FULL (${DECK_RULES.mainMax})` : null;

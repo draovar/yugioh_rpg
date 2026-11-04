@@ -1,13 +1,17 @@
 // Brain vs brain: plays seeded duels for every deck pairing, with each brain going first and second, and reports win
 // rates. Every claim about AI strength comes from here. Duels run in parallel worker threads (tools/lib/match.ts).
-// Usage: npm run arena -- [--a autobot] [--b autobot] (or baseline: the planner in vendor/baseline, an older checkout) [--n 10] [--decks yugi,kaiba,goat] [--seed 1] [--lp 8000]
-//        [--wa weights.json] [--wb weights.json] [--jobs N] [--only K] [--trace] [--sim-trace] [--losses] [--stats]
+// Usage: npm run arena -- [--a autobot] [--b autobot] (or baseline: the planner in vendor/baseline, an older checkout) [--n 10] [--decks plants,SDY,SDK] [--seed 1|random] [--lp 8000]
+//        [--wa weights.json] [--wb weights.json] [--jobs N] [--only K] [--no-mirror] [--trace] [--sim-trace] [--losses] [--stats]
 //        [--record positions.jsonl]
+//   --decks  prebuilt deck keys or shop deck set codes (default: AI_TEST_DECKS in tools/lib/decks.ts)
 //   --n      duels per deck pairing and seat order (so 3 decks = 9 pairings x 2 orders x n)
-//   --seed   base seed: duel k uses seed (base + k), so a run is repeatable
+//   --seed   base seed: duel k uses seed (base + k), so a run is repeatable (default 1); `random` picks a new one, printed
+//            with the results (deck balance: each run gets fresh shuffles, a lucky stack doesn't carry over)
 //   --wa/wb  weights for A / B (a JSON file with any of board.ts's Weights; the rest stay default)
 //   --jobs   worker threads (default: one per CPU core; traces always run in one)
 //   --only K play only duel k (with --trace: replay one duel's decisions)
+//   --no-mirror  skip the pairings of a deck with itself (deck balance: they always come out even); the other duels
+//            keep their numbers and seeds
 //   --trace  print every decision of both brains
 //   --sim-trace  also print the decisions inside the simulated copies (with --trace)
 //   --losses list the duels A lost (replay one with --only K --trace)
@@ -20,7 +24,7 @@ import { availableParallelism } from "node:os";
 import { DEFAULT_WEIGHTS, type Weights } from "../../src/duel/ai/board.ts";
 import { BRAINS } from "../../src/duel/ai/brains.ts";
 import { Simulator } from "../../src/duel/ai/sim/simulator.ts";
-import { DECKS, type DeckName } from "../../src/duel/decks/decks.ts";
+import { AI_TEST_DECKS, deckNamed } from "../lib/decks.ts";
 import { parseArgs } from "../lib/args.ts";
 import { isMatchBrain, matchJobs, runMatch, winRate, type MatchBrain, type MatchSettings, type PassivityStats, type Result } from "../lib/match.ts";
 
@@ -34,16 +38,16 @@ const weightsArg = (key: string): Weights | undefined =>
   args.get(key) ? { ...DEFAULT_WEIGHTS, ...(JSON.parse(readFileSync(args.get(key)!, "utf-8")) as Partial<Weights>) } : undefined;
 const settings: MatchSettings = {
   A: brainArg("a"), B: brainArg("b"), weightsA: weightsArg("wa"), weightsB: weightsArg("wb"),
-  baseSeed: Number(args.get("seed") ?? 1), lp: args.has("lp") ? Number(args.get("lp")) : undefined, trace: args.has("trace"),
+  baseSeed: args.get("seed") === "random" ? Math.floor(Math.random() * 1e9) : Number(args.get("seed") ?? 1), lp: args.has("lp") ? Number(args.get("lp")) : undefined, trace: args.has("trace"),
   record: args.has("record"),
 };
 const n = Number(args.get("n") ?? 10);
 const only = args.has("only") ? Number(args.get("only")) : null;
 if (args.has("sim-trace")) Simulator.debug = (line) => console.log(line);
-const deckNames = (args.get("decks") ?? Object.keys(DECKS).join(",")).split(",") as DeckName[];
-for (const d of deckNames) if (!(d in DECKS)) throw new Error(`unknown deck "${d}"`);
+const deckNames = args.get("decks")?.split(",") ?? AI_TEST_DECKS;
+for (const d of deckNames) deckNamed(d); // throws on an unknown name
 
-const all = matchJobs(deckNames, n);
+const all = matchJobs(deckNames, n).filter((j) => !args.has("no-mirror") || j.aDeck !== j.bDeck);
 const jobs = only === null ? all : all.filter((j) => j.k === only);
 const threads = settings.trace || Simulator.debug ? 1 : Number(args.get("jobs") ?? availableParallelism());
 const started = performance.now();

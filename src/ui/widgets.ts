@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { INK, WHITE, border, text } from "./pixel.ts";
+import { FONT_UI, INK, WHITE, border, measure, text } from "./pixel.ts";
 import { THEME, ui } from "./theme.ts";
 import { LIST_BUTTON } from "../duel-screen/layout.ts";
 
@@ -50,6 +50,23 @@ function downArrow(g: Phaser.GameObjects.Graphics, x: number, y: number) {
 /** Rows of an open drop-down list: darker than buttons, so the list doesn't blend into the ones under it. */
 const DROP_LIST_COLOR = 0x1b2638;
 
+/** Space an open drop-down list keeps from the screen's edges, and between its columns. */
+const DROP_MARGIN = 4, DROP_GAP = 4;
+
+/**
+ * Where an open drop-down list puts its `n` rows, `pitch` apart from `top` down: one column under the button at
+ * `left`, or side by side columns of equal length when one wouldn't fit above the screen's bottom; the block moves left
+ * when it would leave the screen. Returns the block's left, size and each row's top-left.
+ */
+function dropColumns(scene: Phaser.Scene, n: number, left: number, top: number, pitch: number, colW: number) {
+  const fit = Math.max(1, Math.floor((scene.scale.height - DROP_MARGIN - top + 1) / pitch));
+  const cols = Math.ceil(n / fit), rows = Math.ceil(n / cols);
+  const w = cols * colW + (cols - 1) * DROP_GAP;
+  const x = Math.max(DROP_MARGIN, Math.min(left, scene.scale.width - DROP_MARGIN - w));
+  const at = (i: number) => ({ x: x + Math.floor(i / rows) * (colW + DROP_GAP), y: top + (i % rows) * pitch });
+  return { x, w, rows, at };
+}
+
 /** One choice in a `makeDropDown` list. */
 export interface DropDownOption<T> {
   value: T;
@@ -75,13 +92,14 @@ export function makeDropDown<T>(
   };
   const open = () => {
     if (list) return close();
-    const pitch = h + 1, left = Math.round(x - w / 2), top = Math.round(y + h / 2) + 2;
+    const pitch = h + 1, top = Math.round(y + h / 2) + 2;
+    const cols = dropColumns(scene, options.length, Math.round(x - w / 2), top, pitch, w);
     // Invisible full-screen catcher under the rows: a click anywhere else just closes the list.
     const catcher = scene.add.zone(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setInteractive();
     catcher.on("pointerup", close);
     const rows = options.map((o, i) => {
-      const rowY = top + i * pitch + Math.floor(h / 2);
-      return makeButton(scene, left + Math.floor(w / 2), rowY, w, h, o.label.toUpperCase(), () => {
+      const at = cols.at(i);
+      return makeButton(scene, at.x + Math.floor(w / 2), at.y + Math.floor(h / 2), w, h, o.label.toUpperCase(), () => {
         close();
         if (o.value === value) return;
         value = o.value;
@@ -90,9 +108,9 @@ export function makeDropDown<T>(
       }, o.value === value ? pickedColor : DROP_LIST_COLOR);
     });
     // Solid plate behind the rows (and their 1px gaps) with a light outline, so the list stands out from the buttons it covers.
-    const plateH = options.length * pitch + 3;
-    const plate = scene.add.graphics().fillStyle(INK).fillRect(left - 2, top - 2, w + 4, plateH);
-    border(plate, left - 2, top - 2, w + 4, plateH, WHITE);
+    const plateH = cols.rows * pitch + 3;
+    const plate = scene.add.graphics().fillStyle(INK).fillRect(cols.x - 2, top - 2, cols.w + 4, plateH);
+    border(plate, cols.x - 2, top - 2, cols.w + 4, plateH, WHITE);
     list = scene.add.container(0, 0, [catcher, plate, ...rows]).setDepth(1000);
     scene.input.keyboard?.on("keydown-ESC", close);
   };
@@ -209,13 +227,17 @@ export function makeListDropDown<T>(
   const open = () => {
     if (list) return close();
     const pitch = LIST_BUTTON_H + 1, rim = THEME.plate.slice;
-    const top = y + LIST_BUTTON_H + 1 + rim, plateH = options.length * pitch - 1 + 2 * rim;
+    const rowW = Math.max(w, ...options.map((o) => measure(scene, FONT_UI, o.label.toUpperCase()) + 8));
+    const top = y + LIST_BUTTON_H + 1 + rim;
+    const cols = dropColumns(scene, options.length, x, top, pitch, rowW);
+    const plateH = cols.rows * pitch - 1 + 2 * rim;
     // Invisible full-screen catcher under the rows: a click anywhere else just closes the list.
     const catcher = scene.add.zone(0, 0, scene.scale.width, scene.scale.height).setOrigin(0).setInteractive();
     catcher.on("pointerup", close);
-    const plate = scene.add.nineslice(x - rim, top - rim, ui("menu-back"), undefined, w + 2 * rim, plateH, rim, rim, rim, rim).setOrigin(0);
+    const plate = scene.add.nineslice(cols.x - rim, top - rim, ui("menu-back"), undefined, cols.w + 2 * rim, plateH, rim, rim, rim, rim).setOrigin(0);
     const rows = options.flatMap((o, i) => {
-      const row = makeListButton(scene, x, top + i * pitch, w, o.label, () => {
+      const at = cols.at(i);
+      const row = makeListButton(scene, at.x, at.y, rowW, o.label, () => {
         close();
         if (o.value === value && look.label === undefined) return;
         value = o.value;

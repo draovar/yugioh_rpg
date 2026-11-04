@@ -11,7 +11,6 @@ import { TYPE, type CardRecord } from "../duel/engine/cardData.ts";
 import {
   CardList, DECK_RULES, SORT_KEYS, addProblem, filterCount, goesToExtra, nameCopies, nameCounts, type FilterState, type SortKey,
 } from "../duel/decks/deckRules.ts";
-import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import type { Deck } from "../duel/engine/DuelSession.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { CardInfo } from "../duel-screen/CardInfo.ts";
@@ -19,7 +18,10 @@ import { CardSprite } from "../duel-screen/CardSprite.ts";
 import { CARD, INFO, INSET } from "../duel-screen/layout.ts";
 import { ListDrag, dragThumb } from "../ui/listDrag.ts";
 import { FONT_UI, fit, text } from "../ui/pixel.ts";
-import { MAX_CUSTOM_DECKS, chosenDeck, customDeckKey, customDecks, deleteCustomDeck, saveCustomDeck, type CustomDeck } from "../ui/prefs.ts";
+import {
+  MAX_CUSTOM_DECKS, chosenDeck, customDeckKey, customDecks, deleteCustomDeck, namedDeckEntries, saveCustomDeck, type CustomDeck,
+  type DeckEntry,
+} from "../ui/prefs.ts";
 import { createTextInput, type TextInput } from "../ui/textInput.ts";
 import { THEME, ui } from "../ui/theme.ts";
 import { TOUCH } from "../ui/touch.ts";
@@ -259,20 +261,20 @@ export class DeckEditor extends Phaser.Scene {
     button(40, "RENAME", () => this.rename());
     button(32, "SAVE", () => this.save());
     button(40, "DELETE", () => this.confirmDelete());
-    const prebuilt = [
-      { value: "" as DeckName | "", label: "EMPTY DECK" },
-      ...(Object.keys(DECKS) as DeckName[]).map((n) => ({ value: n as DeckName | "", label: DECKS[n].label })),
+    const named = [
+      { value: null as DeckEntry | null, label: "EMPTY DECK" },
+      ...namedDeckEntries().map((e) => ({ value: e as DeckEntry | null, label: e.label })),
     ];
-    this.bar.add(makeListDropDown(this, x, y, 48, prebuilt, null, (n) => this.loadPrebuilt(n), { label: "LOAD" }));
+    this.bar.add(makeListDropDown(this, x, y, 48, named, null, (e) => this.loadNamed(e), { label: "LOAD" }));
     this.bar.add(makeListButton(this, BAR.x + BAR.w - INSET.plate - 32, y, 32, "EXIT", () => this.guard(() => void transitionTo(this, "Overworld"))));
   }
 
-  /** Replaces the deck's cards with a prebuilt deck's (or none). */
-  private loadPrebuilt(name: DeckName | "") {
-    const src: Deck = name ? DECKS[name].deck : { main: [], extra: [] };
+  /** Replaces the deck's cards with a named deck's (prebuilt or a shop's), or none. */
+  private loadNamed(entry: DeckEntry | null) {
+    const src: Deck = entry?.deck ?? { main: [], extra: [] };
     this.deck = { ...this.deck, main: [...src.main], extra: [...(src.extra ?? [])] };
     this.changed();
-    if (name) this.status(`LOADED ${DECKS[name].label.toUpperCase()}`);
+    if (entry) this.status(`LOADED ${entry.label.toUpperCase()}`);
   }
 
   private changed() {

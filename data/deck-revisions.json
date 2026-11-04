@@ -1,0 +1,24 @@
+{
+  "_comment": "This game's revisions of the starter and structure decks (data/decks.json keeps them as printed), by set code: `copies` copies (default all) of the card named `out` become `in`, in the same slot (number and rarity), like a reprint. Each says why. Applied by tools/data/build-data.mjs to public/data/decks.json, the lists the shops show and sell; smoke checks every deck is legal.",
+  "SDY": [
+    { "out": "Last Will", "in": "Kuriboh", "why": "1 Forbidden card per deck: the four starters all keep Change of Heart (owner's pick); Kuriboh is Yugi's own, a weak card for the strongest starter." }
+  ],
+  "SDK": [
+    { "out": "The Inexperienced Spy", "in": "Change of Heart", "why": "The four starters all hold Change of Heart (owner's pick); the Spy only looks at a card." }
+  ],
+  "SDP": [
+    { "out": "Graceful Charity", "in": "Toon Table of Contents", "why": "1 Forbidden card per deck: the four starters all keep Change of Heart (owner's pick); Toon Table of Contents fetches the deck's only Toon World." },
+    { "out": "Gryphon Wing", "in": "Toon Defense", "why": "Gryphon Wing only answers Harpie's Feather Duster, which is Forbidden (owner's pick for evening out the starters)." },
+    { "out": "Hiro's Shadow Scout", "in": "Toon Gemini Elf", "why": "Evening out the starters (owner's pick): Pegasus won 30%; the Scout's Flip draws the opponent 3 cards, Toon Gemini Elf is a 1900 ATK Level 4." }
+  ],
+  "SYE": [
+    { "out": "Pot of Greed", "in": "Jar of Greed", "why": "1 Forbidden card per deck: keeps Change of Heart, like the starters (owner's OK); Jar of Greed draws too." },
+    { "out": "Last Will", "in": "Thousand Knives", "why": "1 Forbidden card per deck (owner's OK); Thousand Knives is Dark Magician support, the deck's ace." }
+  ],
+  "SD1": [
+    { "out": "Nobleman of Crossout", "copies": 1, "in": "Smashing Ground", "why": "Nobleman of Crossout is Limited; Smashing Ground does the same job, 1-for-1 monster removal (owner's OK)." }
+  ],
+  "SD6": [
+    { "out": "Magician of Faith", "copies": 1, "in": "Old Vindictive Magician", "why": "Magician of Faith is Limited; Old Vindictive Magician is another Flip Spellcaster, it destroys a monster (owner's OK)." }
+  ]
+}

@@ -11,9 +11,9 @@ import { availableParallelism } from "node:os";
 import path from "node:path";
 import { DEFAULT_WEIGHTS, type Weights } from "../../src/duel/ai/board.ts";
 import { isBrainName, type BrainName } from "../../src/duel/ai/brains.ts";
-import { DECKS, type DeckName } from "../../src/duel/decks/decks.ts";
 import { mulberry32 } from "../../src/duel/engine/rng.ts";
 import { parseArgs } from "../lib/args.ts";
+import { AI_TEST_DECKS } from "../lib/decks.ts";
 import { matchJobs, runMatch, winRate, type Result } from "../lib/match.ts";
 
 const args = parseArgs();
@@ -24,7 +24,7 @@ const quick = Number(args.get("quick") ?? 10);
 const long = Number(args.get("long") ?? 30);
 const threads = Number(args.get("jobs") ?? availableParallelism());
 const rng = mulberry32(Number(args.get("seed") ?? 1));
-const decks = Object.keys(DECKS) as DeckName[];
+const decks = AI_TEST_DECKS;
 
 /** First stage: drop the variant below this; overall: keep it at or above ACCEPT. */
 const QUICK_PASS = 0.52;

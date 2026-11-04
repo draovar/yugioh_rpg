@@ -9,6 +9,7 @@ const BREAKER = 71413901, SKILLED_DM = 73752131, POT_OF_GREED = 55144522, UPSTAR
 const TRIBE_INFECTING_VIRUS = 33184167, MIND_CRUSH = 15800838, SIXTH_SENSE = 3280747, DNA_TRANSPLANT = 56769674;
 const SINISTER_SERPENT = 8131171, SCAPEGOAT = 73915051, METAMORPHOSIS = 46411259, POLYMERIZATION = 24094653, SNATCH_STEAL = 45986603, AXE = 40619825;
 const CONFISCATION = 17375316, TIME_WIZARD = 71625222, BIG_EYE = 16768387;
+const THOUSAND_EYES_RESTRICT = 63519819, BLUE_EYES_ULTIMATE = 23995346;
 const NEOS = 89943723, AIR_HUMMINGBIRD = 54959865, AIR_NEOS = 11502550, V_TIGER = 51638941, W_WING = 96300057, VW_TIGER = 58859575;
 const BESTIARI = 41470137, DARIUS = 25924653, GYZARUS = 48156348;
 const X_HEAD = 62651957, Y_DRAGON = 65622692, Z_METAL = 64500000;
@@ -46,16 +47,18 @@ const SETUPS: Record<string, DevSetup> = {
   },
   /**
    * Tokens + Extra Deck: Metamorphosis on the Level 1 Sinister Serpent -> Thousand-Eyes Restrict, and Scapegoat
-   * (its tokens are Level 1 too, but Scapegoat forbids other Special Summons that turn). Use &deck=goat.
+   * (its tokens are Level 1 too, but Scapegoat forbids other Special Summons that turn).
    */
   scapegoat: {
     you: [monster(SINISTER_SERPENT, 0), hand(SCAPEGOAT), hand(METAMORPHOSIS)],
     opponent: [monster(VORSE, 2)],
+    extra: [THOUSAND_EYES_RESTRICT],
   },
-  /** Fusion: three Blue-Eyes + Polymerization -> Blue-Eyes Ultimate Dragon. Use &deck=kaiba. */
+  /** Fusion: three Blue-Eyes + Polymerization -> Blue-Eyes Ultimate Dragon. */
   fusion: {
     you: [hand(BLUE_EYES), hand(BLUE_EYES), hand(BLUE_EYES), hand(POLYMERIZATION)],
     opponent: [monster(GEMINI, 2)],
+    extra: [BLUE_EYES_ULTIMATE],
   },
   /**
    * Declarations: Tribe-Infecting Virus (discard, declare a Type), Mind Crush (a card name), Sixth Sense (two
@@ -90,7 +93,7 @@ const SETUPS: Record<string, DevSetup> = {
   },
   /**
    * Ritual: White Dragon Ritual for Paladin of White Dragon (Level 4), tributes by Level from hand or field (Hane-Hane 2,
-   * Kaiser Sea Horse / Battle Ox 4); Paladin can then tribute itself for a Blue-Eyes from the Deck (&deck=kaibaEvolution).
+   * Kaiser Sea Horse / Battle Ox 4); Paladin can then tribute itself for a Blue-Eyes from the Deck (&deck=SKE).
    * Kaiser Sea Horse also counts as 2 tributes for the LIGHT Blue-Eyes in hand.
    */
   ritual: {

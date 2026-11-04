@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { DECKS, type DeckName } from "../duel/decks/decks.ts";
+import { deckByName } from "../duel/decks/decks.ts";
 import { DialogBox } from "./DialogBox.ts";
 import { ChipsGlove } from "../ui/chipsGlove.ts";
 import { WHITE, text } from "../ui/pixel.ts";
@@ -426,9 +426,9 @@ export class Overworld extends Phaser.Scene {
   }
 
   /** A duel against `opponent` with that deck, behind the card-wave transition; afterwards the player is back here. */
-  private startDuel(opponent: string, deck: DeckName) {
+  private startDuel(opponent: string, deck: string) {
     this.savePosition(opponent);
-    const data: DuelSceneData = { opponentName: opponent, playerDeck: chosenDeck().deck, opponentDeck: DECKS[deck].deck };
+    const data: DuelSceneData = { opponentName: opponent, playerDeck: chosenDeck().deck, opponentDeck: deckByName(deck, deck) };
     void transitionTo(this, "Duel", data, { onCovered: () => this.scene.stop("WorldMenu") });
   }
 

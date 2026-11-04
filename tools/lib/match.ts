@@ -11,7 +11,7 @@ import { BRAINS, type BrainContext, type BrainName } from "../../src/duel/ai/bra
 import { formatTrace } from "../../src/duel/ai/trace.ts";
 import { TYPE } from "../../src/duel/engine/cardData.ts";
 import type { DuelSession, FieldSnapshot } from "../../src/duel/engine/DuelSession.ts";
-import { DECKS, type DeckName } from "../../src/duel/decks/decks.ts";
+import { deckNamed } from "./decks.ts";
 import { cards, core, newDuel, readScript, runDuel, seedFrom } from "./engine.ts";
 
 /**
@@ -30,7 +30,7 @@ function makeBrain(name: MatchBrain, ctx: BrainContext) {
 }
 
 /** Duel k of a match: brain A plays `aDeck` and goes first when `aFirst`. */
-export interface Job { k: number; aDeck: DeckName; bDeck: DeckName; aFirst: boolean }
+export interface Job { k: number; aDeck: string; bDeck: string; aFirst: boolean }
 
 export interface MatchSettings {
   A: MatchBrain;
@@ -187,7 +187,7 @@ class PassivityTracker {
 }
 
 /** Every deck pairing and seat order, `n` duels each; duel k always gets the same seed and setup. */
-export function matchJobs(decks: readonly DeckName[], n: number): Job[] {
+export function matchJobs(decks: readonly string[], n: number): Job[] {
   const jobs: Job[] = [];
   for (const aDeck of decks) for (const bDeck of decks) for (const aFirst of [true, false])
     for (let i = 0; i < n; i++) jobs.push({ k: jobs.length, aDeck, bDeck, aFirst });
@@ -198,7 +198,7 @@ export function matchJobs(decks: readonly DeckName[], n: number): Job[] {
 function playJob(job: Job, s: MatchSettings): Result {
   const { k, aDeck, bDeck, aFirst } = job;
   const aSeat = aFirst ? 0 : 1;
-  const decks = aFirst ? [DECKS[aDeck].deck, DECKS[bDeck].deck] : [DECKS[bDeck].deck, DECKS[aDeck].deck];
+  const decks = aFirst ? [deckNamed(aDeck), deckNamed(bDeck)] : [deckNamed(bDeck), deckNamed(aDeck)];
   const duel = newDuel({ decks: [decks[0], decks[1]], seed: seedFrom(s.baseSeed + k), startingLP: s.lp, onCoreLog: () => {} });
   const onTrace = s.trace ? (e: Parameters<typeof formatTrace>[0]) => console.log(formatTrace(e)) : undefined;
   const tracker = new PassivityTracker(duel, s.record);

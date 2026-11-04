@@ -145,13 +145,45 @@ mkdirSync(OUT, { recursive: true });
 writeFileSync(path.join(OUT, "strings.json"), JSON.stringify({ system, counter, victory }));
 writeFileSync(path.join(OUT, "cards.json"), JSON.stringify(cards));
 writeFileSync(path.join(OUT, "scripts.json"), JSON.stringify(scripts));
-// build-pool's set lists (the shops' boosters and decks), every card checked to be in the pool.
+// build-pool's set lists (the shops' boosters and decks), every card checked to be in the pool; the decks with this
+// game's revisions (data/deck-revisions.json) applied.
 for (const [file, key] of [["boosters.json", "sets"], ["decks.json", "decks"]]) {
   const lists = JSON.parse(readFileSync(path.join(ROOT, "data", file), "utf-8"))[key];
   for (const list of lists) for (const [number, code] of list.cards) {
     if (!inPool.has(code)) throw new Error(`${file}: ${number} (${code}) isn't in the pool: rerun npm run build-pool`);
   }
+  if (key === "decks") reviseDecks(lists);
   writeFileSync(path.join(OUT, file), JSON.stringify(lists));
+}
+
+/**
+ * data/deck-revisions.json: per deck (set code), cards swapped out for others, like a reprint: `copies` copies (default
+ * all) of `out` become `in`, in the same slot (number and rarity). Each says why.
+ */
+function reviseDecks(lists) {
+  const revisions = JSON.parse(readFileSync(path.join(ROOT, "data/deck-revisions.json"), "utf-8"));
+  for (const [code, swaps] of Object.entries(revisions)) {
+    if (code.startsWith("_")) continue;
+    const list = lists.find((l) => l.code === code);
+    if (!list) throw new Error(`deck-revisions.json: no deck "${code}" in data/decks.json`);
+    for (const swap of swaps) {
+      const where = `deck-revisions.json ${code}`;
+      if (!swap.why) throw new Error(`${where}: swapping "${swap.out}" says no why`);
+      const out = byName.get(swap.out), into = byName.get(swap.in);
+      if (!out) throw new Error(`${where}: no pool card named "${swap.out}"`);
+      if (!into) throw new Error(`${where}: no pool card named "${swap.in}"`);
+      const i = list.cards.findIndex(([, c]) => c === out.code);
+      if (i < 0) throw new Error(`${where}: the deck has no "${swap.out}"`);
+      const [number, , rarity, have] = list.cards[i];
+      const n = swap.copies ?? have;
+      if (n < 1 || n > have) throw new Error(`${where}: can't swap ${n} of ${have} "${swap.out}"`);
+      if (n === have) list.cards.splice(i, 1);
+      else list.cards[i] = [number, out.code, rarity, have - n];
+      const same = list.cards.findIndex(([, c]) => c === into.code);
+      if (same >= 0) list.cards[same] = [list.cards[same][0], into.code, list.cards[same][2], list.cards[same][3] + n];
+      else list.cards.splice(n === have ? i : i + 1, 0, [number, into.code, rarity, n]);
+    }
+  }
 }
 console.log(`cards: ${cards.length - tokens.size} + ${tokens.size} tokens (${variants.size} in an older version: card-versions.json` +
   `), scripts: ${Object.keys(scripts).length}`);

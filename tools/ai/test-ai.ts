@@ -24,7 +24,7 @@ import { AiMemory } from "../../src/duel/ai/memory.ts";
 import { Simulator } from "../../src/duel/ai/sim/simulator.ts";
 import { describeStep, type PlanStep } from "../../src/duel/ai/sim/sequence.ts";
 import type { FieldSnapshot } from "../../src/duel/engine/DuelSession.ts";
-import { DECKS, type DeckName } from "../../src/duel/decks/decks.ts";
+import { namedDecks } from "../../src/duel/decks/decks.ts";
 import { cards, core, newDuel, readScript, runDuel, seedFrom } from "../lib/engine.ts";
 
 let failures = 0;
@@ -87,10 +87,11 @@ function shown(snap: FieldSnapshot, side: 0 | 1): number[] {
 const serialize = (messages: OcgMessage[]) => JSON.stringify(messages, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
 
 const runs = Number(process.argv[2] ?? 30);
-const names = Object.keys(DECKS) as DeckName[];
+// Every named deck: the prebuilt ones and the shops' (registered by engine.ts).
+const decks = namedDecks().map((d) => d.deck);
 for (let i = 0; i < runs; i++) {
-  const [d0, d1] = [names[i % names.length], names[Math.floor(i / names.length) % names.length]];
-  const duel = newDuel({ decks: [DECKS[d0].deck, DECKS[d1].deck], seed: seedFrom(1000 + i), onCoreLog: () => {} });
+  const [d0, d1] = [decks[i % decks.length], decks[Math.floor(i / decks.length) % decks.length]];
+  const duel = newDuel({ decks: [d0, d1], seed: seedFrom(1000 + i), onCoreLog: () => {} });
   const seats = [new AiSeat({ seat: 0, brain: autoBotBrain, duel }), new AiSeat({ seat: 1, brain: autoBotBrain, duel })] as const;
   // public[viewer][side]: every code `viewer` could legitimately have seen on `side`.
   const pub = [[new Set<number>(), new Set<number>()], [new Set<number>(), new Set<number>()]];
@@ -115,7 +116,7 @@ for (let i = 0; i < runs; i++) {
       for (const v of [0, 1] as const) redact(step.messages, v);
       // 3. A copy laid out from what this seat sees right now places nothing of theirs it can't see.
       for (const v of [0, 1] as const) {
-        const view = { seat: v, board: duel.snapshot(v), memory: seats[v].memory, cards, hint: null, rng: Math.random, deckList: DECKS[v ? d1 : d0].deck.main };
+        const view = { seat: v, board: duel.snapshot(v), memory: seats[v].memory, cards, hint: null, rng: Math.random, deckList: (v ? d1 : d0).main };
         const visible = new Set(shown(view.board, (1 - v) as 0 | 1));
         const blanks = new Set<number>(Object.values(BLANK));
         const theirSide = layoutFrom(view).decks[1];

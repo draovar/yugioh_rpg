@@ -162,6 +162,11 @@ rounds, battle-phase planning, `worldScale`) is in git history at 1095a52 if a l
 
 ### Phase 3: retune all weights together (mostly machine time)
 
+**Decks changed 2026-11-04:** the prebuilt Yugi / Kaiba / Goat / Evolution / structure decks the results in this plan
+used were deleted. `arena` and `tune` now default to `AI_TEST_DECKS` (`tools/lib/decks.ts`: Plants, Insects and the
+four starter decks; `--decks` takes any shop deck by set code). Take a new baseline before comparing; the bench keeps
+frozen copies of the old lists it used (`tools/ai/bench-decks.ts`).
+
 Run `npm run tune -- --brain planner` (overnight) on the full `Weights`, including today's additions. Keep a winner
 only if the arena says ≥ 53.5% against the baseline **and** the passivity numbers don't get worse. Weights that tune
 to "no effect" (e.g. `openField` after phase 2) go back to neutral.

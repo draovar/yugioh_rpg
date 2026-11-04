@@ -6,7 +6,7 @@
 import type { OcgResponse } from "ocgcore-wasm";
 import { DuelController, type RemotePeer } from "../../src/duel/DuelController.ts";
 import { autoRespond } from "../../src/duel/ai/autoBot.ts";
-import { DECKS } from "../../src/duel/decks/decks.ts";
+import { deckByName } from "../../src/duel/decks/decks.ts";
 import { decodeResponse, encodeResponse } from "../../src/net/wire.ts";
 import { cards, newDuel } from "../lib/engine.ts";
 
@@ -32,7 +32,7 @@ interface Result { winner: number | null; checksum: number; prompts: number }
 function play(seed: [bigint, bigint, bigint, bigint]): Promise<[Result, Result]> {
   const links = wire();
   const runs = ([0, 1] as const).map((me) => new Promise<Result>((resolve, reject) => {
-    const session = newDuel({ seed, decks: [DECKS.goat.deck, DECKS.yugi.deck], onCoreLog: () => {} });
+    const session = newDuel({ seed, decks: [deckByName("SD6", "SD6"), deckByName("SDJ", "SDJ")], onCoreLog: () => {} });
     let prompts = 0;
     const ctl: DuelController = new DuelController({
       session, me, remote: links[me],

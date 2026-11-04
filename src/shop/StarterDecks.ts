@@ -8,13 +8,15 @@
 // No chips and no EXIT: a deck has to be taken.
 // Pictures: public/deck-boxes/<CODE>.png (`npm run build-deck-boxes`: the packs cropped flat, 78x116 with the outline).
 import Phaser from "phaser";
+import type { DeckList } from "../duel/decks/decks.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { MAX_CUSTOM_DECKS, customDeckKey, customDecks, saveCustomDeck, setChosenDeck } from "../ui/prefs.ts";
 import { text } from "../ui/pixel.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
 import { setViewMode } from "../ui/view.ts";
 import { DeckOpening } from "./DeckOpening.ts";
-import { STARTER_DECKS, deckCards, deckLists, deckRows, preloadDeckLists, type DeckList, type DeckStock } from "./decks.ts";
+import { deckCards, deckRows } from "./decks.ts";
+import { STARTER_DECKS, type DeckStock } from "./deckStock.ts";
 import { ShopBoard } from "./ShopBoard.ts";
 import { C, CASE, RUNEWOOD, blankPicture, drawRoom, preloadShopButtons, woodBlock } from "./shopParts.ts";
 
@@ -80,7 +82,6 @@ export class StarterDecks extends Phaser.Scene {
   }
 
   preload() {
-    preloadDeckLists(this);
     ShopBoard.preload(this);
     preloadShopButtons(this);
     for (const d of STARTER_DECKS) {
@@ -92,7 +93,7 @@ export class StarterDecks extends Phaser.Scene {
   async create() {
     setViewMode(this.game, "fixed");
     this.engine = await loadEngine();
-    this.lists = deckLists(this);
+    this.lists = this.engine.deckLists;
 
     drawRoom(this, "STARTER DECKS", (g) => this.drawCase(g));
     this.spots = this.add.graphics();

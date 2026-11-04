@@ -3,12 +3,12 @@ import type { Deck, DuelSession } from "../duel/engine/DuelSession.ts";
 import { DEFAULT_BRAIN } from "../duel/ai/brains.ts";
 import { formatBoard, fullBoard } from "../duel/ai/boardText.ts";
 import { phaseLabel } from "../duel/ai/trace.ts";
-import { deckNameOf, type DeckName } from "../duel/decks/decks.ts";
+import { deckNameOf } from "../duel/decks/decks.ts";
 import type { DuelSceneData } from "./DuelScene.ts";
 
 /**
  * For `&aitrace`: the seed, who went first, the decks and the brain, plus a dev URL that replays the same duel (your
- * own moves must be repeated by hand). Decks that aren't prebuilt are listed as passcodes.
+ * own moves must be repeated by hand). Decks without a name (`namedDecks`) are listed as passcodes.
  */
 export function replayInfo(d: DuelSceneData, me: 0 | 1, seed: number, mine: Deck, theirs: Deck): string {
   const brain = d.ai ?? DEFAULT_BRAIN;
@@ -19,7 +19,7 @@ export function replayInfo(d: DuelSceneData, me: 0 | 1, seed: number, mine: Deck
   params.set("ai", brain);
   if (d.startingLP !== undefined) params.set("lp", String(d.startingLP));
   if (d.setup) params.set("setup", d.setup);
-  const deckText = (deck: Deck, name: DeckName | null) =>
+  const deckText = (deck: Deck, name: string | null) =>
     name ?? `main [${deck.main.join(",")}]${deck.extra?.length ? ` extra [${deck.extra.join(",")}]` : ""}`;
   return [
     `[AI] duel seed ${seed}: ${me === 0 ? "you" : "the AI"} went first, AI brain ${brain}`,

@@ -2,8 +2,9 @@
 // reads fall back to the default, writes are skipped.
 import type { ChainMode } from "../duel/DuelController.ts";
 import { DECK_RULES } from "../duel/decks/deckRules.ts";
-import { DECKS, type DeckName } from "../duel/decks/decks.ts";
+import { namedDecks } from "../duel/decks/decks.ts";
 import type { Deck } from "../duel/engine/DuelSession.ts";
+import { DECKS as SHOP_STOCK, STARTER_DECKS } from "../shop/deckStock.ts";
 
 function load(key: string): string | null {
   try { return localStorage.getItem(key); } catch { return null; }
@@ -24,9 +25,9 @@ export interface CustomDeck {
 }
 
 const CUSTOM_KEY = "customDecks";
-/** Deck slots in the editor (the world menu's deck lists must still fit on screen). */
+/** Deck slots in the editor. */
 export const MAX_CUSTOM_DECKS = 8;
-/** Deck choices that are custom decks: this prefix + the deck's id (prebuilt decks are chosen by their DeckName). */
+/** Deck choices that are custom decks: this prefix + the deck's id (named decks are chosen by their name, `namedDecks`). */
 const CUSTOM_PREFIX = "custom:";
 
 /** The world menu's choice for a custom deck (to pick a deck right after saving it). */
@@ -52,32 +53,40 @@ export function deleteCustomDeck(id: string): void {
   store(CUSTOM_KEY, JSON.stringify(customDecks().filter((d) => d.id !== id)));
 }
 
-/** A deck the world menu offers: `key` is a DeckName or `custom:<id>`. */
+/** A deck the world menu offers: `key` is a named deck's (`namedDecks`) or `custom:<id>`. */
 export interface DeckEntry {
   key: string;
   label: string;
   deck: Deck;
 }
 
+/** The shops' decks' short names by set code (STARTER YUGI...), for menus. */
+const SHORT_NAMES = new Map([...STARTER_DECKS, ...SHOP_STOCK].map((d) => [d.code, d.short]));
+
+/** Every named deck as a menu entry: the prebuilt ones, then the shops' (by their short names). */
+export function namedDeckEntries(): DeckEntry[] {
+  return namedDecks().map((d) => ({ key: d.key, label: SHORT_NAMES.get(d.key) ?? d.label, deck: d.deck }));
+}
+
 /**
- * Every deck you can duel with: the prebuilt ones, then your custom decks that have a full Main Deck (the editor
- * keeps the other limits).
+ * Every deck you can duel with: the named ones, then your custom decks that have a full Main Deck (the editor keeps
+ * the other limits).
  */
 export function deckEntries(): DeckEntry[] {
-  const prebuilt = (Object.keys(DECKS) as DeckName[]).map((name) => ({ key: name, label: DECKS[name].label, deck: DECKS[name].deck }));
   const custom = customDecks().filter((d) => d.main.length >= DECK_RULES.mainMin)
     .map((d) => ({ key: customDeckKey(d.id), label: d.name, deck: { main: d.main, extra: d.extra } }));
-  return [...prebuilt, ...custom];
+  return [...namedDeckEntries(), ...custom];
 }
 
-/** The deck stored under `key`, or the prebuilt `fallback` (the key is unknown, or that custom deck was deleted). */
-function deckEntry(key: string | null, fallback: DeckName): DeckEntry {
-  return deckEntries().find((e) => e.key === key) ?? { key: fallback, label: DECKS[fallback].label, deck: DECKS[fallback].deck };
+/** The deck stored under `key`, or the named deck `fallback` (the key is unknown, or that custom deck was deleted). */
+function deckEntry(key: string | null, fallback: string): DeckEntry {
+  const entries = deckEntries();
+  return entries.find((e) => e.key === key) ?? entries.find((e) => e.key === fallback)!;
 }
 
-/** The deck the player picked in the world menu (vs the AI and in multiplayer). */
+/** The deck the player picked in the world menu (vs the AI and in multiplayer); Starter Deck: Yugi by default. */
 export function chosenDeck(): DeckEntry {
-  return deckEntry(load(DECK_KEY), "yugi");
+  return deckEntry(load(DECK_KEY), "SDY");
 }
 
 export function setChosenDeck(key: string): void {
@@ -86,9 +95,9 @@ export function setChosenDeck(key: string): void {
 
 const AI_DECK_KEY = "aiDeck";
 
-/** The deck the Rival (the AI) uses in a quick duel, picked in the world menu. */
+/** The deck the Rival (the AI) uses in a quick duel, picked in the world menu; Starter Deck: Kaiba by default. */
 export function aiDeck(): DeckEntry {
-  return deckEntry(load(AI_DECK_KEY), "kaiba");
+  return deckEntry(load(AI_DECK_KEY), "SDK");
 }
 
 export function setAiDeck(key: string): void {

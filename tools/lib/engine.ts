@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import createCore, { OcgMessageType } from "ocgcore-wasm";
 import type { AiSeat } from "../../src/duel/ai/AiSeat.ts";
+import { setShopDecks, type DeckList } from "../../src/duel/decks/decks.ts";
 import { CardDb, type CardRecord } from "../../src/duel/engine/cardData.ts";
 import { DuelSession, type DuelSeed, type Deck, type StepResult } from "../../src/duel/engine/DuelSession.ts";
 
@@ -12,6 +13,8 @@ const records: CardRecord[] = JSON.parse(readFileSync(path.join(DATA, "cards.jso
 const scripts: Record<string, string> = JSON.parse(readFileSync(path.join(DATA, "scripts.json"), "utf-8"));
 
 export const cards = new CardDb(records);
+// The shops' decks become nameable by set code (`deckByName`, `namedDecks`), as in the game.
+setShopDecks(JSON.parse(readFileSync(path.join(DATA, "decks.json"), "utf-8")) as DeckList[], cards);
 export const core = await createCore({ sync: true });
 export const readScript = (name: string) => scripts[path.basename(name)] ?? null;
 

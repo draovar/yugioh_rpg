@@ -148,10 +148,12 @@ Progress:
   anime/manga versions rather than the 2008 card. Last Turn is on the list but not in the pool. Revisit when `card-versions.json` picks an older version.
 - `build-data` resolves the names (fails on an unknown name or a card on two lists) and writes `limit` (0/1/2) into
   each listed card's record. `deckRules.copiesAllowed` / `addProblem` enforce it in the deck editor ("FORBIDDEN",
-  "LIMITED (1)"); `deckProblems` adds `banlistProblems` for any deck that isn't exactly a prebuilt one.
-- Prebuilt decks are exempt (user's choice): all 7 break the list (Pot of Greed in each; Goat has 19 banned cards).
-  `smoke` lists their banlist breaks as information. Multiplayer: a prebuilt deck is accepted as is, a deck built in
-  the editor must follow the list.
+  "LIMITED (1)"); `deckProblems` adds `banlistProblems` for every deck.
+- Prebuilt decks were exempt at first (all 7 broke the list). 2026-11-04 (owner's picks): this game's own rule, every
+  deck may hold 1 Forbidden card (`DECK_RULES.forbidden`); Chaos Sorcerer, Tribe-Infecting Virus
+  Forbidden → Limited; Level Limit - Area B, Gravity Bind Limited → Semi-Limited (two structure decks print 2); the
+  old prebuilt decks deleted (Plants, Insects kept); every deck must be legal, the shops' too (`smoke` fails
+  otherwise; their revisions: `data/deck-revisions.json`).
 - Deck editor list: listed cards get a 0/1/2 disc on the art's top-left corner (Forbidden red, Limited orange,
   Semi-Limited yellow; `limitBadge` in `listRow.ts`, the user's pick of four mockups).
 - Not done: a saved deck with banned cards is only caught when adding cards or in multiplayer.
