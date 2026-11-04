@@ -23,11 +23,32 @@ const isTrap = (r: CardRecord) => (r.type & TYPE.TRAP) !== 0;
 /** Spell/Trap kinds besides Normal. */
 const ST_KINDS = TYPE.QUICKPLAY | TYPE.CONTINUOUS | TYPE.EQUIP | TYPE.FIELD | TYPE.COUNTER | TYPE.RITUAL;
 
+/**
+ * The name copies are counted under: a card whose name is "always treated as" another's (Harpie Lady 1 as Harpie
+ * Lady) shares that card's limit, also in deck building.
+ */
+const nameKey = (r: CardRecord) => r.alias || r.code;
+
+/** Cards per name in `deck` (`nameKey`). */
+export function nameCounts(deck: Deck, cards: CardDb): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const code of [...deck.main, ...(deck.extra ?? [])]) {
+    const r = cards.records.get(code);
+    const key = r ? nameKey(r) : code;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+/** Copies of `r`'s name in the deck `counts` were taken from, and how many it may hold (the named card's limit). */
+export function nameCopies(r: CardRecord, counts: Map<number, number>, cards: CardDb): { copies: number; allowed: number } {
+  const key = nameKey(r);
+  return { copies: counts.get(key) ?? 0, allowed: copiesAllowed(cards.records.get(key) ?? r) };
+}
+
 /** Why `r` can't be added to `deck` right now (copies, a full deck), or null. */
 export function addProblem(deck: Deck, r: CardRecord, cards: CardDb): string | null {
-  const name = r.alias || r.code;
-  const copies = [...deck.main, ...(deck.extra ?? [])].filter((c) => (cards.records.get(c)?.alias || c) === name).length;
-  const allowed = copiesAllowed(r);
+  const { copies, allowed } = nameCopies(r, nameCounts(deck, cards), cards);
   if (allowed === 0) return "FORBIDDEN";
   if (copies >= allowed) return allowed < DECK_RULES.copies ? `${LIMIT_NAMES[allowed]} (${allowed})` : `${allowed} COPIES MAX`;
   if (goesToExtra(r)) return (deck.extra?.length ?? 0) >= DECK_RULES.extraMax ? `EXTRA DECK FULL (${DECK_RULES.extraMax})` : null;

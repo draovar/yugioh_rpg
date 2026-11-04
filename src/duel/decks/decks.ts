@@ -1,7 +1,7 @@
 // Prebuilt decks (NPCs, the AI, starting points in the deck editor). Every card must be in data/pool.json (the smoke tests check).
 import { TYPE, type CardDb } from "../engine/cardData.ts";
 import type { Deck } from "../engine/DuelSession.ts";
-import { DECK_RULES, copiesAllowed } from "./deckRules.ts";
+import { DECK_RULES, copiesAllowed, nameCounts } from "./deckRules.ts";
 
 /** Passcodes of the cards the decks use, by name. */
 const C = {
@@ -227,39 +227,37 @@ export function deckNameOf(deck: Deck): DeckName | null {
 }
 
 /**
- * Why a deck isn't legal: 40-60 main, up to 15 extra, max 3 copies, every card known (tokens excluded), and the
- * banlist (`banlistProblems`), except for a prebuilt deck: those keep their cards.
+ * Why a deck isn't legal: 40-60 main, up to 15 extra, every card known (tokens excluded), and the copy limits per name
+ * (`nameCounts`): the banlist's (`banlistProblems`), except for a prebuilt deck: those keep their cards, max 3 a name.
  */
 export function deckProblems(deck: Deck, cards: CardDb): string[] {
   const out: string[] = [];
   const main = deck.main, extra = deck.extra ?? [];
   if (main.length < DECK_RULES.mainMin || main.length > DECK_RULES.mainMax) out.push(`main deck has ${main.length} cards`);
   if (extra.length > DECK_RULES.extraMax) out.push(`extra deck has ${extra.length} cards`);
-  for (const [code, n] of copyCounts(deck)) {
+  for (const code of new Set([...main, ...extra])) {
     const r = cards.records.get(code);
     if (!r) out.push(`unknown card ${code}`);
     else if (r.type & TYPE.TOKEN) out.push(`${r.name} is a token`);
-    if (n > DECK_RULES.copies) out.push(`${r?.name ?? code} x${n}`);
   }
-  return isPrebuilt(deck) ? out : [...out, ...banlistProblems(deck, cards)];
+  // Other decks get the copy limits from the banlist check (3 for a card it doesn't list).
+  if (!isPrebuilt(deck)) return [...out, ...banlistProblems(deck, cards)];
+  for (const [key, n] of nameCounts(deck, cards)) {
+    if (n > DECK_RULES.copies) out.push(`${cards.records.get(key)?.name ?? key} x${n}`);
+  }
+  return out;
 }
 
-/** Cards over their banlist limit (data/banlist.json): forbidden ones, or too many copies of a limited one. */
+/** Names over their copy limit (data/banlist.json, else 3): forbidden cards, or too many of one name. */
 export function banlistProblems(deck: Deck, cards: CardDb): string[] {
   const out: string[] = [];
-  for (const [code, n] of copyCounts(deck)) {
-    const r = cards.records.get(code);
+  for (const [key, n] of nameCounts(deck, cards)) {
+    const r = cards.records.get(key);
     if (!r) continue;
     const allowed = copiesAllowed(r);
     if (n > allowed) out.push(allowed === 0 ? `${r.name} is forbidden` : `${r.name} x${n} (${allowed} allowed)`);
   }
   return out;
-}
-
-function copyCounts(deck: Deck): Map<number, number> {
-  const counts = new Map<number, number>();
-  for (const code of [...deck.main, ...(deck.extra ?? [])]) counts.set(code, (counts.get(code) ?? 0) + 1);
-  return counts;
 }
 
 /** Whether `deck` holds exactly the cards of a prebuilt deck (as received from a peer, too). */

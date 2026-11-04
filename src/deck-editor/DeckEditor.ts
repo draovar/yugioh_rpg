@@ -9,7 +9,7 @@
 import Phaser from "phaser";
 import { TYPE, type CardRecord } from "../duel/engine/cardData.ts";
 import {
-  CardList, DECK_RULES, SORT_KEYS, addProblem, copiesAllowed, filterCount, goesToExtra, type FilterState, type SortKey,
+  CardList, DECK_RULES, SORT_KEYS, addProblem, filterCount, goesToExtra, nameCopies, nameCounts, type FilterState, type SortKey,
 } from "../duel/decks/deckRules.ts";
 import { DECKS, type DeckName } from "../duel/decks/decks.ts";
 import type { Deck } from "../duel/engine/DuelSession.ts";
@@ -186,8 +186,8 @@ export class DeckEditor extends Phaser.Scene {
     const r = o?.root.visible ? this.engine.cards.records.get(o.info.code) : undefined;
     if (!o || !r) return;
     const problem = addProblem(this.deck, r, this.engine.cards);
-    const copies = [...this.deck.main, ...this.deck.extra].filter((c) => c === r.code).length;
-    o.add.setLabel(problem ?? `ADD (${copies}/${copiesAllowed(r)})`);
+    const { copies, allowed } = nameCopies(r, nameCounts(this.deck, this.engine.cards), this.engine.cards);
+    o.add.setLabel(problem ?? `ADD (${copies}/${allowed})`);
     o.add.setEnabled(!problem);
   }
 
@@ -407,6 +407,7 @@ export class DeckEditor extends Phaser.Scene {
     this.rows.removeAll(true);
     const inDeck = new Map<number, number>();
     for (const c of [...this.deck.main, ...this.deck.extra]) inDeck.set(c, (inDeck.get(c) ?? 0) + 1);
+    const names = nameCounts(this.deck, this.engine.cards);
     const ink = THEME.panel.paperInk, soft = THEME.panel.inkSoft;
     const g = this.add.graphics();
     this.rows.add(g);
@@ -420,7 +421,11 @@ export class DeckEditor extends Phaser.Scene {
       cardRow(this, this.rows, g, r, ROW_X, y, ROW_W, LIST.rowH, copies ? 14 : 0, ink, soft);
       const artX = ROW_X + 5, artY = y + 1;
       if (i === this.hoverRow && this.hoverArt) this.rows.add(eyeIcon(this, artX, artY));
-      if (copies) this.rows.add(text(this, ROW_X + ROW_W - 2, y + 4, `x${copies}`, { color: copies >= copiesAllowed(r) ? THEME.panel.error : ink, originX: 1 }));
+      if (copies) {
+        // Red once the name is full: cards that share it (Harpie Lady 1 and Harpie Lady) count together.
+        const full = nameCopies(r, names, this.engine.cards);
+        this.rows.add(text(this, ROW_X + ROW_W - 2, y + 4, `x${copies}`, { color: full.copies >= full.allowed ? THEME.panel.error : ink, originX: 1 }));
+      }
       if (r.limit !== undefined) this.rows.add(limitBadge(this, artX - 1, artY - 1, r.limit));
     }
     if (!this.results.length) this.rows.add(text(this, LIST.x + LIST.w / 2, LIST.y + 20, "NO CARDS FOUND", { color: soft, originX: 0.5 }));

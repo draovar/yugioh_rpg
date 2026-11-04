@@ -53,10 +53,13 @@ No Phaser imports: runs unchanged in Node (tools) and the browser.
 - `decks/decks.ts`: prebuilt decks (NPCs, the AI, the deck editor's LOAD): `yugi`, `kaiba`, `goat` + Extra Decks;
   starter decks `kaibaEvolution`, `yugiEvolution` (the Evolution starter decks with the owner's swaps); structure
   decks `zombieMadness` (as printed), `dragonsRoar` (owner's swaps); NPC decks `plants`, `insects` (early game, owner's picks). `deckProblems()` = legality check (40-60 main,
-  ≤15 extra, ≤3 copies, no tokens, all in the pool, and `banlistProblems()` unless the deck is exactly a prebuilt
-  one: prebuilt decks keep their banned cards; `smoke` only lists them).
+  ≤15 extra, no tokens, all in the pool, and the copy limits per name: `banlistProblems()` unless the deck is exactly a
+  prebuilt one, which keeps its banned cards (`smoke` only lists them) and is held to 3 a name).
 - `decks/deckRules.ts`: the deck editor's rules and card list: `DECK_RULES`, `addProblem` (3 copies or the card's banlist
-  `limit` via `copiesAllowed`, 60 main, 15 extra; Fusions go to the Extra Deck), `CardList.find` (every word in the name or, after the name matches, in the
+  `limit` via `copiesAllowed`, 60 main, 15 extra; Fusions go to the Extra Deck). Copies are counted per name
+  (`nameCounts`, `nameCopies`): a card "always treated as" another (its `alias`: Harpie Lady 1 as Harpie Lady, A
+  Legendary Ocean as Umi) shares that card's limit, also in deck building, and the deck editor's ADD (n/3) and red xN
+  count them together; `CardList.find` (every word in the name or, after the name matches, in the
   card text; filters; sort TYPE / NAME / LEVEL / ATK / DEF), filter groups (CARD, MONSTER, ATTRIBUTE, LEVEL, TYPE,
   SPELL/TRAP; only options some pool card has; one-value groups (`single`: all but MONSTER) keep one pick
   (`toggleFilter`), MONSTER picks are alternatives, groups combine), `sortDeck` (how the deck is laid out).
