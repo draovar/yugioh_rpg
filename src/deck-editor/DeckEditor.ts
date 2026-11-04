@@ -17,6 +17,7 @@ import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { CardInfo } from "../duel-screen/CardInfo.ts";
 import { CardSprite } from "../duel-screen/CardSprite.ts";
 import { CARD, INFO, INSET } from "../duel-screen/layout.ts";
+import { ListDrag, dragThumb } from "../ui/listDrag.ts";
 import { FONT_UI, fit, text } from "../ui/pixel.ts";
 import { MAX_CUSTOM_DECKS, chosenDeck, customDeckKey, customDecks, deleteCustomDeck, saveCustomDeck, type CustomDeck } from "../ui/prefs.ts";
 import { createTextInput, type TextInput } from "../ui/textInput.ts";
@@ -32,8 +33,6 @@ import { setViewMode } from "../ui/view.ts";
 
 /** A press held this long shows the card's details instead of adding/removing it (touch screens). */
 const HOLD_MS = 350;
-/** Pointer travel that turns a press on the list into a scroll. */
-const DRAG_PX = 6;
 const MAX_NAME = 16;
 const NEW_DECK = "\u0000new";
 
@@ -431,19 +430,25 @@ export class DeckEditor extends Phaser.Scene {
     if (!this.results.length) this.rows.add(text(this, LIST.x + LIST.w / 2, LIST.y + 20, "NO CARDS FOUND", { color: soft, originX: 0.5 }));
   }
 
+  /** The scrollbar's thumb (top, height), or null when every result fits. */
+  private thumb(): { y: number; h: number } | null {
+    const total = this.results.length;
+    if (total <= LIST.rows) return null;
+    const h = Math.max(12, Math.round(SCROLL.h * LIST.rows / total));
+    return { y: SCROLL.y + Math.round((SCROLL.h - h) * this.scrollRow / this.maxScroll()), h };
+  }
+
   private drawScrollbar() {
     const g = this.scrollbar.clear();
     g.fillStyle(THEME.panel.inkSoft, 0.35).fillRect(SCROLL.x, SCROLL.y, SCROLL.w, SCROLL.h);
-    const total = this.results.length;
-    if (total <= LIST.rows) return;
-    const thumbH = Math.max(12, Math.round(SCROLL.h * LIST.rows / total));
-    const thumbY = SCROLL.y + Math.round((SCROLL.h - thumbH) * this.scrollRow / this.maxScroll());
-    g.fillStyle(THEME.panel.ink).fillRect(SCROLL.x, thumbY, SCROLL.w, thumbH);
+    const t = this.thumb();
+    if (t) g.fillStyle(THEME.panel.ink).fillRect(SCROLL.x, t.y, SCROLL.w, t.h);
   }
 
   /**
    * One zone over the list handles it all: hover highlights a row (and shows the eye over its art); click / tap adds
-   * a copy, or opens the card when on its art; dragging (touch) scrolls. The mouse wheel scrolls; so does the scrollbar.
+   * a copy, or opens the card when on its art; dragging scrolls (`ListDrag`, as the shops' lists). The mouse wheel
+   * scrolls; so does the scrollbar.
    */
   private buildListInput() {
     const zone = this.add.zone(LIST.x, LIST.y, LIST.w, LIST_H).setOrigin(0).setInteractive({ useHandCursor: true });
@@ -456,46 +461,34 @@ export class DeckEditor extends Phaser.Scene {
       const artX = ROW_X + 5, artY = LIST.y + INSET.paper + i * LIST.rowH + 1;
       return i >= 0 && p.x >= artX && p.x < artX + 32 && p.y >= artY && p.y < artY + 32;
     };
-    let down: { y: number; scroll: number; row: number } | null = null;
-    let dragging = false;
     const hover = (i: number, art: boolean) => {
       if (i === this.hoverRow && art === this.hoverArt) return;
       this.hoverRow = i;
       this.hoverArt = art;
       this.drawRows();
     };
+    const drag = new ListDrag(this, zone, {
+      rowH: LIST.rowH, row: () => this.scrollRow, scrollTo: (row) => this.scrollTo(row), onDrag: () => hover(-1, false),
+    });
+    /** The row a click started on: it only counts if it ends there too. */
+    let downRow = -1;
     zone.on("pointermove", (p: Phaser.Input.Pointer) => {
-      if (down && p.isDown) {
-        if (!dragging && Math.abs(p.y - down.y) > DRAG_PX) {
-          dragging = true;
-          hover(-1, false);
-        }
-        if (dragging) this.scrollTo(down.scroll - (p.y - down.y) / LIST.rowH);
-        return;
-      }
-      if (p.wasTouch) return;
+      if (p.isDown || p.wasTouch) return;
       const i = rowAt(p);
       hover(i, onArt(p, i));
     });
-    zone.on("pointerout", () => {
-      hover(-1, false);
-      down = null;
-    });
-    zone.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      down = { y: p.y, scroll: this.scrollRow, row: rowAt(p) };
-      dragging = false;
-    });
+    zone.on("pointerout", () => hover(-1, false));
+    zone.on("pointerdown", (p: Phaser.Input.Pointer) => { downRow = rowAt(p); });
     zone.on("pointerup", (p: Phaser.Input.Pointer) => {
       if (p.wasTouch) hover(-1, false);
       const i = rowAt(p);
-      if (down && !dragging && i >= 0 && i === down.row) {
+      if (drag.clicking && i >= 0 && i === downRow) {
         const r = this.results[this.scrollRow + i];
         if (onArt(p, i)) {
           hover(-1, false);
           this.openCard(r.code);
         } else this.addCard(r);
       }
-      down = null;
     });
     // Wheel over the list panel: one row per 50 units (a mouse notch is ~100; trackpads send many small steps).
     let wheel = 0;
@@ -512,11 +505,8 @@ export class DeckEditor extends Phaser.Scene {
         hover(i, onArt(p, i));
       }
     });
-    // Scrollbar: press or drag anywhere on it to jump there.
     const bar = this.add.zone(SCROLL.x - 1, SCROLL.y, SCROLL.w + 3, SCROLL.h).setOrigin(0).setInteractive({ useHandCursor: true });
-    const jump = (p: Phaser.Input.Pointer) => this.scrollTo(((p.y - SCROLL.y) / SCROLL.h) * (this.maxScroll() + 1) - 0.5);
-    bar.on("pointerdown", jump);
-    bar.on("pointermove", (p: Phaser.Input.Pointer) => { if (p.isDown) jump(p); });
+    dragThumb(this, bar, SCROLL, () => this.thumb(), () => this.maxScroll(), (row) => this.scrollTo(row));
   }
 
   /** Adds a copy of `r` (to the Extra Deck if it's a Fusion), unless a rule says no. */

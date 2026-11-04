@@ -11,8 +11,9 @@ import { INFO, INSET } from "../duel-screen/layout.ts";
 import { cardRow } from "../deck-editor/listRow.ts";
 import { FONT_UI, INK, fit, measure, text } from "../ui/pixel.ts";
 import { THEME, ui } from "../ui/theme.ts";
+import { ListDrag, dragThumb } from "../ui/listDrag.ts";
 import { LIST_BUTTON_H, makeListButton } from "../ui/widgets.ts";
-import { BUTTON_H, DRAG_PX, RUNEWOOD, shopButton } from "./shopParts.ts";
+import { BUTTON_H, RUNEWOOD, shopButton } from "./shopParts.ts";
 
 /** A listed card: its chip (a short label on a colour; null: none), its name and (card rows) how many copies. */
 export interface BoardRow {
@@ -153,34 +154,14 @@ export class ShopBoard {
     });
     const rowAt = (y: number) => this.scrollRow + Math.floor((y - LIST.y) / this.list.rowH);
     const zone = scene.add.zone(LIST.x, LIST.y, SCROLL.x - SCROLL_REACH - LIST.x, SCROLL.h).setOrigin(0).setInteractive({ useHandCursor: true });
-    let press: { y: number; row: number; moved: boolean } | null = null;
-    zone.on("pointerdown", (p: Phaser.Input.Pointer) => { press = { y: p.y, row: this.scrollRow, moved: false }; });
+    const drag = new ListDrag(scene, zone, { rowH: this.list.rowH, row: () => this.scrollRow, scrollTo: (row) => this.scrollTo(row) });
     zone.on("pointermove", (p: Phaser.Input.Pointer) => { if (!p.isDown) this.hover(rowAt(p.y)); });
     zone.on("pointerout", () => this.hover(-1));
-    zone.on("pointerup", (p: Phaser.Input.Pointer) => {
-      if (press && !press.moved) this.openDetails(rowAt(p.y));
-      press = null;
-    });
-    scene.input.on("pointermove", (p: Phaser.Input.Pointer) => {
-      if (!press || !p.isDown) return;
-      if (Math.abs(p.y - press.y) > DRAG_PX) press.moved = true;
-      if (press.moved) this.scrollTo(press.row - Math.round((p.y - press.y) / this.list.rowH));
-    });
-    scene.input.on("pointerup", () => { press = null; });
+    zone.on("pointerup", (p: Phaser.Input.Pointer) => { if (drag.clicking) this.openDetails(rowAt(p.y)); });
 
-    // The scrollbar: grab the thumb and drag it (the pointer may wander off the bar); pressing the track elsewhere
-    // brings the thumb's middle there, still held.
     const bar = scene.add.zone(SCROLL.x - SCROLL_REACH, SCROLL.y, SCROLL.w + 2 * SCROLL_REACH, SCROLL.h).setOrigin(0)
       .setInteractive({ useHandCursor: true });
-    let grab: number | null = null;
-    bar.on("pointerdown", (p: Phaser.Input.Pointer) => {
-      const t = this.thumb();
-      if (!t) return;
-      grab = p.y >= t.y && p.y < t.y + t.h ? p.y - t.y : Math.floor(t.h / 2);
-      this.dragThumb(p.y - grab);
-    });
-    scene.input.on("pointermove", (p: Phaser.Input.Pointer) => { if (grab !== null && p.isDown) this.dragThumb(p.y - grab); });
-    scene.input.on("pointerup", () => { grab = null; });
+    dragThumb(scene, bar, SCROLL, () => this.thumb(), () => this.rows.length - this.list.rows, (row) => this.scrollTo(row));
     this.details = this.makeDetails();
   }
 
@@ -246,12 +227,6 @@ export class ShopBoard {
     if (this.rows.length <= this.list.rows) return null;
     const h = Math.max(8, Math.round((SCROLL.h * this.list.rows) / this.rows.length));
     return { y: SCROLL.y + Math.round(((SCROLL.h - h) * this.scrollRow) / (this.rows.length - this.list.rows)), h };
-  }
-
-  /** Scrolls so the thumb's top is as near `top` as the rows allow. */
-  private dragThumb(top: number) {
-    const t = this.thumb();
-    if (t) this.scrollTo(Math.round(((top - SCROLL.y) / (SCROLL.h - t.h)) * (this.rows.length - this.list.rows)));
   }
 
   /**

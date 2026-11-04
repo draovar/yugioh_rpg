@@ -3,6 +3,7 @@
 // EXIT, the Runewood list buttons, the price labels, what's on the fixture scrolling a row at a time
 // (ScrollingFixture). The shops have their own look, not the UI theme's (the owner's choice: one real-shop look).
 import Phaser from "phaser";
+import { DRAG_PX } from "../ui/listDrag.ts";
 import { text } from "../ui/pixel.ts";
 import { THEMES } from "../ui/theme.ts";
 import { LIST_BUTTON_H } from "../ui/widgets.ts";
@@ -22,8 +23,6 @@ export const IN = { x: CASE.x + 6, y: CASE.y + 6, w: CASE.w - 12, h: CASE.h - 12
 export const RUNEWOOD = THEMES.runewood;
 /** The shops' buttons: 2px taller than a list row, the label in the middle. */
 export const BUTTON_H = LIST_BUTTON_H + 2;
-/** Pointer travel that turns a press into a scroll (a shorter one picks or opens), as in the deck editor. */
-export const DRAG_PX = 6;
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const TAG = { w: 24, h: 9 };
 /** A picked item lifts (and the one picked before settles back) in this long. */

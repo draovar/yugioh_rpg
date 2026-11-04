@@ -353,7 +353,8 @@ table). Geometry in `layout.ts`.
   toggle buttons per group on a 5-column grid, long labels two cells, LEVEL half cells in one row; `FILTER_COLUMNS = 0`
   = buttons as wide as their labels); 8 rows with art (`listRow.ts`: `cardRow` = frame-colour strip, art, text lines,
   shared with the deck shop's deck list; the eye icon, the banlist badge `limitBadge`),
-  scroll by wheel / drag / scrollbar.
+  scroll by wheel (a row per 50 units), dragging the rows or the scrollbar's thumb (`ui/listDrag.ts`, as the shops'
+  boards).
 - Click a listed card = add, a deck card = remove. Hovering a listed card's art shows an eye over it; clicking the art
   opens the card's details (`CardInfo`) over the list with ADD / CLOSE (Esc). Hovering a deck card (touch: holding it)
   shows its details over the list while hovered (and closes an opened card: the list is back afterwards).
@@ -402,9 +403,9 @@ release date and `[number, passcode, rarity]` per card).
   light with a drop shadow like a card name in the info panel), release month, set size, cards per pack, then on the
   paper inset every card of the set with a rarity chip (`RARITIES` in `boosters.ts`: SCR, UR, SR, R, SSP, SP, C), highest rarity
   first, then by number; 30 rows at a time, down to just above the bottom row (wheel, drag the list, or grab the scrollbar's thumb and drag it: pressing
-  the track elsewhere brings the thumb there, still held, and the pointer may wander off the bar; the row under the
-  pointer is highlighted). A press
-  that doesn't drag (`DRAG_PX`, as the deck editor) opens that card's details over the checklist, like the deck
+  the track elsewhere brings the thumb there, still held; `ui/listDrag.ts`, shared with the deck editor; the row under
+  the pointer is highlighted). A press
+  that doesn't drag (`DRAG_PX`) opens that card's details over the checklist, like the deck
   editor's: the duel's info panel (`CardInfo`, the UI theme's board), CLOSE (Esc; picking another
   pack or buying closes it too). Under the list: the price (the packs' total) in the set name's lettering (light, drop
   shadow), the pack count in plain black at the buttons' label size (centred on its glyphs between - and +), - / +
@@ -488,7 +489,10 @@ now only the 12 whose box pictures are cut out (the other 9 commented out).
 `pixel.ts` (bitmap text via `text()`, crisp 1px borders, `GlyphSnapSubmitter`), `widgets.ts` (wood / list buttons,
 drop-downs), `theme.ts` (see Themes above), `prefs.ts` (everything saved in localStorage), `textInput.ts` (text entry
 in the canvas: an invisible HTML input over the drawn field for phone keyboards and paste; it pauses Phaser's global
-key capture while it exists; card search, lobby room code, deck names), `touch.ts`.
+key capture while it exists; card search, lobby room code, deck names), `touch.ts`, `listDrag.ts` (scrolling a list
+by hand, the shops' boards and the deck editor alike: `ListDrag` = the rows follow a drag, a row per row height, until
+the press ends, wherever the pointer goes, so a finger that slides off a small list keeps scrolling; `dragThumb` = the
+scrollbar's thumb, grabbed or brought under the pointer, then dragged; `DRAG_PX` = travel that makes a press a drag).
 
 `chipsGlove.ts`: the chip count, top-left in the overworld's HUD (the shops still write `CHIPS: N`): a red glove
 (`data/ui/chips-glove.png`, drawn for the game; a 1px light outline and a soft shadow set it apart from the map)
