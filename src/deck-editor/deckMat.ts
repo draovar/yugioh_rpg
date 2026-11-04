@@ -29,8 +29,11 @@ export function drawDeckTable(scene: Phaser.Scene, parts: Phaser.GameObjects.Con
  * A deck's labels ("MAIN DECK" and its size, red under the minimum; Monsters / Spells / Traps; "EXTRA DECK" and its
  * size) and the empty slots of the first 40 Main / 10 Extra, like the duel's zones: outlined on the mat, or plates on
  * the table ("zone-monster" for the Main Deck, "menu-back" for the Extra Deck, as the duel's monster / other zones).
+ * `slots` false: the labels only (the deck opening, whose cards are dealt onto a bare mat).
  */
-export function deckSlots(scene: Phaser.Scene, into: Phaser.GameObjects.Container, main: number[], extra: number[], cards: CardDb) {
+export function deckSlots(
+  scene: Phaser.Scene, into: Phaser.GameObjects.Container, main: number[], extra: number[], cards: CardDb, slots = true,
+) {
   const label = THEME.field.label, kinds = countKinds(main, cards);
   into.add(text(scene, GRID_X, MAIN_LABEL_Y, "MAIN DECK", { color: label }));
   into.add(text(scene, GRID_X + 40, MAIN_LABEL_Y, String(main.length), { color: main.length < DECK_RULES.mainMin ? SHORT_COLOR : THEME.plate.ink }));
@@ -38,6 +41,7 @@ export function deckSlots(scene: Phaser.Scene, into: Phaser.GameObjects.Containe
   into.add(text(scene, GRID_X, EXTRA_LABEL_Y, "EXTRA DECK", { color: label }));
   into.add(text(scene, GRID_X + 44, EXTRA_LABEL_Y, String(extra.length), { color: THEME.plate.ink }));
 
+  if (!slots) return;
   const empty: [number, number, boolean][] = [];
   for (let i = main.length; i < 40; i++) empty.push([GRID_X + (i % 10) * PITCH, MAIN_Y + Math.floor(i / 10) * ROW_PITCH, true]);
   for (let i = extra.length; i < 10; i++) empty.push([GRID_X + i * PITCH, EXTRA_Y, false]);

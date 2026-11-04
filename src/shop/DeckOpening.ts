@@ -4,7 +4,8 @@
 // Deck rows, Extra Deck row), then turn over in a wave; the foils (Rares and up) turn last, one by one, with the pack
 // opening's rarity effects (revealFx.ts), each shown in the info panel, and keep their glow. Hovering or tapping a
 // face-up card shows it there. A click, Esc, Enter, Space or X hurries it all along. Then the bar offers SAVE AS DECK
-// (`onSave`: one of the custom deck slots) and DONE (Esc).
+// (`onSave`: one of the custom deck slots) and DONE (Esc); for the starter deck choice (`take`), BACK (Esc) and the
+// button that takes the deck.
 import Phaser from "phaser";
 import type { Engine } from "../duel/engine/loadEngine.ts";
 import { CardSprite } from "../duel-screen/CardSprite.ts";
@@ -32,6 +33,9 @@ export interface DeckOpeningOptions {
   engine: Engine;
   /** Saves the deck as a custom deck slot: whether it was, and the line the bar shows. */
   onSave: () => { saved: boolean; message: string };
+  /** The starter deck choice: the bar's buttons are BACK (instead of DONE) and, at its right end, this label (instead
+   * of SAVE AS DECK; `onSave` takes the deck). */
+  take?: string;
   onClose: () => void;
 }
 
@@ -88,7 +92,7 @@ export class DeckOpening {
     void this.run();
   }
 
-  /** Esc: DONE once it's laid out, else hurry; Enter / Space / X: hurry. */
+  /** Esc: DONE (BACK) once it's laid out, else hurry; Enter / Space / X: hurry. */
   handleKey(code: string) {
     if (code === "Escape" && this.finished) this.close();
     else if (code === "Escape" || code === "Enter" || code === "Space" || code === "KeyX") this.hurry();
@@ -101,7 +105,7 @@ export class DeckOpening {
   private async run() {
     const sc = this.scene, cards = this.opts.engine.cards;
     await this.tween({ targets: [this.root, this.panel.root], alpha: 1, duration: T.shade });
-    deckSlots(sc, this.layer, this.opts.main, this.opts.extra, cards);
+    deckSlots(sc, this.layer, this.opts.main, this.opts.extra, cards, false);
 
     // The cards wait face down in a stack in the box (hidden until it opens), each with its place on the mat.
     this.cards = deckPlaces(this.opts.main, this.opts.extra, cards).map((p) => {
@@ -202,17 +206,19 @@ export class DeckOpening {
     return this.opts.rarity.get(c.code) ?? "Common";
   }
 
-  /** The deck is laid out: SAVE AS DECK and DONE on the bar. */
+  /** The deck is laid out: SAVE AS DECK and DONE on the bar (the starter choice: BACK, then taking the deck). */
   private finish() {
     this.finished = true;
-    const y = BAR.y + INSET.plate, right = BAR.x + BAR.w - INSET.plate, saveX = right - DONE_W - GAP - SAVE_W;
-    const save = makeListButton(this.scene, saveX, y, SAVE_W, "SAVE AS DECK", () => {
+    const sc = this.scene, take = this.opts.take, y = BAR.y + INSET.plate, right = BAR.x + BAR.w - INSET.plate;
+    const saveW = take ? measure(sc, FONT_UI, take) + 13 : SAVE_W;
+    const saveX = take ? right - saveW : right - DONE_W - GAP - SAVE_W, doneX = take ? saveX - GAP - DONE_W : right - DONE_W;
+    const save = makeListButton(sc, saveX, y, saveW, take ?? "SAVE AS DECK", () => {
       const { saved, message } = this.opts.onSave();
       // Right-aligned just left of the buttons.
-      this.status.setText(message).setX(saveX - GAP - 4 - measure(this.scene, FONT_UI, message));
+      this.status.setText(message).setX(Math.min(saveX, doneX) - GAP - 4 - measure(sc, FONT_UI, message));
       if (saved) save.setEnabled(false);
     });
-    this.root.add([...save, ...makeListButton(this.scene, right - DONE_W, y, DONE_W, "DONE", () => this.close())]);
+    this.root.add([...save, ...makeListButton(sc, doneX, y, DONE_W, take ? "BACK" : "DONE", () => this.close())]);
   }
 
   /** A face-up card in the info panel. */

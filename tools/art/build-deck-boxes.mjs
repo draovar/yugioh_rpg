@@ -3,8 +3,9 @@
 // at 1x (DECK_BOX_STYLE in tools/lib/art-style.mjs, the hanger hole cut through; the soft photos looked smeary shown
 // big). The cut-outs share one 200x300 frame with the box at the same pixels in each (deck-boxes/aligned/), so they're
 // all cropped to the same rectangle and keep their places: every box hangs from its peg at the same point. Any other
-// picture has its transparent padding cut (if it has transparency) and is fitted into that rectangle's size, top
-// centred, first (no hole).
+// picture (the first starter decks' flat blister packs, cropped to the pack: src/shop/StarterDecks.ts) has its
+// transparent padding cut (if it has transparency) and is scaled to fit inside that rectangle, keeping its own shape
+// (no hole).
 // Usage: node tools/art/build-deck-boxes.mjs
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -20,7 +21,8 @@ const OUT = path.join(ROOT, "public/deck-boxes");
 const FRAME = { w: 200, h: 300 }, CROP = { left: 24, top: 29, width: 151, height: 248 };
 /**
  * Output folder -> scale: the pegboard's boxes (DECK_BOX in src/shop/DeckShop.ts, 78x126 with the outline) and
- * large/, the cut-outs' own size (153x250, the deck unboxing's box, src/shop/DeckOpening.ts).
+ * large/, the cut-outs' own size (153x250, the deck unboxing's box, src/shop/DeckOpening.ts). A flat pack fills CROP's
+ * width: 78x116 and 153x229.
  */
 const SIZES = { "": STYLE.scale, large: 1 };
 /**
@@ -58,19 +60,19 @@ for (const file of readdirSync(SRC).filter((f) => f.endsWith(".png")).sort()) {
   console.log(`${file}: ${width}x${height}${framed ? " (frame)" : ""} -> ${sizes.join(", ")}`);
 }
 
-/** The box at CROP's size, transparent around it. */
+/** The box (with alpha) and its size: a framed one at CROP's size, transparent around it; any other fitted inside CROP. */
 async function cutOut(src, framed, hasAlpha) {
-  if (framed) return sharp(src).extract(CROP).png().toBuffer();
+  if (framed) return { buf: await sharp(src).extract(CROP).png().toBuffer(), w: CROP.width, h: CROP.height };
   const trimmed = hasAlpha ? await sharp(src).trim({ threshold: 0 }).toBuffer() : src;
-  return sharp(trimmed)
-    .resize(CROP.width, CROP.height, { fit: "contain", position: "top", kernel: "lanczos3", background: { r: 0, g: 0, b: 0, alpha: 0 } })
-    .png().toBuffer();
+  const { data, info } = await sharp(trimmed).ensureAlpha()
+    .resize(CROP.width, CROP.height, { fit: "inside", kernel: "lanczos3" }).png().toBuffer({ resolveWithObject: true });
+  return { buf: data, w: info.width, h: info.height };
 }
 
 /** The box at `scale` as pixel art, in a picture with 1px of outline all round (the hanger hole cut if `framed`). */
-async function render(box, scale, framed) {
+async function render({ buf: box, w, h }, scale, framed) {
   // Colour (lanczos3, then boosted) and coverage separately; the colours mapped to the box's own palette.
-  const art = { w: Math.round(CROP.width * scale), h: Math.round(CROP.height * scale) }, pic = { w: art.w + 2, h: art.h + 2 };
+  const art = { w: Math.round(w * scale), h: Math.round(h * scale) }, pic = { w: art.w + 2, h: art.h + 2 };
   const rgb = await boost(sharp(box).removeAlpha().resize(art.w, art.h, { kernel: "lanczos3", fit: "fill" }), STYLE).raw().toBuffer();
   const alpha = await sharp(box).extractChannel(3).resize(art.w, art.h, { kernel: "cubic", fit: "fill" }).raw().toBuffer();
   const opaque = [];

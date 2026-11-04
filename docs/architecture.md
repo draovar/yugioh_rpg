@@ -362,16 +362,17 @@ table). Geometry in `layout.ts`.
   changes ask SAVE / DISCARD / CANCEL); the message and rename dialogs are in `dialogs.ts`.
 - Custom decks live in localStorage (`prefs.ts`: `customDecks`, up to `MAX_CUSTOM_DECKS`).
 
-## Card shop and deck shop (`src/shop/`)
+## Card shop, deck shop, starter decks (`src/shop/`)
 
-Two shop scenes, "fixed" 640x360, laid out alike: a fixture on a panelled wall on the left, a board on the right. What
-they share: `shopParts.ts` (colours `C`; `IN`, the fixture's inside; `drawRoom`: wall, sign, frame,
+Two shop scenes and the starter deck choice, "fixed" 640x360, laid out alike: a fixture on a panelled wall on the
+left, a board on the right. What they share: `shopParts.ts` (colours `C`; `CASE`, the fixture's frame, and `IN`, its
+inside; `drawRoom`: wall, sign (wider for a longer title), frame, `woodBlock` (a piece of the fixtures' wood),
 baked into one texture, the scene drawing the inside; `shopButton`: Runewood list-row buttons, EXIT in dark brown with
 a white label, - / +, BUY; `drawChipsAndExit`, `blankPicture` (a missing picture), `drawTag` / `tagPrice` (price
 labels), `liftTo` (the picked item's lift), `monthYear`; `ScrollingFixture`: what's on the fixture, scrolling, described
 below) and `ShopBoard.ts` (the
 board on the right: name, facts, a card list of chip rows or the deck editor's card rows, details, price, - / +, BUY;
-described below). They have their
+or a `note` instead of the price and another `buyLabel`; described below). They have their
 own look, not the UI theme's (the owner's choice: one real-shop look; the board is always Runewood's board and paper,
 from `THEMES.runewood`, loaded under keys of its own).
 
@@ -443,8 +444,9 @@ release date and `[number, passcode, rarity]` per card).
 
 The `DeckShop` scene (a `deckshop` spot in the overworld, or `?deckshop`). `decks.ts` = the decks on sale (`DECKS`:
 set code, name, `short` (the saved deck's name, at most 16 characters like the deck editor's), kind (starter /
-structure), TCG release, price), the starter and structure decks up to The Dark Emperor (2008), in release order; for
-now only the 12 whose box pictures are cut out (the other 9 commented out).
+structure), TCG release, price), the starter and structure decks up to The Dark Emperor (2008), in release order,
+but the first four starter decks (`STARTER_DECKS`: the player's first deck, below). `deckRows` (a deck on the board)
+and `deckCards` (its passcodes and rarities) serve both scenes.
 
 - Left: a pegboard on the panelled wall (sign DECK SHOP, CHIPS, EXIT / Esc): brown hardboard (baked with the room) and
   its holes, `HOLE` px apart (in the `ScrollingFixture` content, so they scroll with the rows; `ROW_H` is 13 holes and
@@ -472,7 +474,8 @@ now only the 12 whose box pictures are cut out (the other 9 commented out).
   release and `[number, passcode, rarity, copies]` per card).
 - BUY (X / Enter / Space) opens the deck (`DeckOpening.ts`, free for now: no chips spent): an overlay like the pack
   opening (depth 100, a zone over everything takes the clicks, the shop passes it its keys), the deck editor's left side
-  (`drawDeckTable`, the deck's name on the bar, `deckSlots`) and the pack opening's `OpeningPanel` on the right. The box comes
+  (`drawDeckTable`, the deck's name on the bar, `deckSlots` with its labels only: no slots, the cards land on the bare mat)
+  and the pack opening's `OpeningPanel` on the right. The box comes
   in on the mat at its full size (`public/deck-boxes/large/<CODE>.png`, 153x250 at 1x; without it the pegboard's at
   2x), wiggles, squashes and flashes: its cards (a passcode per copy, Fusions to the Extra Deck, `goesToExtra`) rise out
   face down while it drops away, are dealt one by one to their deck editor places (`deckPlaces`), and turn over in a
@@ -483,6 +486,28 @@ now only the 12 whose box pictures are cut out (the other 9 commented out).
   A click, Esc, Enter, Space or X hurries the rest (`HURRY`: later steps play faster). Then the bar offers SAVE AS
   DECK (a custom deck slot named `short`, while fewer than `MAX_CUSTOM_DECKS` are used; the result shows left of the
   buttons) and DONE (Esc).
+
+### Starter deck choice (`StarterDecks.ts`)
+
+The `StarterDecks` scene (`?starter` for now; it becomes the start of the game later, once the game has one). The first
+four starter decks (`STARTER_DECKS` in `decks.ts`: Yugi, Kaiba, Joey, Pegasus, 2002-03), one of them the player's first
+deck.
+
+- Left: a glass display case on a wooden cabinet in the shops' fixture place (`VIT`; sign STARTER DECKS, no CHIPS or
+  EXIT: a deck has to be taken). Baked with the room (`drawCase`): the cornice, the glass front between two wood posts
+  (the navy back, a dark red velvet floor), a brass lamp per pack under the cornice, the rail, the cabinet with one wide
+  recessed panel. The packs stand in a row on the velvet (78x116 at 1x, `PACK`, `GAP` apart, centred), each over its
+  30% black shadow, a clear stand's lip along its bottom; light streaks on the glass over them; under each, on the
+  cabinet, a brass plaque with its name. Clicking a pack or its plaque, or Left / Right, picks it (`drawPicked`): its
+  spotlight comes on (a cone and a pool of light, `LIT`; the others faint, `UNLIT`), its plaque turns yellow, the
+  others are veiled 25% darker (`DIM`).
+- Pictures: the 2002-03 starter decks were flat blister packs, not boxes: `vendor/paid/deck-boxes/<CODE>.png` is the
+  pack cropped flat (the downloads in `originals/`), which `build-deck-boxes` fits to the boxes' width (78x116,
+  `large/` 153x229) without a hanger hole.
+- Right: `ShopBoard` like the deck shop's, `note` "PICK YOUR FIRST DECK" instead of a price, `buyLabel` CHOOSE (X /
+  Enter / Space): the pack opens over the case (`DeckOpening` with `take`: the bar offers BACK (Esc), putting it away,
+  and TAKE THIS DECK: a custom deck slot named `short`, `setChosenDeck` (the deck you duel with), then the
+  card wave to the overworld).
 
 ## Shared UI (`src/ui/`)
 
@@ -550,10 +575,11 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   (`vendor/paid/booster-packs/<SET>.png`, pack pictures saved by hand, in the private assets repo; the deploy runs it
   after `build-tiles` → `public/boosters/`, each 64x110, the card shop's 1x
   size: transparent padding cut, other shapes stretched; plus `public/boosters/large/` at 100x172 for opening packs),
-  `build-deck-boxes` (`vendor/paid/deck-boxes/<CODE>.png`, the deck shop's box pictures, in the private assets repo; the
-  deploy runs it after `build-boosters` → `public/deck-boxes/`, each 78x126 pixel art: the shared 200x300 frame's cut-outs cropped
-  to one rectangle, other pictures trimmed and fitted in, top centred; then half size, own 32 colours, outline; and
-  `large/`, the same at full size, 153x250, for opening a deck).
+  `build-deck-boxes` (`vendor/paid/deck-boxes/<CODE>.png`, the deck shop's box pictures and the starter decks' flat
+  packs, in the private assets repo; the deploy runs it after `build-boosters` → `public/deck-boxes/`, each 78x126
+  pixel art: the shared 200x300 frame's cut-outs cropped to one rectangle, other pictures trimmed and fitted inside it
+  at their own shape (the packs: 78x116); then half size, own 32 colours, outline; and `large/`, the same at full
+  size, 153x250 (packs 153x229), for opening a deck).
   - `build-characters`: `data/characters/reshef-sheet.png` (every Reshef of Destruction character, green cells on a
     purple grid) sliced per `data/characters/characters.json` (name → 3x3 block or explicit cells per direction,
     `nudge` = move single frames by pixels; `{ "sheet": "x.png" }` = a ready-made 96x96 sheet in the same layout, drawn

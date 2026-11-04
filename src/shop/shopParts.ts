@@ -4,7 +4,7 @@
 // (ScrollingFixture). The shops have their own look, not the UI theme's (the owner's choice: one real-shop look).
 import Phaser from "phaser";
 import { DRAG_PX } from "../ui/listDrag.ts";
-import { text } from "../ui/pixel.ts";
+import { FONT_UI, measure, text } from "../ui/pixel.ts";
 import { THEMES } from "../ui/theme.ts";
 import { LIST_BUTTON_H } from "../ui/widgets.ts";
 
@@ -18,7 +18,7 @@ export const C = {
 };
 
 /** The fixture on the left (wood frame) and its inside. */
-const CASE = { x: 8, y: 30, w: 400, h: 324 };
+export const CASE = { x: 8, y: 30, w: 400, h: 324 };
 export const IN = { x: CASE.x + 6, y: CASE.y + 6, w: CASE.w - 12, h: CASE.h - 12 };
 export const RUNEWOOD = THEMES.runewood;
 /** The shops' buttons: 2px taller than a list row, the label in the middle. */
@@ -88,13 +88,11 @@ export function drawRoom(scene: Phaser.Scene, title: string, inside: (g: Phaser.
   g.fillStyle(C.wallSeam);
   for (let x = 12; x < 640; x += 24) g.fillRect(x, 0, 1, 360);
 
-  const signW = 84, signX = CASE.x + CASE.w / 2 - signW / 2;
+  // 84 wide, wider for a longer title (at 2x, 6 px either side).
+  const signW = Math.max(84, 2 * measure(scene, FONT_UI, title) + 12), signX = CASE.x + CASE.w / 2 - signW / 2;
   g.fillStyle(C.signEdge).fillRect(signX, 5, signW, 20).fillStyle(C.sign).fillRect(signX + 1, 6, signW - 2, 18);
 
-  g.fillStyle(C.woodEdge).fillRect(CASE.x, CASE.y, CASE.w, CASE.h);
-  g.fillStyle(C.wood).fillRect(CASE.x + 1, CASE.y + 1, CASE.w - 2, CASE.h - 2);
-  g.fillStyle(C.woodLight).fillRect(CASE.x + 1, CASE.y + 1, CASE.w - 2, 1).fillRect(CASE.x + 1, CASE.y + 1, 1, CASE.h - 2);
-  g.fillStyle(C.woodDark).fillRect(CASE.x + 1, CASE.y + CASE.h - 2, CASE.w - 2, 1).fillRect(CASE.x + CASE.w - 2, CASE.y + 1, 1, CASE.h - 2);
+  woodBlock(g, CASE.x, CASE.y, CASE.w, CASE.h);
   g.fillStyle(C.woodEdge).fillRect(IN.x - 1, IN.y - 1, IN.w + 2, IN.h + 2);
   inside(g);
   const baked = scene.add.renderTexture(0, 0, 640, 360).setOrigin(0);
@@ -102,6 +100,14 @@ export function drawRoom(scene: Phaser.Scene, title: string, inside: (g: Phaser.
   g.destroy();
 
   text(scene, CASE.x + CASE.w / 2, 10, title, { color: C.signInk, scale: 2, originX: 0.5 });
+}
+
+/** A piece of the fixtures' wood: a dark edge, light along its top and left, darker along its bottom and right. */
+export function woodBlock(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number) {
+  g.fillStyle(C.woodEdge).fillRect(x, y, w, h);
+  g.fillStyle(C.wood).fillRect(x + 1, y + 1, w - 2, h - 2);
+  g.fillStyle(C.woodLight).fillRect(x + 1, y + 1, w - 2, 1).fillRect(x + 1, y + 1, 1, h - 2);
+  g.fillStyle(C.woodDark).fillRect(x + 1, y + h - 2, w - 2, 1).fillRect(x + w - 2, y + 1, 1, h - 2);
 }
 
 /** The chip count top-left; EXIT in dark brown at the fixture's right edge, level with the sign. */

@@ -51,13 +51,17 @@
    Later for the shop: each `shop` spot lists the sets it sells (towns carry different eras); the other store packs of
    the era (Duelist Packs, Dark Beginning / Dark Revelation, Retro Pack, Premium Packs, Gold Series: other pack sizes
    and rarity mixes, pictures saved by hand); prize packs and promos as rewards rather than stock.
-   Deck shop (`src/shop/DeckShop.ts`, a `deckshop` spot or `?deckshop`): ✅ the 12 starter and structure decks whose box
+   Deck shop (`src/shop/DeckShop.ts`, a `deckshop` spot or `?deckshop`): ✅ the 17 starter and structure decks whose box
    pictures are cut out (by hand; `build-deck-boxes` makes them pixel art: half size, own 32 colours, outline) hanging
    on a pegboard, 8 in view, scrolling a row at a time; picking; the board with name, price and the deck list (the deck
    editor's card rows, copies, rarity chips; `data/decks.json`, copy counts from Yugipedia's set lists); buying: the box
    opens over the shop onto the deck editor's mat (foils last with the pack effects), SAVE AS DECK makes it a custom
-   deck slot (free for now, one at a time). Next: the other 9 decks once their box pictures are cut (SDY,
-   SDK, SDJ, SDP and the five on white).
+   deck slot (free for now, one at a time).
+   Starter deck choice (`src/shop/StarterDecks.ts`, `?starter`): ✅ the player takes one of the first four
+   starter decks (Yugi, Kaiba, Joey, Pegasus: their flat blister packs in a glass display case, spotlights, brass
+   plaques; the deck shop's board with CHOOSE; the pack opens, BACK or TAKE THIS DECK: saved as a custom deck slot and
+   the deck you duel with). Next: make it the start of the real game (it only opens with
+   `?starter` for now); better pictures of the four packs (the current ones are small soft downloads).
    Chips: at most 99 (`MAX_CHIPS`), shown on the overworld's glove (`src/ui/chipsGlove.ts`; the shops still write
    them as text); the placeholder prices (packs 50-60, decks 200-250) need to fit that cap.
    Next: card collection (keep pulled cards, spend chips), rewards/boosters after duels,

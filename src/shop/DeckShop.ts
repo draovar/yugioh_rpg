@@ -9,19 +9,16 @@
 // Box pictures: public/deck-boxes/<CODE>.png (`npm run build-deck-boxes`: pixel art at half the cut-outs' size, with an
 // outline); a missing one shows as a blank box with its code.
 import Phaser from "phaser";
-import { goesToExtra, sortDeck } from "../duel/decks/deckRules.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { MAX_CUSTOM_DECKS, customDecks, saveCustomDeck } from "../ui/prefs.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
 import { setViewMode } from "../ui/view.ts";
-import { rarityLook } from "./boosters.ts";
 import { DeckOpening } from "./DeckOpening.ts";
-import { DECKS, type DeckList, type DeckStock } from "./decks.ts";
+import { DECKS, deckCards, deckLists, deckRows, preloadDeckLists, type DeckList, type DeckStock } from "./decks.ts";
 import type { ShopData } from "./Shop.ts";
-import { ShopBoard, type BoardRow } from "./ShopBoard.ts";
+import { ShopBoard } from "./ShopBoard.ts";
 import {
-  IN, RUNEWOOD, ScrollingFixture, blankPicture, drawChipsAndExit, drawRoom, drawTag, liftTo, monthYear,
-  preloadShopButtons, tagPrice,
+  IN, RUNEWOOD, ScrollingFixture, blankPicture, drawChipsAndExit, drawRoom, drawTag, liftTo, preloadShopButtons, tagPrice,
 } from "./shopParts.ts";
 
 /** Box pictures are drawn at 1x (tools/art/build-deck-boxes.mjs makes them this size, outline included). */
@@ -48,7 +45,6 @@ const PB = {
 };
 /** A box's shadow on the board: a black copy this far down-right, this opaque. */
 const SHADOW = { by: 2, alpha: 0.3 };
-const LISTS_KEY = "decks";
 
 const boxKey = (d: DeckStock) => `deck-box-${d.code}`;
 /** The box at its full size (public/deck-boxes/large/), for opening it. */
@@ -79,7 +75,7 @@ export class DeckShop extends Phaser.Scene {
   }
 
   preload() {
-    if (!this.cache.json.exists(LISTS_KEY)) this.load.json(LISTS_KEY, "data/decks.json");
+    preloadDeckLists(this);
     ShopBoard.preload(this);
     preloadShopButtons(this);
     for (const d of DECKS) {
@@ -91,7 +87,7 @@ export class DeckShop extends Phaser.Scene {
   async create() {
     setViewMode(this.game, "fixed");
     this.engine = await loadEngine();
-    this.lists = new Map(((this.cache.json.get(LISTS_KEY) as DeckList[] | undefined) ?? []).map((l) => [l.code, l]));
+    this.lists = deckLists(this);
 
     // The pegboard's hardboard, a shadow under the frame's top; its holes scroll with the rows.
     drawRoom(this, "DECK SHOP", (g) => {
@@ -187,17 +183,7 @@ export class DeckShop extends Phaser.Scene {
 
   /** The picked deck on the board. */
   private showDeck() {
-    const d = DECKS[this.picked], list = this.lists.get(d.code);
-    // Its cards as the deck editor sorts them by type, each with its copies and (above Common) its rarity chip.
-    const listed = new Map<number, { copies: number; rarity: string }>();
-    for (const [, code, rarity, n] of list?.cards ?? []) listed.set(code, { copies: (listed.get(code)?.copies ?? 0) + n, rarity });
-    const rows: BoardRow[] = sortDeck([...listed.keys()], this.engine.cards).map((code) => {
-      const c = listed.get(code)!, name = this.engine.cards.records.get(code)?.name ?? `#${code}`;
-      return { code, name, copies: c.copies, chip: c.rarity === "Common" ? null : rarityLook(c.rarity) };
-    });
-    const total = rows.reduce((n, r) => n + (r.copies ?? 0), 0);
-    const facts = `${d.kind === "starter" ? "STARTER DECK" : "STRUCTURE DECK"}  -  ${monthYear(d.released)}` +
-      (list ? `  -  ${total} CARDS` : "");
+    const d = DECKS[this.picked], { rows, facts } = deckRows(d, this.lists.get(d.code), this.engine);
     this.board.show(d.name, facts, rows, d.price);
     this.drawTags();
   }
@@ -237,12 +223,7 @@ export class DeckShop extends Phaser.Scene {
     const d = DECKS[this.picked], list = this.lists.get(d.code);
     if (!list) return this.board.setStatus("NO DECK LIST: RUN BUILD-DATA", RUNEWOOD.panel.error);
     this.board.closeDetails();
-    const main: number[] = [], extra: number[] = [], rarity = new Map<number, string>();
-    for (const [, code, r, copies] of list.cards) {
-      const record = this.engine.cards.records.get(code);
-      for (let i = 0; i < copies; i++) (record && goesToExtra(record) ? extra : main).push(code);
-      rarity.set(code, r);
-    }
+    const { main, extra, rarity } = deckCards(list, this.engine);
     this.opening = new DeckOpening(this, {
       box: this.openingBox(d), title: d.name, main, extra, rarity, engine: this.engine,
       onSave: () => {

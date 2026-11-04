@@ -66,6 +66,7 @@ export class Boot extends Phaser.Scene {
         } else if (params.has("mp")) start("Lobby");
         else if (params.has("shop")) start("Shop");
         else if (params.has("deckshop")) start("DeckShop");
+        else if (params.has("starter")) start("StarterDecks");
         else if (params.has("duel")) {
           start("Duel", {
             opponentName: "Test Opponent", startingLP: lp, seed, setup, goFirst, ai: isBrainName(ai) ? ai : undefined,

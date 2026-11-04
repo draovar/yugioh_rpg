@@ -1,6 +1,7 @@
 // The board on the right of a shop: Runewood's info board (the duel's info panel, the same size), its content inside
 // the board's rim: the picked item's name and facts, a card list on the paper inset (a scrollbar at its right edge;
-// clicking a card opens its details over the board, like the deck editor's), the price, how many (- / +) and BUY.
+// clicking a card opens its details over the board, like the deck editor's), the price, how many (- / +) and BUY (or,
+// with `note` and `buyLabel`, a line instead of the price and another label: the starter decks' CHOOSE).
 // The list's rows are either compact chips (a coloured chip and a name: the card shop's checklist) or the deck
 // editor's card rows (art, name, type line, ATK / DEF, copies, a rarity chip: the deck shop's deck lists). Always
 // Runewood's board and paper, whatever the UI theme.
@@ -31,6 +32,10 @@ export interface BoardOptions {
   onBuy: () => void;
   /** The list's rows: compact chips (the default) or the deck editor's card rows. */
   rows?: "chips" | "cards";
+  /** The buy button's label (BUY when not given); the button widens to fit it. */
+  buyLabel?: string;
+  /** A line in the price's place instead of a price (the starter decks: nothing to pay). */
+  note?: string;
 }
 
 const BOARD = { x: 640 - INFO.w, w: INFO.w };
@@ -48,13 +53,13 @@ const BOARD_KEY = "shop-info-frame", PAPER_KEY = "shop-panel-paper";
 const CHIP = { w: 17, h: 7 };
 /**
  * The bottom row: the price on the left; -, the count (centred between them), + and BUY on the right (x: left edges
- * and the count's centre, from the board's right edge; - / + are `step` wide). Buttons from `top`, BUTTON_H tall; the
- * 2x texts' top at textY, centred on the buttons.
+ * and the count's centre, from the board's right edge; - / + are `step` wide; BUY at least `buyW`, ending at the
+ * right edge). Buttons from `top`, BUTTON_H tall; the 2x texts' top at textY, centred on the buttons.
  */
 const RIGHT = CONTENT.x + CONTENT.w;
 const BOTTOM = {
   top: CONTENT.bottom - BUTTON_H - 2, textY: CONTENT.bottom - BUTTON_H,
-  buy: RIGHT - 36, buyW: 36, plus: RIGHT - 53, count: RIGHT - 60, minus: RIGHT - 79, step: 13,
+  buyW: 36, plus: RIGHT - 53, count: RIGHT - 60, minus: RIGHT - 79, step: 13,
 };
 /** A card's details over the board: above it, under anything being opened. */
 const DETAILS_DEPTH = 50;
@@ -144,7 +149,8 @@ export class ShopBoard {
       shopButton(scene, BOTTOM.minus, BOTTOM.top, BOTTOM.step, "-", "wood", () => this.setQuantity(this.quantity - 1));
       shopButton(scene, BOTTOM.plus, BOTTOM.top, BOTTOM.step, "+", "wood", () => this.setQuantity(this.quantity + 1));
     }
-    shopButton(scene, BOTTOM.buy, BOTTOM.top, BOTTOM.buyW, "BUY", "green", () => opts.onBuy());
+    const buyLabel = opts.buyLabel ?? "BUY", buyW = Math.max(BOTTOM.buyW, measure(scene, FONT_UI, buyLabel) + 20);
+    shopButton(scene, RIGHT - buyW, BOTTOM.top, buyW, buyLabel, "green", () => opts.onBuy());
 
     // The list scrolls by the wheel (over the board: three chip rows or one card row a notch) or by dragging it (touch);
     // a click (tap) on a card that doesn't drag opens its details; the row under the pointer is highlighted.
@@ -187,15 +193,15 @@ export class ShopBoard {
     // Centred on its glyphs (measure leaves out the font's trailing spacing, which `width` counts).
     const count = String(this.quantity);
     this.countText?.setText(count).setX(Math.round(BOTTOM.count - measure(this.scene, FONT_UI, count) / 2));
-    const price = `${this.unitPrice * this.quantity} CHIPS`;
+    const price = this.opts.note === undefined ? `${this.unitPrice * this.quantity} CHIPS` : "";
     this.priceText.setText(price);
     this.priceShadow.setText(price);
   }
 
-  /** A line in the price's place for a moment ("": the price again). */
+  /** A line in the price's place for a moment ("": the price, or the note, again). */
   setStatus(s: string, color = RUNEWOOD.panel.inkSoft) {
     this.statusTimer?.remove();
-    this.statusText.setText(s).setTint(color);
+    this.statusText.setText(s || (this.opts.note ?? "")).setTint(s ? color : RUNEWOOD.panel.inkSoft);
     this.priceText.setVisible(!s);
     this.priceShadow.setVisible(!s);
     this.statusTimer = s ? this.scene.time.delayedCall(STATUS_MS, () => this.setStatus("")) : null;
