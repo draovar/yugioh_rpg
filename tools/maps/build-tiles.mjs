@@ -4,8 +4,7 @@
 //   data/maps/<name>.tmj + its tilesets data/maps/**/*.tsj (Tiled, committed) + their images in vendor/paid/ (private
 //   assets repo, gitignored)
 //   → public/maps/<name>.png (used tiles, packed square: at least 32 a row, under phones' 4096 px texture limit while
-//     it can be) + public/maps/<name>.json (the map with one tileset, "world", and
-//     its tile ids remapped)
+//     it can be) + public/maps/<name>.json (the map with one tileset, "world", and its tile ids remapped)
 // vendor/paid is a clone of the private Draovar/yugioh_rpg-assets repo (the deploy checks it out with a deploy key).
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -30,6 +29,15 @@ async function sheet(file) {
   return sheets.get(file);
 }
 
+/** A base64 layer's cells (zlib / gzip compressed or not). */
+function decodeLayer(mapName, layer) {
+  let bytes = Buffer.from(layer.data, "base64");
+  if (layer.compression === "zlib") bytes = inflateSync(bytes);
+  else if (layer.compression === "gzip") bytes = gunzipSync(bytes);
+  else if (layer.compression) throw new Error(`${mapName}/${layer.name}: ${layer.compression} compression not supported`);
+  return Array.from(new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4));
+}
+
 /** The map's tilesets, external ones (what Tiled and the Tiled MCP server edit) read in; image = absolute path. */
 function tilesets(map) {
   return map.tilesets.map((ref) => {
@@ -50,10 +58,7 @@ async function pack(name) {
   // Layers Tiled stores as base64 (zlib / gzip compressed or not) become plain arrays: Phaser reads no compression.
   for (const layer of layers) {
     if (layer.encoding !== "base64") continue;
-    const raw = Buffer.from(layer.data, "base64");
-    const bytes = layer.compression === "zlib" ? inflateSync(raw) : layer.compression === "gzip" ? gunzipSync(raw)
-      : layer.compression ? (() => { throw new Error(`${name}/${layer.name}: ${layer.compression} compression not supported`); })() : raw;
-    layer.data = Array.from(new Uint32Array(bytes.buffer, bytes.byteOffset, bytes.length / 4));
+    layer.data = decodeLayer(name, layer);
     delete layer.encoding;
     delete layer.compression;
   }
@@ -67,16 +72,16 @@ async function pack(name) {
     }
   }
 
-  const COLUMNS = Math.max(32, Math.ceil(Math.sqrt(remap.size)));
-  const rows = Math.ceil(remap.size / COLUMNS);
-  const width = COLUMNS * tw, height = rows * th;
+  const columns = Math.max(32, Math.ceil(Math.sqrt(remap.size)));
+  const rows = Math.ceil(remap.size / columns);
+  const width = columns * tw, height = rows * th;
   const dst = Buffer.alloc(width * height * 4);
   for (const [oldGid, newGid] of remap) {
     const set = setOf(oldGid);
     const { data: src, info } = await sheet(set.image);
     const s = oldGid - set.firstgid, d = newGid - 1;
     const sx = (s % set.columns) * tw, sy = Math.floor(s / set.columns) * th;
-    const dx = (d % COLUMNS) * tw, dy = Math.floor(d / COLUMNS) * th;
+    const dx = (d % columns) * tw, dy = Math.floor(d / columns) * th;
     for (let y = 0; y < th; y++) {
       const from = ((sy + y) * info.width + sx) * 4;
       src.copy(dst, ((dy + y) * width + dx) * 4, from, from + tw * 4);
@@ -94,13 +99,13 @@ async function pack(name) {
   // tile's id in it, so game code can tell tiles apart by what they show (the hedge faces hedge ambushes come out of).
   const custom = new Map(sets.map((set) => [set, new Map((set.tiles ?? []).map((t) => [t.id, t]))]));
   const tiles = [...remap].map(([oldGid, newGid]) => {
-    const set = setOf(oldGid);
-    const t = custom.get(set).get(oldGid - set.firstgid);
+    const set = setOf(oldGid), sheetId = oldGid - set.firstgid;
+    const t = custom.get(set).get(sheetId);
     const properties = [...(t?.properties ?? []), { name: "sheet", type: "string", value: set.name },
-      { name: "sheetId", type: "int", value: oldGid - set.firstgid }];
+      { name: "sheetId", type: "int", value: sheetId }];
     return { ...t, id: newGid - 1, properties };
   });
-  map.tilesets = [{ name: "world", firstgid: 1, image: `${name}.png`, columns: COLUMNS, tilecount: remap.size,
+  map.tilesets = [{ name: "world", firstgid: 1, image: `${name}.png`, columns, tilecount: remap.size,
     imagewidth: width, imageheight: height, tilewidth: tw, tileheight: th, margin: 0, spacing: 0, tiles }];
   writeFileSync(path.join(OUT, `${name}.json`), JSON.stringify(map));
   console.log(`${name}: ${remap.size} tiles from ${sets.length} tileset(s) → public/maps/${name}.png (${width}x${height})`);

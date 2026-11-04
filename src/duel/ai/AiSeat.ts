@@ -11,7 +11,7 @@ import { AiMemory } from "./memory.ts";
 import { redact } from "./redact.ts";
 import { describeChoice, promptName, type ScoredOption, type TraceEntry } from "./trace.ts";
 
-/** How often the AI accepts the same card's optional effect in one turn before it declines (see `decide`). */
+/** How often the AI accepts the same card's optional effect in one turn before it declines (see `stopLoops`). */
 const LOOP_LIMIT = 20;
 
 /** Everything a brain may know when it decides. */
@@ -89,7 +89,7 @@ export class AiSeat implements AiPlayer {
   private readonly rng: () => number;
   private readonly strict: boolean;
   private readonly onTrace?: (entry: TraceEntry) => void;
-  /** Optional effects accepted this turn, per card code (the loop guard in `decide`). */
+  /** Optional effects accepted this turn, per card code (`stopLoops`). */
   private accepted = { turn: -1, counts: new Map<number, number>() };
 
   constructor(opts: AiSeatOptions) {
@@ -137,19 +137,27 @@ export class AiSeat implements AiPlayer {
       console.error(`AI (${this.brain.name}) failed, falling back to autoBot:`, e);
       decision = { response: autoRespond(prompt, this.rng, this.duel.cards), reason: `fallback after error: ${String(e)}` };
     }
-    // Some optional effects can repeat forever if always accepted (two Manticore of Darkness reviving each other in
-    // the End Phase): a player stops the loop, so the AI does too.
-    if (prompt.type === OcgMessageType.SELECT_EFFECTYN && decision.response.type === OcgResponseType.SELECT_EFFECTYN && decision.response.yes) {
-      if (this.accepted.turn !== this.memory.turn) this.accepted = { turn: this.memory.turn, counts: new Map() };
-      const n = (this.accepted.counts.get(prompt.code) ?? 0) + 1;
-      this.accepted.counts.set(prompt.code, n);
-      if (n > LOOP_LIMIT) decision = { response: { type: OcgResponseType.SELECT_EFFECTYN, yes: false }, reason: `used ${LOOP_LIMIT} times this turn: stopping a loop` };
-    }
+    decision = this.stopLoops(prompt, decision);
     this.onTrace?.({
       seat: this.seat, brain: this.brain.name, turn: this.memory.turn, phase: this.memory.phase, prompt: promptName(prompt),
       choice: describeChoice(prompt, decision.response, this.duel.cards), reason: decision.reason ?? "", options: decision.options,
       ms: performance.now() - started,
     });
     return decision.response;
+  }
+
+  /**
+   * Some optional effects can repeat forever if always accepted (two Manticore of Darkness reviving each other in the
+   * End Phase): a player stops the loop, so the AI does too.
+   */
+  private stopLoops(prompt: OcgMessage, decision: Decision): Decision {
+    const accepts = prompt.type === OcgMessageType.SELECT_EFFECTYN
+      && decision.response.type === OcgResponseType.SELECT_EFFECTYN && decision.response.yes;
+    if (!accepts) return decision;
+    if (this.accepted.turn !== this.memory.turn) this.accepted = { turn: this.memory.turn, counts: new Map() };
+    const n = (this.accepted.counts.get(prompt.code) ?? 0) + 1;
+    this.accepted.counts.set(prompt.code, n);
+    if (n <= LOOP_LIMIT) return decision;
+    return { response: { type: OcgResponseType.SELECT_EFFECTYN, yes: false }, reason: `used ${LOOP_LIMIT} times this turn: stopping a loop` };
   }
 }

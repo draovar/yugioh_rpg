@@ -81,29 +81,29 @@ export interface Pull {
   rarity: string;
 }
 
-/** One pack of `list`: `size` - 1 different commons and one card from the rare slot, in random order. */
-export function pullPack(list: BoosterList, size = CARDS_PER_PACK, random = Math.random): Pull[] {
+/** One pack of `list`: CARDS_PER_PACK - 1 different commons and one card from the rare slot, in random order. */
+export function pullPack(list: BoosterList): Pull[] {
   const cards = list.cards.map(([, code, rarity]) => ({ code, rarity }));
-  let roll = random(), slot = RARE_SLOT.length - 1;
+  const rareRoll = Math.random();
+  let slot = RARE_SLOT.length - 1;
   for (let i = 0, acc = 0; i < RARE_SLOT.length; i++) {
     acc += RARE_SLOT[i][1];
-    if (roll < acc) { slot = i; break; }
+    if (rareRoll < acc) { slot = i; break; }
   }
   let rares = cards.filter((c) => c.rarity === RARE_SLOT[slot][0]);
   if (!rares.length && slot === 0) rares = cards.filter((c) => ULTIMATE.includes(c.rarity));
   for (let i = slot + 1; i < RARE_SLOT.length && !rares.length; i++) rares = cards.filter((c) => c.rarity === RARE_SLOT[i][0]);
-  const pack = rares.length ? [rares[Math.floor(random() * rares.length)]] : [];
+  const pack = rares.length ? [rares[Math.floor(Math.random() * rares.length)]] : [];
 
   const commons = cards.filter((c) => c.rarity in COMMON_WEIGHT);
-  while (pack.length < size && commons.length) {
+  while (pack.length < CARDS_PER_PACK && commons.length) {
     const total = commons.reduce((n, c) => n + COMMON_WEIGHT[c.rarity], 0);
-    roll = random() * total;
-    let i = 0;
+    let roll = Math.random() * total, i = 0;
     while (i < commons.length - 1 && (roll -= COMMON_WEIGHT[commons[i].rarity]) >= 0) i++;
     pack.push(commons.splice(i, 1)[0]);
   }
   for (let i = pack.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
+    const j = Math.floor(Math.random() * (i + 1));
     [pack[i], pack[j]] = [pack[j], pack[i]];
   }
   return pack;

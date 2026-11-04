@@ -62,21 +62,23 @@ function isTerrain(gid) {
   const id = gid & ~FLIPS, name = named.get(id);
   return TERRAIN_SETS.has(setOf(id).name) || !name || name.startsWith("Pier");
 }
+const isDecoration = (gid) => !isTerrain(gid);
 
 /** A tile's 16x16 RGBA pixels, flips applied. */
 const pixelCache = new Map();
 async function pixels(gid) {
   if (pixelCache.has(gid)) return pixelCache.get(gid);
   const id = gid & ~FLIPS, s = setOf(id);
-  s.image_ ??= await sharp(s.image, { limitInputPixels: false }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-  const { data, info } = s.image_, n = id - s.first;
+  s.rgba ??= await sharp(s.image, { limitInputPixels: false }).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const { data, info } = s.rgba, n = id - s.first;
   const sx = (n % s.columns) * 16, sy = Math.floor(n / s.columns) * 16;
   const h = gid & 0x80000000, v = gid & 0x40000000, d = gid & 0x20000000;
   const out = new Uint8Array(16 * 16 * 4);
   for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
     let tx = h ? 15 - x : x, ty = v ? 15 - y : y;
     if (d) [tx, ty] = [ty, tx];
-    out.set(data.subarray(((sy + ty) * info.width + sx + tx) * 4, ((sy + ty) * info.width + sx + tx) * 4 + 4), (y * 16 + x) * 4);
+    const from = ((sy + ty) * info.width + sx + tx) * 4;
+    out.set(data.subarray(from, from + 4), (y * 16 + x) * 4);
   }
   pixelCache.set(gid, out);
   return out;
@@ -110,8 +112,8 @@ for (let i = 0; i < cells; i++) {
   if (!stack.length) continue;
   const at = `${i % W},${Math.floor(i / W)}`;
   let terrain = stack.filter(isTerrain);
-  const decor = stack.filter((g) => !isTerrain(g));
-  if (stack.findIndex((g) => !isTerrain(g)) < stack.findLastIndex(isTerrain) && decor.length) reordered.push(at);
+  const decor = stack.filter(isDecoration);
+  if (decor.length && stack.findIndex(isDecoration) < stack.findLastIndex(isTerrain)) reordered.push(at);
   let from = 0;
   for (let k = terrain.length - 1; k > 0; k--) if (await isOpaque(terrain[k])) { from = k; break; }
   hidden += from;
@@ -139,9 +141,9 @@ if (doubled.length) throw new Error(`two decorations on one tile (only ground3 h
 const names = ["ground", "ground2", "ground3"];
 const result = names.map((name, k) => ({ ...(grounds[k] ?? { ...grounds[0], id: map.nextlayerid++, visible: true }), name,
   encoding: grounds[0].encoding, compression: grounds[0].compression, data: encode(grounds[0], out[k]) }));
-const at = map.layers.indexOf(grounds[0]);
+const firstGround = map.layers.indexOf(grounds[0]);
 map.layers = map.layers.filter((l) => !grounds.includes(l));
-map.layers.splice(at, 0, ...result);
+map.layers.splice(firstGround, 0, ...result);
 
 const count = (d) => d.reduce((n, g) => n + (g ? 1 : 0), 0);
 console.log(`${file}: ${grounds.length} ground layers → ground (main), ground2 (overlaps), ground3 (decorations); ${hidden} hidden tiles dropped`);

@@ -20,15 +20,22 @@ const DESTINY_BOARD = 94212438, MESSAGE_I = 31893528, MESSAGE_N = 67287533, MESS
 const WHITE_DRAGON_RITUAL = 9786492, PALADIN = 73398797, KAISER_SEA_HORSE = 17444133, HANE_HANE = 7089711, BATTLE_OX = 5053103;
 
 const hand = (code: number): StartCard => ({ code, location: OcgLocation.HAND });
-/** A face-up Spell/Trap (Continuous or Field) in Spell & Trap zone `sequence`. */
-const faceUp = (code: number, sequence: number): StartCard => ({ code, location: OcgLocation.SZONE, sequence, position: OcgPosition.FACEUP_ATTACK });
 const monster = (code: number, sequence: number): StartCard => ({ code, location: OcgLocation.MZONE, sequence });
 /** A Spell/Trap set face-down in Spell & Trap zone `sequence`. */
 const set = (code: number, sequence: number): StartCard =>
   ({ code, location: OcgLocation.SZONE, sequence, position: OcgPosition.FACEDOWN_DEFENSE });
+/** A face-up Spell/Trap (Continuous or Field) in Spell & Trap zone `sequence`. */
+const faceUp = (code: number, sequence: number): StartCard =>
+  ({ code, location: OcgLocation.SZONE, sequence, position: OcgPosition.FACEUP_ATTACK });
 
-/** `extra`: cards added to your Extra Deck. */
-const SETUPS: Record<string, { you: StartCard[]; opponent: StartCard[]; extra?: number[] }> = {
+interface DevSetup {
+  you: StartCard[];
+  opponent: StartCard[];
+  /** Cards added to your Extra Deck. */
+  extra?: number[];
+}
+
+const SETUPS: Record<string, DevSetup> = {
   /**
    * Tribute Summons: three monsters to tribute from, Blue-Eyes (2 tributes) and Summoned Skull / Dark
    * Magician (1 tribute) in hand, and two opponent monsters to attack.
@@ -134,8 +141,7 @@ const SETUPS: Record<string, { you: StartCard[]; opponent: StartCard[]; extra?: 
    * Mystical Space Typhoon on your own Toon World: every Toon is destroyed with it.
    */
   toon: {
-    you: [{ code: TOON_WORLD, location: OcgLocation.SZONE, sequence: 2, position: OcgPosition.FACEUP_ATTACK }, monster(CELTIC, 2),
-      hand(TOON_MERMAID), hand(TOON_SKULL), hand(TOON_GEMINI_ELF), hand(MST)],
+    you: [faceUp(TOON_WORLD, 2), monster(CELTIC, 2), hand(TOON_MERMAID), hand(TOON_SKULL), hand(TOON_GEMINI_ELF), hand(MST)],
     opponent: [monster(VORSE, 2)],
   },
   /**
@@ -175,5 +181,6 @@ export function withDevSetup(decks: [Deck, Deck], name: string | undefined): [De
     console.warn(`unknown &setup=${name}; known: ${Object.keys(SETUPS).join(", ")}`);
     return decks;
   }
-  return [{ ...decks[0], start: setup.you, extra: [...(decks[0].extra ?? []), ...(setup.extra ?? [])] }, { ...decks[1], start: setup.opponent }];
+  const you: Deck = { ...decks[0], start: setup.you, extra: [...(decks[0].extra ?? []), ...(setup.extra ?? [])] };
+  return [you, { ...decks[1], start: setup.opponent }];
 }

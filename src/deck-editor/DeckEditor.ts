@@ -402,7 +402,7 @@ export class DeckEditor extends Phaser.Scene {
     this.drawScrollbar();
   }
 
-  /** The visible rows: frame-colour strip, 32x32 art (with the banlist badge), name, Level / Attribute / Type (or Spell/Trap kind), ATK / DEF, copies in the deck. */
+  /** The visible rows (`cardRow`), with the banlist badge on the art and the copies in the deck. */
   private drawRows() {
     this.rows.removeAll(true);
     const inDeck = new Map<number, number>();

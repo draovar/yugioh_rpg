@@ -7,18 +7,17 @@
 // (`onSave`: one of the custom deck slots) and DONE (Esc).
 import Phaser from "phaser";
 import type { Engine } from "../duel/engine/loadEngine.ts";
-import { CardInfo } from "../duel-screen/CardInfo.ts";
 import { CardSprite } from "../duel-screen/CardSprite.ts";
 import { CARD, INFO, INSET, LIST_BUTTON } from "../duel-screen/layout.ts";
 import { pause, playTween } from "../duel-screen/tweens.ts";
 import { deckPlaces, deckSlots, drawDeckTable } from "../deck-editor/deckMat.ts";
 import { BAR, FELT } from "../deck-editor/layout.ts";
 import { fit, FONT_UI, measure, text } from "../ui/pixel.ts";
-import { THEME, ui } from "../ui/theme.ts";
-import { makeListButton, type ListButton } from "../ui/widgets.ts";
+import { THEME } from "../ui/theme.ts";
+import { makeListButton } from "../ui/widgets.ts";
 import { rarityLook } from "./boosters.ts";
-import { DETAILS } from "./PackOpening.ts";
-import { glow, revealShow, shake, type FxCard, type FxHost } from "./revealFx.ts";
+import { OpeningPanel } from "./PackOpening.ts";
+import { glow, revealShow, shake, stopLoops, type FxCard, type FxHost, type FxLoop } from "./revealFx.ts";
 
 export interface DeckOpeningOptions {
   /** The box picture and how big it's drawn (the large one at 1x, else the pegboard's at 2x); null: the cards are dealt
@@ -61,14 +60,11 @@ export class DeckOpening {
   private readonly opts: DeckOpeningOptions;
   private readonly root: Phaser.GameObjects.Container;
   private readonly layer: Phaser.GameObjects.Container;
-  private readonly panel: Phaser.GameObjects.Container;
-  private readonly info: CardInfo;
-  private readonly hint: Phaser.GameObjects.BitmapText;
+  private readonly panel: OpeningPanel;
   private readonly status: Phaser.GameObjects.BitmapText;
   private cards: Laid[] = [];
   /** Glows and shines on the foils, until the deck is put away. */
-  private readonly loops: (Phaser.Time.TimerEvent | Phaser.Tweens.Tween)[] = [];
-  private save: ListButton | null = null;
+  private readonly loops: FxLoop[] = [];
   private speed = 1;
   private finished = false;
   private closed = false;
@@ -88,14 +84,7 @@ export class DeckOpening {
     this.status = text(scene, 0, textY, "", { color: ink });
     this.layer = scene.add.container(0, 0);
     this.root.add([blocker, table, title, this.status, this.layer]);
-
-    // The info panel: a hint until a card shows.
-    this.info = new CardInfo(scene, opts.engine, DETAILS);
-    this.hint = text(scene, DETAILS.x + DETAILS.w / 2, 176, "OPENING THE DECK", { color: THEME.panel.inkSoft, originX: 0.5 });
-    this.panel = scene.add.container(0, 0, [
-      scene.add.nineslice(SPLIT, 0, ui("info-frame"), undefined, INFO.w, 360, ...THEME.panel.infoSlice).setOrigin(0),
-      this.info.container, this.hint,
-    ]).setDepth(DEPTH + 1).setAlpha(0);
+    this.panel = new OpeningPanel(scene, opts.engine, "OPENING THE DECK");
     void this.run();
   }
 
@@ -111,7 +100,7 @@ export class DeckOpening {
 
   private async run() {
     const sc = this.scene, cards = this.opts.engine.cards;
-    await this.tween({ targets: [this.root, this.panel], alpha: 1, duration: T.shade });
+    await this.tween({ targets: [this.root, this.panel.root], alpha: 1, duration: T.shade });
     deckSlots(sc, this.layer, this.opts.main, this.opts.extra, cards);
 
     // The cards wait face down in a stack in the box (hidden until it opens), each with its place on the mat.
@@ -216,22 +205,19 @@ export class DeckOpening {
   /** The deck is laid out: SAVE AS DECK and DONE on the bar. */
   private finish() {
     this.finished = true;
-    const y = BAR.y + INSET.plate, right = BAR.x + BAR.w - INSET.plate;
-    this.save = makeListButton(this.scene, right - DONE_W - GAP - SAVE_W, y, SAVE_W, "SAVE AS DECK", () => {
-      const result = this.opts.onSave();
+    const y = BAR.y + INSET.plate, right = BAR.x + BAR.w - INSET.plate, saveX = right - DONE_W - GAP - SAVE_W;
+    const save = makeListButton(this.scene, saveX, y, SAVE_W, "SAVE AS DECK", () => {
+      const { saved, message } = this.opts.onSave();
       // Right-aligned just left of the buttons.
-      const end = right - DONE_W - GAP - SAVE_W - GAP - 4;
-      this.status.setText(result.message).setX(end - measure(this.scene, FONT_UI, result.message));
-      if (result.saved) this.save?.setEnabled(false);
+      this.status.setText(message).setX(saveX - GAP - 4 - measure(this.scene, FONT_UI, message));
+      if (saved) save.setEnabled(false);
     });
-    this.root.add([...this.save, ...makeListButton(this.scene, right - DONE_W, y, DONE_W, "DONE", () => this.close())]);
+    this.root.add([...save, ...makeListButton(this.scene, right - DONE_W, y, DONE_W, "DONE", () => this.close())]);
   }
 
   /** A face-up card in the info panel. */
   private showDetails(c: Laid) {
-    if (this.closed) return;
-    this.hint.setVisible(false);
-    if (this.info.code !== c.code) this.info.show(c.code);
+    if (!this.closed) this.panel.show(c.code);
   }
 
   private fxHost(): FxHost {
@@ -241,12 +227,11 @@ export class DeckOpening {
   private close() {
     if (this.closed) return;
     this.closed = true;
-    for (const l of this.loops) l instanceof Phaser.Time.TimerEvent ? l.remove() : l.stop();
+    stopLoops(this.loops);
     void this.tween({
-      targets: [this.root, this.panel], alpha: 0, duration: T.close,
+      targets: [this.root, this.panel.root], alpha: 0, duration: T.close,
       onComplete: () => {
         this.scene.tweens.killTweensOf(this.layer.list);
-        this.info.clear();
         this.root.destroy();
         this.panel.destroy();
         this.opts.onClose();

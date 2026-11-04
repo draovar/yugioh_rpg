@@ -29,8 +29,8 @@ const available = pool.filter((code) => existsSync(path.join(SRC, `${code}.jpg`)
 const missing = pool.filter((code) => !available.includes(code));
 
 // 32x32 atlas, 32 tiles per row.
-const PER_ROW = 32, T = ART_STYLE.small.size;
-const rows = Math.max(1, Math.ceil(available.length / PER_ROW));
+const PER_ROW = 32, T = ART_STYLE.small.size, L = ART_STYLE.large.size;
+const atlasW = PER_ROW * T, atlasH = Math.max(1, Math.ceil(available.length / PER_ROW)) * T;
 const tiles = [];
 const frames = {};
 for (const [i, code] of available.entries()) {
@@ -38,13 +38,12 @@ for (const [i, code] of available.entries()) {
   const x = (i % PER_ROW) * T, y = Math.floor(i / PER_ROW) * T;
   tiles.push({ input: await renderArt(src, ART_STYLE.small), raw: { width: T, height: T, channels: 4 }, left: x, top: y });
   frames[String(code)] = { frame: { x, y, w: T, h: T }, rotated: false, trimmed: false, spriteSourceSize: { x: 0, y: 0, w: T, h: T }, sourceSize: { w: T, h: T } };
-  const L = ART_STYLE.large.size;
   writeFileSync(path.join(OUT, "art128", `${code}.png`), indexedPng(await renderArt(src, ART_STYLE.large), L, L));
 }
-const atlas = await sharp({ create: { width: PER_ROW * T, height: rows * T, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+const atlas = await sharp({ create: { width: atlasW, height: atlasH, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
   .composite(tiles).raw().toBuffer();
-writeFileSync(path.join(OUT, "art32.png"), indexedPng(atlas, PER_ROW * T, rows * T));
-writeFileSync(path.join(OUT, "art32.json"), JSON.stringify({ frames, meta: { image: "art32.png", size: { w: PER_ROW * T, h: rows * T }, scale: "1" } }));
+writeFileSync(path.join(OUT, "art32.png"), indexedPng(atlas, atlasW, atlasH));
+writeFileSync(path.join(OUT, "art32.json"), JSON.stringify({ frames, meta: { image: "art32.png", size: { w: atlasW, h: atlasH }, scale: "1" } }));
 
 console.log(`art: ${available.length} cards -> art32 atlas + art128 (${PALETTE.length}-colour palette)`);
 if (missing.length) console.warn("no downloaded art for (run npm run fetch-art):", missing);

@@ -1,24 +1,14 @@
-// Lossless 8-bit indexed PNG writer for art already mapped to the shared palette (≤ 256 colours + transparency).
+// Lossless 8-bit indexed PNG writer for art already mapped to a palette (≤ 256 colours + transparency).
 // sharp's `palette` output runs libimagequant, which shifts colours slightly even when the image has fewer than
 // 256; this keeps every pixel and is ~25% smaller than sharp's RGBA PNG for our dithered art.
 import zlib from "node:zlib";
 
-const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
-function crc32(buf) {
-  let c = 0xffffffff;
-  for (const b of buf) c = CRC_TABLE[(c ^ b) & 255] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
 function chunk(type, data) {
   const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
   const out = Buffer.alloc(body.length + 8);
   out.writeUInt32BE(data.length, 0);
   body.copy(out, 4);
-  out.writeUInt32BE(crc32(body), body.length + 4);
+  out.writeUInt32BE(zlib.crc32(body), body.length + 4);
   return out;
 }
 

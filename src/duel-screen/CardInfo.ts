@@ -136,16 +136,12 @@ export class CardInfo {
     });
     const descY = artY + ART_FRAME + 5;
     p.add(paperInset(s, L.x, descY, L.w, L.bottom - descY));
-    // 2px more room at the top and left than at the right, and 1px more between lines than the font's own.
-    const pad = INSET.paper + 1;
+    const pad = INSET.paper + 1, descBottom = L.bottom - pad;
     const desc = text(s, L.x + pad + DESC_LEAD, descY + pad + DESC_LEAD, r.desc,
       { maxWidth: L.w - pad * 2 - DESC_LEAD, color: THEME.panel.paperInk }).setLineSpacing(DESC_LINE_GAP);
-    let overflow = desc.y + desc.height - (L.bottom - pad);
     // Too long: wrap it narrower, leaving a lane for the scroll bar at the right.
-    if (overflow > 0) {
-      desc.setMaxWidth(desc.maxWidth - DESC_BAR_LANE);
-      overflow = desc.y + desc.height - (L.bottom - pad);
-    }
+    if (desc.y + desc.height > descBottom) desc.setMaxWidth(desc.maxWidth - DESC_BAR_LANE);
+    const overflow = desc.y + desc.height - descBottom;
     // In a container of its own: the scroll mask goes on that (as the name's), not on the text.
     const descBox = s.add.container(0, 0, [desc]);
     p.add(descBox);
@@ -154,7 +150,7 @@ export class CardInfo {
 
   /**
    * Card text taller than its paper: clipped to the paper's inside by a Mask filter, scrolled with the mouse wheel over
-   * it (a line per notch) or by dragging it (touch), with a thin bar on the paper's right edge showing where it is.
+   * it or by dragging it (touch), with a thin bar on the paper's right edge showing where it is.
    */
   private scrollDesc(descBox: Phaser.GameObjects.Container, desc: Phaser.GameObjects.BitmapText, paperY: number, overflow: number) {
     const s = this.scene, L = this.box, rim = INSET.paper;

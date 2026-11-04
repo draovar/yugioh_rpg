@@ -1,11 +1,9 @@
 // Opening booster packs (the shop's BUY), over the shop: on the left, over a dark shade, the pack comes in, wiggles,
 // loses its top along a jagged line, the cards rise out of it and are dealt face down in two rows. Clicking (tapping) a
-// card flips it; Enter / Space / X flip the next one, REVEAL ALL (Esc) the rest. A Rare flashes; Super Rares and up
-// first shake with a glow in their rarity's colour, then flash and burst into sparkles; Ultra and Secret Rares also
-// flash the screen and get a shine across them now and then; a Secret Rare's glow and sparkles run through the colours
-// (revealFx.ts, shared with the deck unboxing).
-// A card's rarity chip shows under it once it's up. On the right, where the shop's checklist is, the duel's card info
-// panel shows each card as it turns over, then whichever face-up card is hovered or tapped.
+// card flips it; Enter / Space / X flip the next one, REVEAL ALL (Esc) the rest. Each makes the show of its rarity
+// (revealFx.ts, shared with the deck unboxing) and gets its rarity chip under it once it's up.
+// On the right, where the shop's checklist is, the duel's card info panel shows each card as it turns over, then
+// whichever face-up card is hovered or tapped (OpeningPanel, shared with the deck unboxing).
 // Several packs bought at once open one after another (the title counts them): NEXT PACK clears the cards away and
 // tears the next one open; after the last, DONE (Esc) closes. The pulled cards aren't kept yet (no collection).
 import Phaser from "phaser";
@@ -18,7 +16,7 @@ import { text } from "../ui/pixel.ts";
 import { THEME, ui } from "../ui/theme.ts";
 import { makeButton, type Button } from "../ui/widgets.ts";
 import { rarityLook, type Pull } from "./boosters.ts";
-import { glow, revealShow, shake, type FxHost } from "./revealFx.ts";
+import { glow, revealShow, shake, stopLoops, type FxCard, type FxHost, type FxLoop } from "./revealFx.ts";
 
 /** The pack while it's opened, drawn at 1x (public/boosters/large/, `npm run build-boosters`). */
 export const LARGE_PACK = { w: 100, h: 172 };
@@ -27,7 +25,7 @@ const TEAR_Y = 16;
 const JAG = [0, 1, 2, 1, 2, 0, -1, 0, 1, -1, 0, 2, 1, -1];
 /** The card info panel on the right (the duel's info panel: board, then the details inside its rim). */
 const SPLIT = 640 - INFO.w;
-export const DETAILS = { x: SPLIT + INSET.board + 2, w: INFO.w - 2 * (INSET.board + 2), top: INSET.board + 2, bottom: 360 - INSET.board - 2 };
+const DETAILS = { x: SPLIT + INSET.board + 2, w: INFO.w - 2 * (INSET.board + 2), top: INSET.board + 2, bottom: 360 - INSET.board - 2 };
 /** Cards at 2x in two rows left of the panel, each one's rarity chip under it. */
 const SCALE = 2, CARD_W = CARD.w * SCALE, CARD_H = CARD.h * SCALE, GAP = 6;
 const ROW_TOPS = [28, 160];
@@ -40,11 +38,9 @@ const T = {
   flip: 70, revealAllStagger: 150, close: 150,
 };
 
-interface Dealt {
+interface Dealt extends FxCard {
   pull: Pull;
   sprite: CardSprite;
-  x: number;
-  y: number;
   zone: Phaser.GameObjects.Zone;
   /** Turning over (or done). */
   revealed: boolean;
@@ -64,21 +60,55 @@ export interface PackOpeningOptions {
   onClose: () => void;
 }
 
+/**
+ * An opening's card info panel on the right: the duel's (the UI theme's board), above the overlay, `hint` in it until a
+ * card shows. It starts transparent, for the opening to fade in with the overlay.
+ */
+export class OpeningPanel {
+  readonly root: Phaser.GameObjects.Container;
+  private readonly info: CardInfo;
+  private readonly hint: Phaser.GameObjects.BitmapText;
+
+  constructor(scene: Phaser.Scene, engine: Engine, hint: string) {
+    this.info = new CardInfo(scene, engine, DETAILS);
+    this.hint = text(scene, DETAILS.x + DETAILS.w / 2, 176, hint, { color: THEME.panel.inkSoft, originX: 0.5 });
+    this.root = scene.add.container(0, 0, [
+      scene.add.nineslice(SPLIT, 0, ui("info-frame"), undefined, INFO.w, 360, ...THEME.panel.infoSlice).setOrigin(0),
+      this.info.container, this.hint,
+    ]).setDepth(DEPTH + 1).setAlpha(0);
+  }
+
+  /** A face-up card in the panel. */
+  show(code: number) {
+    this.hint.setVisible(false);
+    if (this.info.code !== code) this.info.show(code);
+  }
+
+  /** Empty again, the hint back. */
+  clear() {
+    this.info.clear();
+    this.hint.setVisible(true);
+  }
+
+  destroy() {
+    this.info.clear();
+    this.root.destroy();
+  }
+}
+
 export class PackOpening {
   private readonly scene: Phaser.Scene;
   private readonly opts: PackOpeningOptions;
   private readonly root: Phaser.GameObjects.Container;
-  private readonly panel: Phaser.GameObjects.Container;
-  private readonly info: CardInfo;
-  private readonly hint: Phaser.GameObjects.BitmapText;
+  private readonly panel: OpeningPanel;
   private title: Phaser.GameObjects.BitmapText | null = null;
   /** The pack being opened: its pieces, cards and their effects (cleared for the next pack). */
   private layer: Phaser.GameObjects.Container | null = null;
   private pack = 0;
   private cards: Dealt[] = [];
   private button: Button | null = null;
-  /** Effects that run until the pack is put away: shine timers, glow and shine tweens. */
-  private readonly loops: (Phaser.Time.TimerEvent | Phaser.Tweens.Tween)[] = [];
+  /** Effects that run until the pack is put away. */
+  private readonly loops: FxLoop[] = [];
   private dealt = false;
   private closed = false;
 
@@ -88,14 +118,7 @@ export class PackOpening {
     this.root = scene.add.container(0, 0).setDepth(DEPTH);
     // Takes every click, so the shop under it doesn't react.
     this.root.add(scene.add.zone(0, 0, 640, 360).setOrigin(0).setInteractive());
-
-    // The info panel: empty with a hint until a card turns over.
-    this.info = new CardInfo(scene, opts.engine, DETAILS);
-    this.hint = text(scene, DETAILS.x + DETAILS.w / 2, 176, "TURN A CARD OVER", { color: THEME.panel.inkSoft, originX: 0.5 });
-    this.panel = scene.add.container(0, 0, [
-      scene.add.nineslice(SPLIT, 0, ui("info-frame"), undefined, INFO.w, 360, ...THEME.panel.infoSlice).setOrigin(0),
-      this.info.container, this.hint,
-    ]).setDepth(DEPTH + 1).setAlpha(0);
+    this.panel = new OpeningPanel(scene, opts.engine, "TURN A CARD OVER");
     void this.run();
   }
 
@@ -115,7 +138,7 @@ export class PackOpening {
     const shade = sc.add.rectangle(0, 0, 640, 360, 0x000000, 0.88).setOrigin(0).setAlpha(0);
     this.title = text(sc, CENTER.x, 8, "", { color: 0xffffff, scale: 2 });
     this.root.add([shade, this.title]);
-    await this.tween({ targets: [shade, this.panel], alpha: 1, duration: T.shade });
+    await this.tween({ targets: [shade, this.panel.root], alpha: 1, duration: T.shade });
     await this.openPack();
   }
 
@@ -136,7 +159,7 @@ export class PackOpening {
       this.layer!.add(sprite);
       const { x, y } = this.slot(i, pulls.length);
       const zone = sc.add.zone(x - CARD_W / 2, y - CARD_H / 2, CARD_W, CARD_H).setOrigin(0);
-      return { pull, sprite, x, y, zone, revealed: false, faceUp: false, settled: false };
+      return { pull, sprite, x, y, w: CARD_W, h: CARD_H, zone, revealed: false, faceUp: false, settled: false };
     });
     if (this.opts.packKey) await this.tearOpen(this.opts.packKey);
     else {
@@ -181,13 +204,12 @@ export class PackOpening {
   private async nextPack() {
     this.dealt = false;
     this.button?.setVisible(false);
-    this.stopLoops();
+    stopLoops(this.loops);
     const old = this.layer!;
     await this.tween({ targets: old, alpha: 0, duration: T.close });
     this.scene.tweens.killTweensOf(old.list);
     old.destroy();
-    this.info.clear();
-    this.hint.setVisible(true);
+    this.panel.clear();
     this.pack++;
     await this.openPack();
   }
@@ -268,24 +290,27 @@ export class PackOpening {
   // --- Revealing --------------------------------------------------------------------------------------------------
 
   /**
-   * REVEAL ALL: the face-down cards turn over one after another (only the rare takes the info panel); once they're all
-   * up and done (not while a card still turns), NEXT PACK or DONE.
+   * REVEAL ALL: the face-down cards turn over one after another; once they're all up and done (not while a card still
+   * turns), NEXT PACK or DONE.
    */
   private pressButton() {
     if (!this.dealt) return;
     const hidden = this.cards.filter((c) => !c.revealed);
-    if (!hidden.length) {
-      if (!this.cards.every((c) => c.settled)) return;
-      if (this.pack < this.opts.packs.length - 1) void this.nextPack();
-      else this.close();
+    if (hidden.length) {
+      void this.revealAll(hidden);
       return;
     }
-    void (async () => {
-      for (const c of hidden) {
-        void this.reveal(c, true);
-        await this.wait(T.revealAllStagger);
-      }
-    })();
+    if (!this.cards.every((c) => c.settled)) return;
+    if (this.pack < this.opts.packs.length - 1) void this.nextPack();
+    else this.close();
+  }
+
+  /** Turns `hidden` over one after another, quietly (only the rare takes the info panel). */
+  private async revealAll(hidden: Dealt[]) {
+    for (const c of hidden) {
+      void this.reveal(c, true);
+      await this.wait(T.revealAllStagger);
+    }
   }
 
   /**
@@ -298,10 +323,9 @@ export class PackOpening {
     c.sprite.y = c.y;
     this.layer!.bringToTop(c.sprite);
     const look = rarityLook(c.pull.rarity), host = this.fxHost();
-    const card = { x: c.x, y: c.y, w: CARD_W, h: CARD_H, sprite: c.sprite };
     if (look.tier >= 2) {
-      glow(host, card, look.color, look.tier >= 4);
-      await shake(host, card);
+      glow(host, c, look.color, look.tier >= 4);
+      await shake(host, c);
     }
     await this.tween({ targets: c.sprite, scaleX: 0, duration: T.flip });
     if (this.closed || !c.sprite.active) return;
@@ -310,7 +334,7 @@ export class PackOpening {
     if (!quiet || look.tier >= 1) this.showDetails(c);
     await this.tween({ targets: c.sprite, scaleX: SCALE, duration: T.flip });
     if (this.closed || !c.sprite.active) return;
-    revealShow(host, card, look);
+    revealShow(host, c, look);
     this.chip(c, look);
     c.settled = true;
     if (this.cards.every((d) => d.settled)) this.button?.setLabel(this.pack < this.opts.packs.length - 1 ? "NEXT PACK" : "DONE");
@@ -318,19 +342,15 @@ export class PackOpening {
 
   /** A face-up card in the info panel. */
   private showDetails(c: Dealt) {
-    if (this.closed) return;
-    this.hint.setVisible(false);
-    if (this.info.code !== c.pull.code) this.info.show(c.pull.code);
+    if (!this.closed) this.panel.show(c.pull.code);
   }
 
   /** The rarity chip under a turned card. */
   private chip(c: Dealt, look: { label: string; color: number }) {
     const x = c.x - Math.floor(CHIP.w / 2), y = c.y + CARD_H / 2 + 3;
-    const g = this.scene.add.graphics().fillStyle(look.color).fillRect(x, y, CHIP.w, CHIP.h);
-    const t = text(this.scene, x + CHIP.w / 2, y + 1, look.label, { color: 0xffffff, originX: 0.5 });
+    const g = this.scene.add.graphics().fillStyle(look.color).fillRect(x, y, CHIP.w, CHIP.h).setAlpha(0);
+    const t = text(this.scene, x + CHIP.w / 2, y + 1, look.label, { color: 0xffffff, originX: 0.5 }).setAlpha(0);
     this.layer!.add([g, t]);
-    g.setAlpha(0);
-    t.setAlpha(0);
     void this.tween({ targets: [g, t], alpha: 1, duration: 150 });
   }
 
@@ -339,22 +359,15 @@ export class PackOpening {
     return { scene: this.scene, layer: this.layer!, loops: this.loops, closed: () => this.closed };
   }
 
-  /** Stops the running effects (emptying `loops` in place: effects still hold it). */
-  private stopLoops() {
-    for (const l of this.loops) l instanceof Phaser.Time.TimerEvent ? l.remove() : l.stop();
-    this.loops.length = 0;
-  }
-
   private close() {
     if (this.closed) return;
     this.closed = true;
-    this.stopLoops();
+    stopLoops(this.loops);
     void this.tween({
-      targets: [this.root, this.panel], alpha: 0, duration: T.close,
+      targets: [this.root, this.panel.root], alpha: 0, duration: T.close,
       onComplete: () => {
         if (this.layer) this.scene.tweens.killTweensOf(this.layer.list);
         this.scene.tweens.killTweensOf(this.root.list);
-        this.info.clear();
         this.root.destroy();
         this.panel.destroy();
         this.opts.onClose();

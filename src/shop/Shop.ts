@@ -7,10 +7,10 @@
 // on Runewood's info board (ShopBoard.ts): the picked set's name, release, size, every card it drops with its rarity,
 // the price, how many packs (- / +) and BUY: the packs open one after another (PackOpening.ts). The card collection
 // isn't built yet: packs are free for now (no chips spent) and the pulled cards aren't kept.
-// The room, buttons and scroll cues are shared with the deck shop (shopParts.ts).
 // Pack pictures: public/boosters/<SET>.png and large/<SET>.png (`npm run build-boosters`); a missing one shows as a
 // blank pack with its code (and is dealt from without tearing). Card lists: public/data/boosters.json (`npm run build-data`).
 import Phaser from "phaser";
+import { rarityPack } from "../dev/rarityPack.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
 import { text } from "../ui/pixel.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
@@ -18,8 +18,10 @@ import { setViewMode } from "../ui/view.ts";
 import { BOOSTERS, CARDS_PER_PACK, RARITIES, pullPack, rarityLook, type BoosterList, type BoosterStock } from "./boosters.ts";
 import { PackOpening } from "./PackOpening.ts";
 import { ShopBoard } from "./ShopBoard.ts";
-import { BUTTON_H, C, CASE, DRAG_PX, IN, MONTHS, RUNEWOOD, ScrollingFixture, drawRoom, preloadShopButtons, shade, shopButton } from "./shopParts.ts";
-import { rarityPack } from "../dev/rarityPack.ts";
+import {
+  C, IN, RUNEWOOD, ScrollingFixture, blankPicture, drawChipsAndExit, drawRoom, drawTag, liftTo, monthYear,
+  preloadShopButtons, shade, tagPrice,
+} from "./shopParts.ts";
 
 /** What the overworld hands over. */
 export interface ShopData {
@@ -36,8 +38,7 @@ const SHELF_TOP = ROW_H - 20, SHELF_FACE = 3, SHELF_FRONT = 10;
 const BOX_W = 92, LIP_H = 16, LID_ABOVE = 8;
 /** Packs behind the front one, each this much higher, darker. */
 const BEHIND = [{ dy: -8, tint: 0x6a6a6a }, { dy: -4, tint: 0x9a9a9a }];
-const LIFT = 8, LIFT_MS = 80;
-const TAG = { w: 24, h: 9 };
+const LIFT = 8;
 /** Packs bought at once, at most. */
 const MAX_PACKS = 10;
 const LISTS_KEY = "boosters";
@@ -91,12 +92,8 @@ export class Shop extends Phaser.Scene {
     });
     this.drawShelves();
     this.drawGlass();
-    this.shelves.makeCues();
     this.board = new ShopBoard(this, this.engine, { maxQuantity: MAX_PACKS, busy: () => !!this.opening, onBuy: () => this.buy() });
-
-    text(this, 10, 12, `CHIPS: ${this.chips}`, { color: C.light });
-    // EXIT like the checklist's buttons in dark brown, at the case's right edge, level with the sign.
-    shopButton(this, CASE.x + CASE.w - 40, 15 - Math.floor(BUTTON_H / 2), 40, "EXIT", "dark", () => this.exit());
+    drawChipsAndExit(this, this.chips, () => this.exit());
 
     this.input.keyboard?.on("keydown", (e: KeyboardEvent) => this.handleKey(e.code));
 
@@ -104,7 +101,7 @@ export class Shop extends Phaser.Scene {
     this.showSet();
   }
 
-  /** Column / row of display i. */
+  /** Display i's centre and its shelf's top. */
   private cell(i: number) {
     const col = i % COLS, row = Math.floor(i / COLS);
     const cx = Math.round(IN.x + (IN.w * (2 * col + 1)) / (2 * COLS));
@@ -117,17 +114,23 @@ export class Shop extends Phaser.Scene {
     return [cx - PACK.w / 2, shelfTop - PACK.h];
   }
 
+  /** Display i's price label: its centre, its top (on the shelf's front edge). */
+  private tagXY(i: number): [number, number] {
+    const { cx, shelfTop } = this.cell(i);
+    return [cx, shelfTop + SHELF_FACE + 1];
+  }
+
   /**
    * The shelves and everything on them: per row a shelf; per display its lid standing up behind, the packs further back
    * in the box (darker), the front pack, the lip with the set code, the price label, a hit zone (covering the lifted
    * pack too).
    */
   private drawShelves() {
-    this.shelves = new ScrollingFixture(this, { count: BOOSTERS.length, perLine: COLS, lineSize: ROW_H, axis: "y", busy: () => !!this.opening });
+    this.shelves = new ScrollingFixture(this, { count: BOOSTERS.length, perRow: COLS, rowH: ROW_H, busy: () => !!this.opening });
     const content = this.shelves.content;
 
     const g = this.add.graphics();
-    for (let row = 0; row < this.shelves.lines; row++) {
+    for (let row = 0; row < this.shelves.rows; row++) {
       const top = IN.y + row * ROW_H + SHELF_TOP;
       g.fillStyle(C.woodLight).fillRect(IN.x, top, IN.w, SHELF_FACE);
       g.fillStyle(C.wood).fillRect(IN.x, top + SHELF_FACE, IN.w, SHELF_FRONT);
@@ -170,39 +173,29 @@ export class Shop extends Phaser.Scene {
     this.tags = this.add.graphics();
     content.add(this.tags);
     BOOSTERS.forEach((b, i) => {
-      const { cx, shelfTop } = this.cell(i);
-      content.add(text(this, cx, shelfTop + SHELF_FACE + 3, String(b.price), { color: C.ink, originX: 0.5 }));
+      content.add(tagPrice(this, ...this.tagXY(i), b.price));
       const [x, y] = this.packXY(i);
-      const hit = this.add.zone(x, y - LIFT, PACK.w, PACK.h + LIFT).setOrigin(0).setInteractive({ useHandCursor: true });
-      // A press that drags (a swipe) scrolls instead.
-      hit.on("pointerup", (p: Phaser.Input.Pointer) => { if (Math.abs(p.y - p.downY) <= DRAG_PX) this.pick(i); });
-      this.shelves.addZone(hit);
+      this.shelves.addItem(x, y - LIFT, PACK.w, PACK.h + LIFT, () => this.pick(i));
     });
   }
 
   /** The pack's picture, or a blank pack with its set code when the picture is missing. */
   private packPicture(b: BoosterStock): Phaser.GameObjects.GameObject[] {
     if (this.textures.exists(packKey(b))) return [this.add.image(0, 0, packKey(b)).setOrigin(0)];
-    const g = this.add.graphics().fillStyle(0x8a8a8a).fillRect(0, 0, PACK.w, PACK.h).fillStyle(0x6a6a6a).fillRect(3, 3, PACK.w - 6, PACK.h - 6);
-    return [g, text(this, PACK.w / 2, PACK.h / 2 - 2, b.code, { color: 0xffffff, originX: 0.5 })];
+    return blankPicture(this, PACK.w, PACK.h, b.code);
   }
 
   /** The price labels, the picked one yellow. */
   private drawTags() {
     this.tags.clear();
-    BOOSTERS.forEach((_, i) => {
-      const { cx, shelfTop } = this.cell(i), x = cx - TAG.w / 2, y = shelfTop + SHELF_FACE + 1;
-      this.tags.fillStyle(C.woodEdge).fillRect(x, y, TAG.w, TAG.h);
-      this.tags.fillStyle(i === this.picked ? C.tagPicked : C.tag).fillRect(x + 1, y + 1, TAG.w - 2, TAG.h - 2);
-    });
+    BOOSTERS.forEach((_, i) => drawTag(this.tags, ...this.tagXY(i), i === this.picked));
   }
 
   /** Light streaks on the case's glass front, over everything inside. */
   private drawGlass() {
     const g = this.add.graphics().setDepth(2);
-    const slant = Math.round(IN.h * 0.35), bottom = IN.y + IN.h;
+    const slant = Math.round(IN.h * 0.35), bottom = IN.y + IN.h, V = Phaser.Math.Vector2;
     for (const [x, w, alpha] of [[IN.x + 20, 16, 0.07], [IN.x + 44, 5, 0.06], [IN.x + 200, 22, 0.05]]) {
-      const V = Phaser.Math.Vector2;
       g.fillStyle(C.glass, alpha).fillPoints([new V(x, bottom), new V(x + w, bottom), new V(x + w + slant, IN.y), new V(x + slant, IN.y)], true);
     }
   }
@@ -215,8 +208,7 @@ export class Shop extends Phaser.Scene {
       .map(([number, code, rarity]) => ({ number, code, rarity, name: this.engine.cards.records.get(code)?.name ?? `#${code}` }))
       .sort((a, b) => order.indexOf(a.rarity) - order.indexOf(b.rarity) || a.number.localeCompare(b.number))
       .map(({ code, name, rarity }) => ({ code, name, chip: rarityLook(rarity) }));
-    const [year, month] = (list?.released ?? "").split("-").map(Number);
-    const facts = list ? `${MONTHS[month - 1]} ${year}  -  ${list.cards.length} CARDS  -  ${CARDS_PER_PACK} PER PACK` : "";
+    const facts = list ? `${monthYear(list.released)}  -  ${list.cards.length} CARDS  -  ${CARDS_PER_PACK} PER PACK` : "";
     this.board.show(list?.name ?? b.code, facts, rows, b.price);
     this.drawTags();
   }
@@ -243,13 +235,8 @@ export class Shop extends Phaser.Scene {
 
   private pick(i: number) {
     if (transitioning(this.game) || this.opening || i === this.picked || i < 0 || i >= BOOSTERS.length) return;
-    const lift = (i: number, up: boolean) => {
-      const pack = this.packs[i];
-      this.tweens.killTweensOf(pack);
-      this.tweens.add({ targets: pack, y: this.packXY(i)[1] - (up ? LIFT : 0), duration: LIFT_MS, ease: "Linear" });
-    };
-    lift(this.picked, false);
-    lift(i, true);
+    liftTo(this, this.packs[this.picked], this.packXY(this.picked)[1]);
+    liftTo(this, this.packs[i], this.packXY(i)[1] - LIFT);
     this.picked = i;
     // A pack on a row out of view (picked with the arrow keys) scrolls it in.
     this.shelves.show(i);

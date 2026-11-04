@@ -20,7 +20,7 @@
    ✅ Rock-paper-scissors before each duel (cards on the board); the winner chooses to go first or second.
    ✅ Code cleanup: DuelScene split into InfoPanel / BoardPick / duelPrompts, dead code and duplicates removed, comments
    brought up to date.
-   ✅ Structure refactor (2026-10-25, `docs/refactor-plan.md`): feature folders, the biggest files split,
+   ✅ Structure refactor (2026-10-25): feature folders, the biggest files split,
    code-simplifier pass, CLAUDE.md slimmed with `docs/architecture.md`.
 3. **Opponent AI** (`docs/ai-plan.md`: one universal brain + per-card knowledge + trainer profiles; levels Rookie /
    Duelist / Expert, Expert as strong as possible, with lookahead later; no cheating by default).

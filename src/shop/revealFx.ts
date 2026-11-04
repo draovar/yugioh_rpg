@@ -7,10 +7,13 @@
 import Phaser from "phaser";
 import { pause, playTween } from "../duel-screen/tweens.ts";
 
+/** An effect that runs on until it's stopped: a shine timer, a glow or shine tween. */
+export type FxLoop = Phaser.Time.TimerEvent | Phaser.Tweens.Tween;
+
 export interface FxHost {
   scene: Phaser.Scene;
   layer: Phaser.GameObjects.Container;
-  loops: (Phaser.Time.TimerEvent | Phaser.Tweens.Tween)[];
+  loops: FxLoop[];
   /** The opening was closed: a shine waiting for its turn doesn't start. */
   closed: () => boolean;
 }
@@ -28,14 +31,23 @@ export interface FxCard {
   tight?: boolean;
 }
 
+const FX_T = { shake: 45, flash: 250, screenFlash: 300, sparkle: 550, shine: 450, shineEvery: 2600 };
+/** Sparkles a reveal bursts into, by rarity tier (0 = commons ... 4 = Secret Rare). */
+const SPARKLES = [0, 0, 8, 12, 16];
+
 /** An effect on the card itself goes just above its sprite: cards drawn after it (overlapping ones) cover it too. */
 function onCard(host: FxHost, c: FxCard, obj: Phaser.GameObjects.GameObject) {
   host.layer.addAt(obj, host.layer.getIndex(c.sprite) + 1);
 }
 
-export const FX_T = { shake: 45, flash: 250, screenFlash: 300, sparkle: 550, shine: 450, shineEvery: 2600 };
-/** Sparkles a reveal bursts into, by rarity tier (0 = commons ... 4 = Secret Rare). */
-export const SPARKLES = [0, 0, 8, 12, 16];
+/** Stops the effects that run on, emptying `loops` in place (the effects still hold it). */
+export function stopLoops(loops: FxLoop[]) {
+  for (const l of loops) {
+    if (l instanceof Phaser.Time.TimerEvent) l.remove();
+    else l.stop();
+  }
+  loops.length = 0;
+}
 
 /** Anticipation: the card trembles a pixel each way. */
 export async function shake(host: FxHost, c: FxCard) {
@@ -64,13 +76,13 @@ export function glow(host: FxHost, c: FxCard, color: number, rainbow: boolean) {
   }
 }
 
-export function flash(host: FxHost, c: FxCard) {
+function flash(host: FxHost, c: FxCard) {
   const r = host.scene.add.rectangle(c.x, c.y, c.w, c.h, 0xffffff, 0.8);
   onCard(host, c, r);
   void playTween(host.scene, { targets: r, alpha: 0, duration: FX_T.flash, onComplete: () => r.destroy() }, 1);
 }
 
-export function screenFlash(host: FxHost) {
+function screenFlash(host: FxHost) {
   const r = host.scene.add.rectangle(0, 0, 640, 360, 0xffffff, 0.35).setOrigin(0);
   host.layer.add(r);
   void playTween(host.scene, { targets: r, alpha: 0, duration: FX_T.screenFlash, onComplete: () => r.destroy() }, 1);
@@ -80,7 +92,7 @@ export function screenFlash(host: FxHost) {
  * Plus-shaped sparkles flying out from the card, in its rarity's colour and white (any colour for a Secret Rare), as
  * far as the card is wide (60-100 px from a card 76 px wide).
  */
-export function sparkles(host: FxHost, c: FxCard, color: number, n: number, rainbow: boolean) {
+function sparkles(host: FxHost, c: FxCard, color: number, n: number, rainbow: boolean) {
   const reach = c.w / 76;
   for (let i = 0; i < n; i++) {
     const angle = (i / n) * Math.PI * 2 + Math.random() * 0.4, dist = (60 + Math.random() * 40) * reach;
@@ -95,7 +107,7 @@ export function sparkles(host: FxHost, c: FxCard, color: number, n: number, rain
 }
 
 /** A slanted band of light sweeping across the card face (clipped to the card), its width scaled with the card. */
-export function shine(host: FxHost, c: FxCard) {
+function shine(host: FxHost, c: FxCard) {
   if (host.closed() || !c.sprite.active) return;
   const g = host.scene.add.graphics();
   onCard(host, c, g);

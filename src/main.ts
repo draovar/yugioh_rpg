@@ -11,7 +11,7 @@ import { fullscreenOnFirstTap } from "./ui/touch.ts";
 import { Transition } from "./ui/Transition.ts";
 import { HEIGHT, WIDTH, fitView, viewSize } from "./ui/view.ts";
 
-// Size and zoom: src/ui/view.ts (640x360 scaled up by whole numbers; the overworld's smaller ZOOMs at screen resolution).
+// Size and zoom follow the window and the world menu's SCALING and ZOOM: src/ui/view.ts.
 const game = new Phaser.Game({
   type: Phaser.AUTO,
   title: "Yu-Gi-Oh RPG",

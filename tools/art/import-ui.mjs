@@ -1,8 +1,7 @@
 // Copies each duel-screen theme's UI sprites from the Crusenho "Complete UI Essential Pack" (assets/,
 // CC BY 4.0) into public/assets/ui/<theme>/<role>.png. The roles are UI_ROLES in src/ui/theme.ts; a role
 // left out here (e.g. Runewood's "star", drawn for this project) is a hand-made file kept in the folder.
-// The theme's nine-slice insets and colours live in src/ui/theme.ts. "shop" isn't a theme: the card shop's own
-// Runewood sprites (public/assets/ui/shop/).
+// The theme's nine-slice insets and colours live in src/ui/theme.ts.
 // Usage: node tools/art/import-ui.mjs [theme...]   (default: every theme, and shop)
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -46,7 +45,7 @@ const THEMES = {
     "menu-back": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame01a.png"],
     "menu-button": ["13_Runewood_Theme/Sprites/UI_Runewood_FrameList09a.png"],
     "menu-button-hover": ["13_Runewood_Theme/Sprites/UI_Runewood_FrameList09c.png"],
-    // Unused by the mat layout; the plate sprite stands in.
+    // The deck editor's Main Deck slots.
     "zone-monster": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame01a.png"],
     // Card action menu: the dark wood frame (as the plates).
     "card-menu": ["13_Runewood_Theme/Sprites/UI_Runewood_Frame01a.png"],

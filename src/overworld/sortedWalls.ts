@@ -259,11 +259,11 @@ function touchingGroups(tiles: Phaser.Tilemaps.Tile[]): Phaser.Tilemaps.Tile[][]
 function wallBaseY(layers: Phaser.Tilemaps.TilemapLayer[], blockers: Phaser.Tilemaps.TilemapLayer | null): Map<Phaser.Tilemaps.Tile, number> {
   const { width: w, height: h } = layers[0].layer;
   const tileH = layers[0].tilemap.tileHeight;
-  // Per cell, read once (a forest made millions of tile lookups): a wall tile on any walls layer (`occupied`), and
-  // a "collision" layer cell or a wall tile with the `collision` property (`solid`).
   const isTile = (t: Phaser.Tilemaps.Tile | null): t is Phaser.Tilemaps.Tile => !!t && t.index !== -1;
   const props = (t: Phaser.Tilemaps.Tile) => t.properties as { collision?: boolean; sheet?: string };
-  // ...and the sheet of the cell's first wall tile (`firstSheet`).
+  // Per cell, read once (a forest made millions of tile lookups): a wall tile on any walls layer (`occupied`), a
+  // "collision" layer cell or a wall tile with the `collision` property (`solid`), and the sheet of the cell's first
+  // wall tile (`firstSheet`).
   const occupiedAt = new Uint8Array(w * h), solidAt = new Uint8Array(w * h), blockedAt = new Uint8Array(w * h);
   const firstSheet: (string | undefined)[] = new Array(w * h);
   blockers?.layer.data.forEach((row, y) => row.forEach((t, x) => { if (isTile(t)) blockedAt[y * w + x] = solidAt[y * w + x] = 1; }));

@@ -14,7 +14,7 @@ import { NPCS, type NpcDef } from "./npcs.ts";
 import { depthForY, isBaked, showMap } from "./sortedWalls.ts";
 import { Ambushes, loadAmbushes } from "./ambush.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
-import { layoutScale, setViewMode, worldSpriteScale } from "../ui/view.ts";
+import { WIDTH, layoutScale, setViewMode, worldSpriteScale } from "../ui/view.ts";
 
 const mapKey = (name: string) => `map-${name}`, tilesKey = (name: string) => `tiles-${name}`;
 
@@ -63,7 +63,7 @@ const READ_REACH = 8;
 /** Holding Z runs: this much faster, with the look's run frames. */
 const RUN_SPEED = 1.5;
 
-/** Where the player stood when they left for a duel or the lobby, and who they were dueling. */
+/** Where the player stood when they left the overworld (a duel, a shop, the lobby...), and who they were dueling. */
 let saved: { x: number; y: number; facing: Facing; flipX: boolean; opponent?: string } | null = null;
 /**
  * Set when walking through a warp: the point to arrive at, and the height to keep (maps placed side by side). Walking
@@ -156,8 +156,8 @@ export class Overworld extends Phaser.Scene {
     // The 32px character frames are drawn at 2x. Body size/offset are in frame pixels and scale with the sprite.
     // Start: back from a duel on the same spot, through a warp at its arrival point (layer "objects"), else at the
     // map's point named "spawn".
-    const point = (name: string) => map.findObject("objects", (o) => o.name === name);
-    const at = arrival?.spawn ? point(arrival.spawn) : arrival ? null : point("spawn");
+    const spawn = arrival ? arrival.spawn : "spawn";
+    const at = spawn ? map.findObject("objects", (o) => o.name === spawn) : null;
     const x = saved?.x ?? arrival?.x ?? at?.x ?? 400;
     let y = saved?.y ?? arrival?.y ?? at?.y ?? 520;
     const crossed = arrival?.x !== undefined;
@@ -205,36 +205,42 @@ export class Overworld extends Phaser.Scene {
       }),
     });
 
-    // Signs: rectangles named "sign" (layer "objects") with properties text and title (the dialog's header, "SIGN"
-    // if empty); read by facing them and pressing X. Shops: rectangles named "shop" (a counter, a door: the card
-    // shop) or "deckshop" (the deck shop) open the same way; "cardshop" asks first which one (the shopkeeper's dialog,
-    // optional properties title and text).
+    // Rectangles in layer "objects". Signs ("sign") with properties text and title (the dialog's header, "SIGN" if
+    // empty); read by facing them and pressing X. Shops: "shop" (a counter, a door: the card shop) or "deckshop" (the
+    // deck shop) open the same way; "cardshop" asks first which one (the shopkeeper's dialog, optional properties title
+    // and text). Warps ("warp") with properties map (target map) and spawn (the point to arrive at there); keepY keeps
+    // the player's height, for maps placed side by side with their tops aligned.
     this.spots = [];
     for (const o of map.getObjectLayer("objects")?.objects ?? []) {
       const area = new Phaser.Geom.Rectangle(o.x!, o.y!, o.width!, o.height!);
       const prop = (name: string) => (o.properties as { name: string; value: unknown }[] | undefined)?.find((p) => p.name === name)?.value;
-      if (o.name === "sign") {
-        const title = String(prop("title") || "Sign"), body = String(prop("text") ?? "");
-        this.spots.push({ area, use: () => this.dialog.open(title, body, ["OK"], () => {}) });
-      } else if (o.name === "shop") this.spots.push({ area, use: () => this.enterShop("Shop") });
-      else if (o.name === "deckshop") this.spots.push({ area, use: () => this.enterShop("DeckShop") });
-      else if (o.name === "cardshop") {
-        const title = String(prop("title") || "Shopkeeper"), body = String(prop("text") || "Welcome! Booster packs, or a whole deck?");
-        this.spots.push({ area, use: () => this.dialog.open(title, body, ["Packs", "Decks", "Leave"], (choice) => {
-          if (choice !== "Leave") this.enterShop(choice === "Packs" ? "Shop" : "DeckShop");
-        }) });
+      switch (o.name) {
+        case "sign": {
+          const title = String(prop("title") || "Sign"), body = String(prop("text") ?? "");
+          this.spots.push({ area, use: () => this.dialog.open(title, body, ["OK"], () => {}) });
+          break;
+        }
+        case "shop":
+          this.spots.push({ area, use: () => this.enterShop("Shop") });
+          break;
+        case "deckshop":
+          this.spots.push({ area, use: () => this.enterShop("DeckShop") });
+          break;
+        case "cardshop": {
+          const title = String(prop("title") || "Shopkeeper"), body = String(prop("text") || "Welcome! Booster packs, or a whole deck?");
+          this.spots.push({ area, use: () => this.dialog.open(title, body, ["Packs", "Decks", "Leave"], (choice) => {
+            if (choice !== "Leave") this.enterShop(choice === "Packs" ? "Shop" : "DeckShop");
+          }) });
+          break;
+        }
+        case "warp": {
+          const zone = this.add.zone(area.centerX, area.centerY, area.width, area.height);
+          this.physics.add.existing(zone, true);
+          this.physics.add.overlap(this.player, zone, () =>
+            this.warp(String(prop("map")), String(prop("spawn")), prop("keepY") === true));
+          break;
+        }
       }
-    }
-
-    // Warps: rectangles named "warp" (layer "objects") with properties map (target map) and spawn (the point to
-    // arrive at there); keepY keeps the player's height, for maps placed side by side with their tops aligned.
-    for (const o of map.getObjectLayer("objects")?.objects ?? []) {
-      if (o.name !== "warp") continue;
-      const prop = (name: string) => (o.properties as { name: string; value: unknown }[] | undefined)?.find((p) => p.name === name)?.value;
-      const zone = this.add.zone(o.x! + o.width! / 2, o.y! + o.height! / 2, o.width!, o.height!);
-      this.physics.add.existing(zone, true);
-      this.physics.add.overlap(this.player, zone, () =>
-        this.warp(String(prop("map")), String(prop("spawn")), prop("keepY") === true));
     }
 
     new ChipsGlove(this, 8, 8, this.chips, this.hud);
@@ -242,7 +248,7 @@ export class Overworld extends Phaser.Scene {
     // On touch devices the dialog sits between the D-pad and the X button.
     this.pad = TOUCH ? new TouchPad(this, this.hud, (code) => this.handleKey(code)) : null;
     this.dialog = new DialogBox(this, this.hud, TOUCH
-      ? { left: DPAD.x + DPAD.r + 8, right: 640 - (X_BUTTON.x - X_BUTTON.r) + 8 } : undefined);
+      ? { left: DPAD.x + DPAD.r + 8, right: WIDTH - (X_BUTTON.x - X_BUTTON.r) + 8 } : undefined);
 
     // Key events rather than JustDown polling, so quick taps are never missed.
     this.input.keyboard!.on("keydown", (event: KeyboardEvent) => this.handleKey(event.code));
@@ -340,8 +346,8 @@ export class Overworld extends Phaser.Scene {
    * points that may land on something solid (a warp keeping the height across maps).
    */
   private freeY(x: number, y: number): number {
-    const clear = (yy: number) => [...this.walls, ...(this.blockers ? [this.blockers] : [])]
-      .every((l) => l.getTilesWithinWorldXY(x - 15, yy + 1, 30, 30, { isColliding: true }).length === 0);
+    const layers = this.blockers ? [...this.walls, this.blockers] : this.walls;
+    const clear = (yy: number) => layers.every((l) => l.getTilesWithinWorldXY(x - 15, yy + 1, 30, 30, { isColliding: true }).length === 0);
     for (let d = 0; d <= 160; d += 16) {
       if (clear(y + d)) return y + d;
       if (clear(y - d)) return y - d;
@@ -353,19 +359,26 @@ export class Overworld extends Phaser.Scene {
     return (this.scene.get("WorldMenu") as WorldMenu).isOpen;
   }
 
-  /** A key press, or the touch pad's: answers the open dialog, else X / Enter / Space talks to the nearest NPC. */
+  /** A key press, or the touch pad's: answers the open dialog, else X / Enter / Space uses the `target`. */
   private handleKey(code: string) {
     if (this.menuOpen() || transitioning(this.game)) return;
     if (this.dialog.isOpen) this.dialog.handleKey(code);
-    else if (code === "KeyX" || code === "Enter" || code === "Space") {
-      // A sign or shop the player faces wins over an NPC standing nearby.
-      const spot = this.facedSpot(), npc = spot ? null : this.nearestNpc();
-      if (spot) spot.use();
-      else if (npc) this.talkTo(npc);
-    }
+    else if (code === "KeyX" || code === "Enter" || code === "Space") this.target()?.use();
   }
 
-  /** Remembers where the player stands, so coming back from a duel or the lobby puts them on the same spot. */
+  /**
+   * What X acts on: the sign or shop the player faces (it wins over an NPC standing nearby), else the nearest NPC.
+   * `x` / `top` place the talk hint over it.
+   */
+  private target(): { x: number; top: number; use: () => void } | null {
+    const spot = this.facedSpot();
+    if (spot) return { x: spot.area.centerX, top: spot.area.top, use: spot.use };
+    const npc = this.nearestNpc();
+    if (npc) return { x: npc.x, top: npc.getBounds().top, use: () => this.talkTo(npc) };
+    return null;
+  }
+
+  /** Remembers where the player stands, so coming back (from a duel, a shop, the lobby...) puts them on the same spot. */
   savePosition(opponent?: string) {
     if (!this.player) return;
     saved = { x: Math.round(this.player.x), y: Math.round(this.player.y), facing: this.facing, flipX: this.player.flipX, opponent };
@@ -446,10 +459,9 @@ export class Overworld extends Phaser.Scene {
       return;
     }
 
-    const spot = this.facedSpot(), npc = spot ? null : this.nearestNpc();
-    const hintAt = spot ? { x: spot.area.centerX, top: spot.area.top } : npc ? { x: npc.x, top: npc.getBounds().top } : null;
-    this.talkHint.setVisible(!!hintAt);
-    if (hintAt) this.talkHint.setPosition(Math.round(hintAt.x - this.talkHint.width / 2), Math.round(hintAt.top - 2 - this.talkHint.height));
+    const target = this.target();
+    this.talkHint.setVisible(!!target);
+    if (target) this.talkHint.setPosition(Math.round(target.x - this.talkHint.width / 2), Math.round(target.top - 2 - this.talkHint.height));
 
     let vx = 0, vy = 0;
     if (this.cursors.left.isDown || this.pad?.x === -1) vx = -SPEED;
@@ -467,13 +479,14 @@ export class Overworld extends Phaser.Scene {
     } else if (vy < 0) this.facing = "up";
     else if (vy > 0) this.facing = "down";
 
-    if (vx !== 0 || vy !== 0) this.player.play(walkAnim(this, running ? this.look.run : this.look.walk, this.facing, running ? 6 : 4), true);
+    const moving = vx !== 0 || vy !== 0;
+    if (moving) this.player.play(walkAnim(this, running ? this.look.run : this.look.walk, this.facing, running ? 6 : 4), true);
     else {
       this.player.anims.stop();
       this.player.setFrame(frameOf(this, this.look.walk, this.facing));
     }
     this.sortByFeet(this.player);
     this.crossEdge();
-    if (vx !== 0 || vy !== 0) this.ambushes?.walk(this.player, this.player.body.speed * this.game.loop.delta / 1000, this.facing);
+    if (moving) this.ambushes?.walk(this.player, this.player.body.speed * this.game.loop.delta / 1000, this.facing);
   }
 }

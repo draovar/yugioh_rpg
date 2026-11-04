@@ -66,11 +66,8 @@ interface Spot {
 export interface AmbushHooks {
   /** Turns the player (the scene keeps its facing). */
   turnPlayer(facing: Facing, flipX: boolean): void;
-  /**
-   * The ambusher has landed in front of the player; call `retreat` to send them back into the hedge, or
-   * `leaveForDuel` before starting their duel.
-   */
-  challenge(def: AmbushDef, npc: Phaser.GameObjects.Sprite, retreat: () => void): void;
+  /** The ambusher has landed in front of the player; call `leaveForDuel` before starting their duel. */
+  challenge(def: AmbushDef): void;
 }
 
 /**
@@ -84,14 +81,15 @@ export class Ambushes {
   private readonly scene: Phaser.Scene;
   private readonly defs: AmbushDef[];
   private readonly walls: Phaser.Tilemaps.TilemapLayer[];
-  private readonly blockers: Phaser.Tilemaps.TilemapLayer | null;
+  /** The walls layers and the map's hidden "collision" layer, if any. */
+  private readonly solidLayers: Phaser.Tilemaps.TilemapLayer[];
   private readonly hooks: AmbushHooks;
   /** Distance walked since the last roll / the last ambush. */
   private walked = 0;
   private cooldown = 0;
   /** An ambush is ready: it happens at the next spot that fits. */
   private ready = force;
-  /** The ambusher standing in front of the player (between `challenge` and `retreat`). */
+  /** The ambusher standing in front of the player once they `challenge`, for `leaveForDuel`. */
   private current: { def: AmbushDef; spot: Spot; npc: Phaser.GameObjects.Sprite } | null = null;
 
   constructor(scene: Phaser.Scene, map: string, walls: Phaser.Tilemaps.TilemapLayer[],
@@ -99,7 +97,7 @@ export class Ambushes {
     this.scene = scene;
     this.defs = AMBUSHERS[map] ?? [];
     this.walls = walls;
-    this.blockers = blockers;
+    this.solidLayers = blockers ? [...walls, blockers] : walls;
     this.hooks = hooks;
   }
 
@@ -151,12 +149,11 @@ export class Ambushes {
   }
 
   private solidTile(col: number, row: number) {
-    return [...this.walls, ...(this.blockers ? [this.blockers] : [])].some((l) => !!l.getTileAt(col, row)?.collides);
+    return this.solidLayers.some((l) => !!l.getTileAt(col, row)?.collides);
   }
 
   private solid(x: number, y: number, w: number, h: number) {
-    return [...this.walls, ...(this.blockers ? [this.blockers] : [])]
-      .some((l) => l.getTilesWithinWorldXY(x, y, w, h, { isColliding: true }).length > 0);
+    return this.solidLayers.some((l) => l.getTilesWithinWorldXY(x, y, w, h, { isColliding: true }).length > 0);
   }
 
   /** A 3-tile hedge face straight above the corridor ahead, with room to land between it and the player's row. */
@@ -253,7 +250,7 @@ export class Ambushes {
     const scene = this.scene, key = sheetKey(def.sprite);
     this.start(player);
     this.hooks.turnPlayer("side", player.flipX);
-    const { leaves, rustle } = this.leaves(key, spot);
+    const { rustle } = this.leaves(key, spot);
     const hedge = this.shakeHedge(spot, rustle);
 
     // A dark hollow opens in it, then eyes show; the player turns to look.
@@ -291,7 +288,7 @@ export class Ambushes {
     this.hooks.turnPlayer("side", !fromLeft);
     await this.wait(250);
     this.current = { def, spot, npc };
-    this.hooks.challenge(def, npc, () => void this.retreat(npc, spot, key, leaves));
+    this.hooks.challenge(def);
   }
 
   /** Side: the hedge beside the path shakes, then the NPC leaps out of it onto the path ahead. */
@@ -299,7 +296,7 @@ export class Ambushes {
     const scene = this.scene, key = sheetKey(def.sprite);
     this.start(player);
     this.hooks.turnPlayer(facing, false);
-    const { leaves, rustle } = this.leaves(key, spot);
+    const { rustle } = this.leaves(key, spot);
     const hedge = this.shakeHedge(spot, rustle);
     await this.wait(700);
     hedge.px = 2;
@@ -318,7 +315,7 @@ export class Ambushes {
     this.exclaim(player);
     await this.wait(700);
     this.current = { def, spot, npc };
-    this.hooks.challenge(def, npc, () => void this.retreat(npc, spot, key, leaves));
+    this.hooks.challenge(def);
   }
 
   /** Leaps back into the hedge and is gone. */
@@ -336,7 +333,6 @@ export class Ambushes {
     leaves.explode(10, spot.from.x, spot.from.y - 20);
     await this.wait(spot.kind === "front" ? 200 : 0);
     npc.destroy();
-    this.current = null;
     await this.wait(800);
     leaves.destroy();
     this.cooldown = COOLDOWN;

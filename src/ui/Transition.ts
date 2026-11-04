@@ -1,12 +1,12 @@
 import Phaser from "phaser";
 import { CARD_BACK } from "../duel-screen/CardSprite.ts";
-import { scaleWithView } from "./view.ts";
+import { HEIGHT, WIDTH, scaleWithView } from "./view.ts";
 
 /** Card back size (assets/cards/back.png). */
 const CARD_W = 38, CARD_H = 56;
-const COLS = Math.ceil(640 / CARD_W), ROWS = Math.ceil(360 / CARD_H);
+const COLS = Math.ceil(WIDTH / CARD_W), ROWS = Math.ceil(HEIGHT / CARD_H);
 /** The grid is centred, so the cut-off edges are even on both sides. */
-const LEFT = Math.round((640 - COLS * CARD_W) / 2), TOP = Math.round((360 - ROWS * CARD_H) / 2);
+const LEFT = Math.round((WIDTH - COLS * CARD_W) / 2), TOP = Math.round((HEIGHT - ROWS * CARD_H) / 2);
 /** Delay between diagonals of the wave, and how long one card takes to flip. */
 const STEP_MS = 25, FLIP_MS = 120;
 /** Covered for this long before the next scene starts. */
@@ -32,7 +32,7 @@ export class Transition extends Phaser.Scene {
 
   create() {
     scaleWithView(this);
-    this.backdrop = this.add.rectangle(0, 0, 640, 360, 0x000000).setOrigin(0).setVisible(false);
+    this.backdrop = this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000).setOrigin(0).setVisible(false);
     this.cards = [];
     for (let row = 0; row < ROWS; row++) {
       for (let col = 0; col < COLS; col++) {
@@ -42,7 +42,7 @@ export class Transition extends Phaser.Scene {
         this.cards.push(card);
       }
     }
-    this.blocker = this.add.zone(0, 0, 640, 360).setOrigin(0);
+    this.blocker = this.add.zone(0, 0, WIDTH, HEIGHT).setOrigin(0);
   }
 
   /** Card backs flip in, diagonal by diagonal, until they cover the screen. */

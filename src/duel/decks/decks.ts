@@ -249,8 +249,9 @@ export function banlistProblems(deck: Deck, cards: CardDb): string[] {
   const out: string[] = [];
   for (const [code, n] of copyCounts(deck)) {
     const r = cards.records.get(code);
-    if (!r || n <= copiesAllowed(r)) continue;
-    out.push(r.limit === 0 ? `${r.name} is forbidden` : `${r.name} x${n} (${copiesAllowed(r)} allowed)`);
+    if (!r) continue;
+    const allowed = copiesAllowed(r);
+    if (n > allowed) out.push(allowed === 0 ? `${r.name} is forbidden` : `${r.name} x${n} (${allowed} allowed)`);
   }
   return out;
 }
@@ -263,7 +264,7 @@ function copyCounts(deck: Deck): Map<number, number> {
 
 /** Whether `deck` holds exactly the cards of a prebuilt deck (as received from a peer, too). */
 function isPrebuilt(deck: Deck): boolean {
-  const key = (d: Deck) => [[...d.main].sort().join(), [...(d.extra ?? [])].sort().join()].join("|");
+  const key = (d: Deck) => `${[...d.main].sort().join()}|${[...(d.extra ?? [])].sort().join()}`;
   const k = key(deck);
   return Object.values(DECKS).some((d) => key(d.deck) === k);
 }

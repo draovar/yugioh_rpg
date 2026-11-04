@@ -75,7 +75,7 @@ Plan and milestones: `docs/ai-plan.md`; current work: `docs/ai-rework-plan.md`; 
   for a `Brain`, which returns a `Decision` (response + reason + scored options). Brains never get the session or raw
   messages, and are built with a `BrainContext` holding the rules engine (`core`, `cards`, `readScript`), never the
   duel. A boss that peeks at your hand would be an explicit `AiSeat` option, never a brain reading the session.
-  `decide()` also caps "yes" to the same optional effect at 20 per card per turn (`LOOP_LIMIT`: a brain that always
+  `decide()` also caps "yes" to the same optional effect at 20 per card per turn (`stopLoops`, `LOOP_LIMIT`: a brain that always
   accepts would loop a self-reviving card like Manticore of Darkness forever).
 - `trace.ts` turns decisions into lines (`&aitrace`, `arena --trace`); `boardText.ts` prints the whole board (the
   L key with `&aitrace`).
@@ -334,8 +334,8 @@ passes the `NetDuel` to `Duel`.
 - **Dev previews** (`src/dev/`): `&anims` (`animPreview.ts`) replays single animations, `&dialogs` (`dialogPreview.ts`)
   opens every prompt UI with sample cards (numbers match `docs/duel-ui-checklist.md`); both are written for seat 0 =
   you (`previewSeats.ts` swaps seats). In the card shop, `?shop&anims` makes BUY deal `rarityPack.ts`: one card of each
-  rarity, lowest first, to preview every reveal. `devSetups.ts` = the `&setup` boards. `capture.ts` + `tools/art/make-gif.mjs` =
-  frame capture to GIFs.
+  rarity, lowest first, to preview every reveal. `devSetups.ts` = the `&setup` boards. `capture.ts` =
+  frame capture (PNG frames into `captures/<clip>/`).
 
 ## Deck editor (`src/deck-editor/`)
 
@@ -361,9 +361,11 @@ table). Geometry in `layout.ts`.
 ## Card shop and deck shop (`src/shop/`)
 
 Two shop scenes, "fixed" 640x360, laid out alike: a fixture on a panelled wall on the left, a board on the right. What
-they share: `shopParts.ts` (colours `C`; `CASE` / `IN`, the fixture's frame and inside; `drawRoom`: wall, sign, frame,
+they share: `shopParts.ts` (colours `C`; `IN`, the fixture's inside; `drawRoom`: wall, sign, frame,
 baked into one texture, the scene drawing the inside; `shopButton`: Runewood list-row buttons, EXIT in dark brown with
-a white label, - / +, BUY; `ScrollingFixture`: what's on the fixture, scrolling, described below) and `ShopBoard.ts` (the
+a white label, - / +, BUY; `drawChipsAndExit`, `blankPicture` (a missing picture), `drawTag` / `tagPrice` (price
+labels), `liftTo` (the picked item's lift), `monthYear`; `ScrollingFixture`: what's on the fixture, scrolling, described
+below) and `ShopBoard.ts` (the
 board on the right: name, facts, a card list of chip rows or the deck editor's card rows, details, price, - / +, BUY;
 described below). They have their
 own look, not the UI theme's (the owner's choice: one real-shop look; the board is always Runewood's board and paper,
@@ -381,15 +383,14 @@ release date and `[number, passcode, rarity]` per card).
   overworld). Shelves of three booster displays: a box (lid standing up behind, packs inside: the front pack plus two
   darker ones behind, the set code on the front lip), a price label on the shelf edge, faint light streaks on the glass
   over it all (they don't move). The room and case are baked into one texture; everything on the shelves sits in
-  a `ScrollingFixture` (`shopParts.ts`; lines of items along an axis: here rows of three down the case, axis y; the
-  deck shop's is one long row of single-deck columns, axis x): its `content`, clipped to the case's inside by a Mask
-  filter on its parent. Two lines are in view (`VISIBLE_LINES`); with more stock they scroll a whole line at a time,
-  smoothly (`scroll`, `SCROLL_MS`): the wheel over the fixture (a line per `WHEEL_STEP` units; sideways wheels too on
-  axis x), a swipe on it along the axis (touch or mouse drag, `SWIPE_PX`; a press that drags never picks), the scroll
-  cues (`makeCues`: a small tab like the shop's sign on the fixture's frame, top / bottom or left / right, a gold arrow
-  in it bobbing a pixel toward the lines out of view, shown only while they can scroll that way; clicking one scrolls a
-  line), or picking an item out of view with the arrow keys (`show`). Only items on the lines in view take clicks
-  (`addZone`, `setZones`).
+  a `ScrollingFixture` (`shopParts.ts`, `{ count, perRow, rowH, busy }`: rows of items down the fixture, here three
+  a row; the deck shop's four): its `content`, clipped to the case's inside by a Mask filter on its parent. Two rows
+  are in view (`VISIBLE_ROWS`); with more stock they scroll a whole row at a time, smoothly (`scroll`, `SCROLL_MS`): the
+  wheel over the fixture (a row per `WHEEL_STEP` units), a vertical swipe on it (touch or mouse drag, `SWIPE_PX`), the
+  scroll cues (`ScrollCues`: a small tab like the shop's sign on the fixture's frame, top and bottom, a gold arrow in it
+  bobbing a pixel toward the rows out of view, shown only while they can scroll that way; clicking one scrolls a row),
+  or picking an item out of view with the arrow keys (`show`). Each item's hit zone comes from `addItem` (a press that
+  drags, `DRAG_PX`, scrolls and never picks); only items on the rows in view take clicks (`setZones`).
 - Pack pictures are drawn at 1x: 64x110 (`public/boosters/<SET>.png` from `npm run build-boosters`, loaded in
   `preload`; a missing one shows as a blank pack with its code). Clicking a pack (its hit zone covers the lifted spot
   too) or the arrow keys (rows and columns) pick it: its front pack lifts `LIFT` px out of the box, its label turns
@@ -416,8 +417,8 @@ release date and `[number, passcode, rarity]` per card).
   Rares, shown with the card's own rarity) and different
   commons (a Short Print half as likely as a Common, a Super Short Print a quarter), in random order.
 - The opening is an overlay in the shop scene (depth 100, a zone over everything takes the clicks; the shop passes it
-  its keys), laid out like the duel: the cards in the left 416 px, the duel's card info panel (`CardInfo` on the
-  theme's info board, 224 px) on the right. A dark shade, the set name, the pack at 1x
+  its keys), laid out like the duel: the cards in the left 416 px, the duel's card info panel (`OpeningPanel`:
+  `CardInfo` on the theme's info board, 224 px, plus a hint; shared with the deck unboxing) on the right. A dark shade, the set name, the pack at 1x
   (`public/boosters/large/<SET>.png`, 100x172) fades in, wiggles,
   its top tears off along a jagged line (`tornPieces`: two canvas textures cut from the picture, made once per pack)
   and flies away with a few bits of foil, the face-down cards (`CardSprite` at 2x) rise out of it while it drops, and
@@ -426,7 +427,7 @@ release date and `[number, passcode, rarity]` per card).
   pulsing 2px glow in its rarity's colour, then flashes and bursts into plus-shaped sparkles; an Ultra or Secret Rare
   also flashes the screen and gets a light band sweeping across it every few seconds; a Secret Rare's glow and
   sparkles run through the colours (`revealFx.ts`, any card size: shared with the deck unboxing; the effects that run
-  on go in the opening's `loops`, emptied in place when they stop). Each turned card gets its rarity chip under it. The info panel shows each card as
+  on go in the opening's `loops`, stopped and emptied by `stopLoops`). Each turned card gets its rarity chip under it. The info panel shows each card as
   its face comes up (during REVEAL ALL only the pack's one Rare-or-better card: commons leave it alone, so it doesn't
   flicker), then any face-up card hovered or tapped ("TURN A CARD OVER" before the first; no rarity line: the chips
   under the cards show it). REVEAL ALL (Esc) turns the rest over one by one. Once every card's reveal has
@@ -444,7 +445,7 @@ now only the 12 whose box pictures are cut out (the other 9 commented out).
 - Left: a pegboard on the panelled wall (sign DECK SHOP, CHIPS, EXIT / Esc): brown hardboard (baked with the room) and
   its holes, `HOLE` px apart (in the `ScrollingFixture` content, so they scroll with the rows; `ROW_H` is 13 holes and
   `COL_W` 8, so every peg sits in a hole). Four decks to a row (`COLS`, pegs `COL_W` apart from `PEG_X`), two rows in
-  view, scrolling down a row at a time like the card shop's shelves (axis y). Per deck: the box (78x126 at 1x, over a
+  view, scrolling down a row at a time like the card shop's shelves. Per deck: the box (78x126 at 1x, over a
   30% black copy 2px down-right as its shadow on the board; the board shows through its hanger hole), its peg in front
   (`PEG`, 5x5 pixels, outlined like the boxes: it comes straight out of a hole through the bump of the box's hole,
   `PEG_AT`), a price label under it. Clicking a box or the arrow keys (four columns) pick it: it lifts `LIFT` px (still
@@ -467,7 +468,7 @@ now only the 12 whose box pictures are cut out (the other 9 commented out).
   release and `[number, passcode, rarity, copies]` per card).
 - BUY (X / Enter / Space) opens the deck (`DeckOpening.ts`, free for now: no chips spent): an overlay like the pack
   opening (depth 100, a zone over everything takes the clicks, the shop passes it its keys), the deck editor's left side
-  (`drawDeckTable`, the deck's name on the bar, `deckSlots`) and the duel's card info panel on the right. The box comes
+  (`drawDeckTable`, the deck's name on the bar, `deckSlots`) and the pack opening's `OpeningPanel` on the right. The box comes
   in on the mat at its full size (`public/deck-boxes/large/<CODE>.png`, 153x250 at 1x; without it the pegboard's at
   2x), wiggles, squashes and flashes: its cards (a passcode per copy, Fusions to the Extra Deck, `goesToExtra`) rise out
   face down while it drops away, are dealt one by one to their deck editor places (`deckPlaces`), and turn over in a
@@ -524,7 +525,7 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
 - `lib/engine.ts`: shared core + card data loader, `newDuel`, `runDuel` (AI vs AI to the end), `seedFrom(n)` (four
   64-bit seed words from one number). `lib/match.ts`: brain vs brain matches on worker threads (`matchJobs`,
   `runMatch`, `winRate`, `PassivityStats`; also the workers' entry), used by arena and tune. `lib/args.ts`: `--name
-  value` option parsing. `lib/palette.mjs` / `art-style.mjs` / `bmfont.mjs` / `indexed-png.mjs`: art quantisation, style knobs, BMFont output, lossless indexed PNG output (card art).
+  value` option parsing. `lib/palette.mjs` / `art-style.mjs` / `bmfont.mjs` / `indexed-png.mjs`: art quantisation, style knobs, BMFont output, lossless indexed PNG output (card art, deck boxes).
 - `data/`: `fetch-data` (CardScripts at the pinned commit + BabelCDB), `build-pool` (TCG products up to the cutoff
   from YGOPRODeck set lists, mapped to BabelCDB passcodes (an alias with the same name is an alt art, one with another
   name a card of its own, e.g. Harpie Lady 1), ± `pool-exceptions.json` by name → `data/pool.json`; and the core
@@ -537,7 +538,7 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   `boosters.json` and `data/decks.json` → `decks.json`, every card checked to be in the pool), `check-cards`.
 - `art/`: `fetch-art` / `build-art` (YGOPRODeck crops → the shared palette, `art32` atlas + `art128`), `build-palette`,
   `import-ui` (Crusenho pack → theme sprites), `build-pixel-font` / `build-tiny5-font`, `build-chips-glove` (the
-  glove's four star frames, the stars drawn in code on `data/ui/chips-glove.png`, + its digit font), `make-gif`, `build-boosters`
+  glove's four star frames, the stars drawn in code on `data/ui/chips-glove.png`, + its digit font), `build-boosters`
   (`vendor/paid/booster-packs/<SET>.png`, pack pictures saved by hand, in the private assets repo; the deploy runs it
   after `build-tiles` → `public/boosters/`, each 64x110, the card shop's 1x
   size: transparent padding cut, other shapes stretched; plus `public/boosters/large/` at 100x172 for opening packs),
@@ -550,7 +551,7 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
     `nudge` = move single frames by pixels; `{ "sheet": "x.png" }` = a ready-made 96x96 sheet in the same layout, drawn
     for this game: `player-girl`, `player-girl-run`; `{ "recolor": base, "hair": [...], "shirt": [...] }` = the base
     with its hair / shirt colour ramps from `recolors` swapped: the `hopper-*` ambushers) → `public/assets/overworld/characters.png`+`.json` (one row of 9
-    32x32 frames per character: down / side (facing right) / up × stand, step, step), `props.png`+`.json`,
+    32x32 frames per character: down / side (facing right) / up × stand, step, step),
     `balloons.png`+`.json` (16x16 reaction balloons: heart, dots, exclaim, anger, sweat, question), and the contact
     sheet `docs/characters.png` with every name.
   - `build-ambush` (run by `build-characters`): for each name in characters.json's `ambush` list, a row of 10 32x32
@@ -583,17 +584,6 @@ Node scripts; `.ts` ones run directly with Node 24 type stripping (no tsx). CLAU
   markings), whose complete edge sets the theme sheets lack. Custom art goes the same way: its image in
   `vendor/paid/custom/`, its `.tsj` in `data/maps/tilesets/` (`yugioh.tsj`: `custom/yugioh_tileset.png`, 16 px tiles;
   rows 0-14 drawn by hand, the pieces below them from `build-yugioh-sheet`).
-  - `build-main-city.mjs`: the main city, planned by hand in code on the island template (the ground under it is read
-    from the island blockout, so the edges still meet `junction` and `city-north`): tile classes (water, sand, grass,
-    sidewalk, road, dirt) from rectangles and polygons → terrain layers (sidewalk/asphalt curbs from the autotile set,
-    grey sidewalks in the east), lane markings, zebra crossings, piers and a boardwalk from the camping sheet, then
-    buildings and props stamped by catalogue name (a modular shop is roof + floors + shopfront, `tower`), street lamps
-    along every road, iron-fenced villa gardens (their door paths are the gates), district `area` labels. Prints props
-    that found no room and walkable tiles left without ground. A scaffold: **overwrites** the .tmj (Tiled edits lost).
-    Its helpers are `tools/lib/map-builder.mjs`: tilesets + catalogue lookup, `stamp` (an object into the first free
-    walls layer, collision `all` / `base` rows / tree `trunk`, fully transparent cells skipped), corner-signature terrain
-    (`edgeSet`, `scored` for blob sets: picks the piece whose inside matches its corners), blob sets read from the
-    sidewalk block's layout (`blobSet` / `paintBlob`, for fences and hedges) and the .tmj writer.
   - `generate-world.mjs data/maps/island/layout.json [--only NAME] [--force]`: world template from a blockout picture
     (`data/maps/island/blockout.png`, 1 px = 1 tile, 1868x1688: traced from the owner's `sketch.png`, then made 4x as
     wide with smoothed coasts and roads redrawn as 1 px lines; colours in the layout's legend: sea, grass, desert,

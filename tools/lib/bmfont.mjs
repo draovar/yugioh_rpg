@@ -24,10 +24,8 @@ export async function writeBitmapFont(outDir, name, glyphs, { capHeight, lineHei
   const W = Math.max(1, x), H = Math.max(1, ...placed.map((g) => g.rows)) + 2 * pad;
   const rgba = Buffer.alloc(W * H * 4);
   for (const g of placed) {
-    g.bits.forEach((row, r) => row.forEach((on, c) => {
-      if (!on) return;
-      const i = ((pad + r) * W + g.x + c) * 4;
-      rgba.set([...palette[on], 255], i);
+    g.bits.forEach((row, r) => row.forEach((v, c) => {
+      if (v) rgba.set([...palette[v], 255], ((pad + r) * W + g.x + c) * 4);
     }));
   }
   await sharp(rgba, { raw: { width: W, height: H, channels: 4 } }).png().toFile(path.join(outDir, `${name}.png`));

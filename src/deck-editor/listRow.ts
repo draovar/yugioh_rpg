@@ -7,7 +7,7 @@ import { FONT_UI, INK, INK_SOFT, WHITE, fit, text } from "../ui/pixel.ts";
 
 /** Colour strip on a list row by frame (the card frames' main colours). */
 const KIND_COLOR = { normal: 0xd8b04a, effect: 0xc8692c, ritual: 0x4f78c8, fusion: 0x8a54a8, spell: 0x2a9a7a, trap: 0xb04a8a };
-export function kindColor(r: CardRecord): number {
+function kindColor(r: CardRecord): number {
   if (r.type & TYPE.SPELL) return KIND_COLOR.spell;
   if (r.type & TYPE.TRAP) return KIND_COLOR.trap;
   if (r.type & TYPE.FUSION) return KIND_COLOR.fusion;
@@ -35,7 +35,7 @@ export function cardRow(scene: Phaser.Scene, into: Phaser.GameObjects.Container,
 }
 
 /** A list row's second and third lines: "LV4 DARK SPELLCASTER" / "ATK 2500  DEF 2100", or "SPELL - QUICK-PLAY". */
-export function describe(r: CardRecord): [string, string] {
+function describe(r: CardRecord): [string, string] {
   if (r.type & TYPE.MONSTER) {
     const stat = (v: number) => (v < 0 ? "?" : String(v));
     return [`LV${r.level & 0xff} ${attributeNames(r.attribute)} ${raceNames(BigInt(r.race))}`, `ATK ${stat(r.atk)}  DEF ${stat(r.def)}`];
@@ -43,10 +43,7 @@ export function describe(r: CardRecord): [string, string] {
   return [`${r.type & TYPE.SPELL ? "SPELL" : "TRAP"} - ${spellTrapKind(r.type)}`, ""];
 }
 
-/**
- * Eye shown over a hovered list row's art (2x, dark outline, semi-transparent): clicking the art opens the card.
- * w = white, k = pupil, h = glint.
- */
+/** The eye shown over a hovered row's art (clicking the art opens the card): w = white, k = pupil, h = glint. */
 const EYE = ["...wwwww...", ".ww.....ww.", "w...kkk...w", "w..kkhkk..w", "w...kkk...w", ".ww.....ww.", "...wwwww..."];
 const EYE_COLOR: Record<string, number> = { w: 0xffffff, k: 0x1a1a2a, h: 0xffffff };
 

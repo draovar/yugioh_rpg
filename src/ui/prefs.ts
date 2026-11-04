@@ -140,7 +140,9 @@ const INTEGER_KEY = "view.integerScale";
  */
 export function integerScale(): boolean | null {
   const saved = load(INTEGER_KEY);
-  return saved === "1" ? true : saved === "0" ? false : null;
+  if (saved === "1") return true;
+  if (saved === "0") return false;
+  return null;
 }
 
 export function setIntegerScale(on: boolean): void {

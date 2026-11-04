@@ -371,8 +371,12 @@ export class DuelScene extends Phaser.Scene {
   private onEnd(winner: number | null, reason: number | null) {
     this.ended = true;
     this.clearInteraction();
-    this.endDialog(winner, reason, () =>
-      void transitionTo(this, this.sceneData.returnScene ?? "Overworld", { duelResult: { won: winner === this.me } }));
+    this.endDialog(winner, reason, () => this.leave({ won: winner === this.me }));
+  }
+
+  /** Back to the scene that started the duel (the overworld by default). */
+  private leave(duelResult?: { won: boolean }) {
+    void transitionTo(this, this.sceneData.returnScene ?? "Overworld", duelResult && { duelResult });
   }
 
   /**
@@ -385,10 +389,7 @@ export class DuelScene extends Phaser.Scene {
     this.controller?.stop(); // none yet during rock-paper-scissors
     this.modal.close();
     this.clearInteraction();
-    const duelResult = won === undefined ? undefined : { won };
-    this.modal.dialog(message.toUpperCase(), [
-      { label: "CONTINUE", onClick: () => void transitionTo(this, this.sceneData.returnScene ?? "Overworld", duelResult && { duelResult }) },
-    ]);
+    this.modal.dialog(message.toUpperCase(), [{ label: "CONTINUE", onClick: () => this.leave(won === undefined ? undefined : { won }) }]);
   }
 
   /** Your Deck's menu: FORFEIT ends the duel as a loss (and tells the other player in a peer-to-peer duel). */
@@ -416,8 +417,8 @@ export class DuelScene extends Phaser.Scene {
     if (winner === this.me) message = "YOU WIN THE DUEL!";
     else if (winner === 1 - this.me) message = "YOU LOST THE DUEL...";
     const why = reason === null ? "" : this.engine.text.winReason(reason);
-    this.modal.dialog(why ? `${message}
-${why.toUpperCase()}` : message, [{ label: "CONTINUE", onClick: onContinue }]);
+    if (why) message += `\n${why.toUpperCase()}`;
+    this.modal.dialog(message, [{ label: "CONTINUE", onClick: onContinue }]);
   }
 
   /** Lists a pile's cards in a picker dialog: a Graveyard (newest first, then banished cards) or your Extra Deck. */
@@ -431,7 +432,7 @@ ${why.toUpperCase()}` : message, [{ label: "CONTINUE", onClick: onContinue }]);
     const acts = shown.map((c) => (c.location === undefined ? undefined : this.actions.get(cardKey(c))));
     this.modal.picker({
       title: pile === "extra" ? `${owner} Extra Deck` : `${owner} Graveyard (newest first)${banished.length ? ", then banished" : ""}`,
-      // No names (they're on the cards); only banished cards get a caption, to tell them apart.
+      // No names (they're on the cards): captions only for actions, or to tell banished cards apart.
       cards: shown.map((c, i) => acts[i]
         ? { code: c.code, caption: acts[i].map((a) => a.label).join(" / ") }
         : { code: c.code, inert: true, caption: i < contents.length ? "" : "BANISHED" }),

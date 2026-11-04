@@ -19,12 +19,14 @@ const OUT = path.join(ROOT, "public/data");
 const SCRIPT_DIRS = ["official", "unofficial"];
 
 const pool = JSON.parse(readFileSync(path.join(ROOT, "data/pool.json"), "utf-8")).cards;
+const inPool = new Set(pool);
 
 const db = new DatabaseSync(CDB, { readOnly: true });
 const stmt = db.prepare(
   "SELECT d.id, d.alias, d.setcode, d.type, d.atk, d.def, d.level, d.race, d.attribute, t.* " +
   "FROM datas d JOIN texts t ON t.id = d.id WHERE d.id = ?");
 stmt.setReadBigInts(true);
+const idByName = db.prepare("SELECT d.id FROM datas d JOIN texts t ON t.id = d.id WHERE t.name = ? AND d.alias = 0");
 
 // Older versions: cards play their modern version, except those data/card-versions.json picks. CardScripts' goat/
 // and pre-errata/ folders script older versions under codes of their own, whose database entries
@@ -39,24 +41,24 @@ for (const [dir, cdb] of Object.entries(variantDbs)) {
   const vdb = new DatabaseSync(path.join(path.dirname(CDB), cdb), { readOnly: true });
   const byAlias = vdb.prepare("SELECT d.id, d.alias, d.type, t.* FROM datas d JOIN texts t ON t.id = d.id WHERE d.alias = ? ORDER BY d.id");
   for (const name of Object.keys(picked[dir])) {
-    const base = db.prepare("SELECT d.id FROM datas d JOIN texts t ON t.id = d.id WHERE t.name = ? AND d.alias = 0").get(name);
+    const base = idByName.get(name);
     if (!base) throw new Error(`card-versions.json: no card named "${name}" in cards.cdb`);
     const code = Number(base.id);
     if (variants.has(code)) throw new Error(`card-versions.json: "${name}" is picked twice`);
-    if (!pool.includes(code)) throw new Error(`card-versions.json: "${name}" is not in the pool`);
+    if (!inPool.has(code)) throw new Error(`card-versions.json: "${name}" is not in the pool`);
     const row = byAlias.all(code).find((r) => existsSync(path.join(SCRIPTS, dir, `c${r.id}.lua`)));
     if (!row) throw new Error(`card-versions.json: "${name}" has no ${dir} version`);
     variants.set(code, { file: path.join(SCRIPTS, dir, `c${row.id}.lua`), row });
   }
 }
 
+// str1..str16: effect descriptions referenced by aux.Stringid(code, n) -> strings[n]
+const strings = (r) => Array.from({ length: 16 }, (_, i) => r[`str${i + 1}`] ?? "");
 const record = (r) => ({
   code: Number(r.id), alias: Number(r.alias), setcode: r.setcode.toString(), type: Number(r.type),
   atk: Number(r.atk), def: Number(r.def), level: Number(r.level), race: r.race.toString(),
   attribute: Number(r.attribute), name: r.name, desc: r.desc, strings: strings(r),
 });
-// str1..str16: effect descriptions referenced by aux.Stringid(code, n) -> strings[n]
-const strings = (r) => Array.from({ length: 16 }, (_, i) => r[`str${i + 1}`] ?? "");
 
 const cards = [];
 const missing = [];
@@ -102,10 +104,8 @@ for (const f of readdirSync(SCRIPTS)) if (f.endsWith(".lua")) scripts[f] = readF
 const noScript = [];
 for (const c of cards) {
   const name = `c${c.code}.lua`;
-  const dir = SCRIPT_DIRS.find((d) => existsSync(path.join(SCRIPTS, d, name)));
-  const variant = variants.get(c.code);
-  if (variant) scripts[name] = readFileSync(variant.file, "utf-8");
-  else if (dir) scripts[name] = readFileSync(path.join(SCRIPTS, dir, name), "utf-8");
+  const file = variants.get(c.code)?.file ?? SCRIPT_DIRS.map((d) => path.join(SCRIPTS, d, name)).find((f) => existsSync(f));
+  if (file) scripts[name] = readFileSync(file, "utf-8");
   else if (c.type & 0x20 /* TYPE_EFFECT */ || c.type & 0x6 /* spell/trap */) noScript.push(c.code);
 }
 
@@ -121,7 +121,7 @@ for (const c of cards) {
   for (let i = 1; i <= 8; i++) candidates.push(c.code + i);
   for (const id of candidates) {
     const r = stmt.get(id);
-    if (r && BigInt(r.type) & TYPE_TOKEN && !pool.includes(id) && !tokens.has(id)) {
+    if (r && BigInt(r.type) & TYPE_TOKEN && !inPool.has(id) && !tokens.has(id)) {
       tokens.add(id);
       cards.push(record(r));
     }
@@ -145,17 +145,14 @@ mkdirSync(OUT, { recursive: true });
 writeFileSync(path.join(OUT, "strings.json"), JSON.stringify({ system, counter, victory }));
 writeFileSync(path.join(OUT, "cards.json"), JSON.stringify(cards));
 writeFileSync(path.join(OUT, "scripts.json"), JSON.stringify(scripts));
-const boosters = JSON.parse(readFileSync(path.join(ROOT, "data/boosters.json"), "utf-8")).sets;
-const inPool = new Set(pool);
-for (const set of boosters) for (const [number, code] of set.cards) {
-  if (!inPool.has(code)) throw new Error(`boosters.json: ${number} (${code}) isn't in the pool: rerun npm run build-pool`);
+// build-pool's set lists (the shops' boosters and decks), every card checked to be in the pool.
+for (const [file, key] of [["boosters.json", "sets"], ["decks.json", "decks"]]) {
+  const lists = JSON.parse(readFileSync(path.join(ROOT, "data", file), "utf-8"))[key];
+  for (const list of lists) for (const [number, code] of list.cards) {
+    if (!inPool.has(code)) throw new Error(`${file}: ${number} (${code}) isn't in the pool: rerun npm run build-pool`);
+  }
+  writeFileSync(path.join(OUT, file), JSON.stringify(lists));
 }
-writeFileSync(path.join(OUT, "boosters.json"), JSON.stringify(boosters));
-const decks = JSON.parse(readFileSync(path.join(ROOT, "data/decks.json"), "utf-8")).decks;
-for (const deck of decks) for (const [number, code] of deck.cards) {
-  if (!inPool.has(code)) throw new Error(`decks.json: ${number} (${code}) isn't in the pool: rerun npm run build-pool`);
-}
-writeFileSync(path.join(OUT, "decks.json"), JSON.stringify(decks));
 console.log(`cards: ${cards.length - tokens.size} + ${tokens.size} tokens (${variants.size} in an older version: card-versions.json` +
   `), scripts: ${Object.keys(scripts).length}`);
 console.log(`banlist ${banlist.name}: ${cards.filter((c) => c.limit !== undefined).length} pool cards limited` +

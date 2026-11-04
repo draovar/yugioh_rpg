@@ -55,8 +55,9 @@ export function viewSize(m: ViewMode) {
 /** Fits the game to the window in the current mode (window resizes, phone rotations, a mode or ZOOM change). */
 export function fitView(game: Phaser.Game) {
   const { width, height, zoom } = viewSize(mode), scale = game.scale;
-  if (width === scale.width && height === scale.height && zoom === scale.zoom) return;
-  if (width !== scale.width || height !== scale.height) scale.resize(width, height);
+  const resized = width !== scale.width || height !== scale.height;
+  if (!resized && zoom === scale.zoom) return;
+  if (resized) scale.resize(width, height);
   // After the resize: Phaser's resize leaves the canvas's CSS size alone when it equals the new game size (the full
   // detail game at zoom 1), setZoom always sets it.
   scale.setZoom(zoom);

@@ -1,7 +1,7 @@
 // What the card shop (Shop.ts) and the deck shop (DeckShop.ts) share: the room (dark wood panelling, a sign, a
-// wood-framed fixture in the same place: the card shop's glass case, the deck shop's pegboard), the Runewood list
-// buttons, what's on the fixture scrolling a row or column at a time (ScrollingFixture). The shops have their own
-// look, not the UI theme's (the owner's choice: one real-shop look).
+// wood-framed fixture in the same place: the card shop's glass case, the deck shop's pegboard), the chip count and
+// EXIT, the Runewood list buttons, the price labels, what's on the fixture scrolling a row at a time
+// (ScrollingFixture). The shops have their own look, not the UI theme's (the owner's choice: one real-shop look).
 import Phaser from "phaser";
 import { text } from "../ui/pixel.ts";
 import { THEMES } from "../ui/theme.ts";
@@ -17,24 +17,33 @@ export const C = {
 };
 
 /** The fixture on the left (wood frame) and its inside. */
-export const CASE = { x: 8, y: 30, w: 400, h: 324 };
+const CASE = { x: 8, y: 30, w: 400, h: 324 };
 export const IN = { x: CASE.x + 6, y: CASE.y + 6, w: CASE.w - 12, h: CASE.h - 12 };
 export const RUNEWOOD = THEMES.runewood;
 /** The shops' buttons: 2px taller than a list row, the label in the middle. */
 export const BUTTON_H = LIST_BUTTON_H + 2;
 /** Pointer travel that turns a press into a scroll (a shorter one picks or opens), as in the deck editor. */
 export const DRAG_PX = 6;
-export const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const TAG = { w: 24, h: 9 };
+/** A picked item lifts (and the one picked before settles back) in this long. */
+const LIFT_MS = 80;
 /** The scroll cues' arrows bob a pixel this often. */
 const CUE_BOB_MS = 600;
-/** Lines (rows or columns) in view; more scroll (a line at a time, SCROLL_MS each). A swipe on the fixture this long
- * scrolls a line (touch, or a mouse drag); so do this many wheel units (a mouse notch is ~100). */
-const VISIBLE_LINES = 2, SCROLL_MS = 250, SWIPE_PX = 16, WHEEL_STEP = 50;
+/** Rows in view; more scroll (a row at a time, SCROLL_MS each). A swipe on the fixture this long scrolls a row (touch,
+ * or a mouse drag); so do this many wheel units (a mouse notch is ~100). */
+const VISIBLE_ROWS = 2, SCROLL_MS = 250, SWIPE_PX = 16, WHEEL_STEP = 50;
 
 export const shade = (color: number, by: number) => {
   const c = Phaser.Display.Color.ValueToColor(color);
   return (by < 0 ? c.darken(-by) : c.lighten(by)).color;
 };
+
+/** A release date (YYYY-MM-DD) as its month and year: "MAR 2004". */
+export function monthYear(date: string): string {
+  const [year, month] = date.split("-").map(Number);
+  return `${MONTHS[month - 1]} ${year}`;
+}
 
 /**
  * The shops' buttons: list-row buttons like the info panel's CLOSE, always Runewood's: wood for - / +, green for BUY,
@@ -96,137 +105,151 @@ export function drawRoom(scene: Phaser.Scene, title: string, inside: (g: Phaser.
   text(scene, CASE.x + CASE.w / 2, 10, title, { color: C.signInk, scale: 2, originX: 0.5 });
 }
 
+/** The chip count top-left; EXIT in dark brown at the fixture's right edge, level with the sign. */
+export function drawChipsAndExit(scene: Phaser.Scene, chips: number, onExit: () => void) {
+  text(scene, 10, 12, `CHIPS: ${chips}`, { color: C.light });
+  shopButton(scene, CASE.x + CASE.w - 40, 15 - Math.floor(BUTTON_H / 2), 40, "EXIT", "dark", onExit);
+}
+
+/** A blank picture with `code` on it, for an item whose picture is missing. */
+export function blankPicture(scene: Phaser.Scene, w: number, h: number, code: string): Phaser.GameObjects.GameObject[] {
+  const g = scene.add.graphics().fillStyle(0x8a8a8a).fillRect(0, 0, w, h).fillStyle(0x6a6a6a).fillRect(3, 3, w - 6, h - 6);
+  return [g, text(scene, w / 2, h / 2 - 2, code, { color: 0xffffff, originX: 0.5 })];
+}
+
+/** A price label centred on x, its top at y: light, the picked one yellow (its price: `tagPrice`). */
+export function drawTag(g: Phaser.GameObjects.Graphics, x: number, y: number, picked: boolean) {
+  const left = x - TAG.w / 2;
+  g.fillStyle(C.woodEdge).fillRect(left, y, TAG.w, TAG.h);
+  g.fillStyle(picked ? C.tagPicked : C.tag).fillRect(left + 1, y + 1, TAG.w - 2, TAG.h - 2);
+}
+
+/** The price on a label centred on x, its top at y. */
+export function tagPrice(scene: Phaser.Scene, x: number, y: number, price: number): Phaser.GameObjects.BitmapText {
+  return text(scene, x, y + 2, String(price), { color: C.ink, originX: 0.5 });
+}
+
+/** Moves an item to `y`: up off its rest when picked, back down when another one is. */
+export function liftTo(scene: Phaser.Scene, item: Phaser.GameObjects.Container, y: number) {
+  scene.tweens.killTweensOf(item);
+  scene.tweens.add({ targets: item, y, duration: LIFT_MS, ease: "Linear" });
+}
+
 /**
- * Scroll cues for a fixture with more lines than fit: a small tab like the sign on its frame (top / bottom for rows,
- * left / right for columns), a gold arrow in it bobbing a pixel toward the lines out of view (pixel steps, CUE_BOB_MS
- * apart). Clicking one calls `onScroll`.
+ * Scroll cues for a fixture with more rows than fit: a small tab like the sign across its top and bottom frame, a gold
+ * arrow in it bobbing a pixel toward the rows out of view (pixel steps, CUE_BOB_MS apart). Clicking one calls `onScroll`.
  */
 class ScrollCues {
   private cues: { by: -1 | 1; root: Phaser.GameObjects.Container; arrow: Phaser.GameObjects.Graphics; rest: number }[];
 
-  constructor(scene: Phaser.Scene, axis: "x" | "y", onScroll: (by: -1 | 1) => void) {
-    const long = 17, short = 9;
+  constructor(scene: Phaser.Scene, onScroll: (by: -1 | 1) => void) {
+    const w = 17, h = 9, cx = CASE.x + CASE.w / 2;
     this.cues = ([-1, 1] as const).map((by) => {
-      let tab: Phaser.GameObjects.Graphics, arrow: Phaser.GameObjects.Graphics, hit: Phaser.GameObjects.Zone, rest: number;
-      if (axis === "y") {
-        // Top: across the top frame, under the sign; bottom: across the bottom frame. The arrow 7 wide, 4 tall: rows 1,
-        // 3, 5, 7 px pointing up, the reverse pointing down.
-        const cx = CASE.x + CASE.w / 2, y = by < 0 ? CASE.y - 2 : CASE.y + CASE.h - short + 2;
-        tab = scene.add.graphics().fillStyle(C.signEdge).fillRect(cx - 8, y, long, short).fillStyle(C.sign).fillRect(cx - 7, y + 1, long - 2, short - 2);
-        arrow = scene.add.graphics({ x: cx, y: y + 2 });
-        for (let k = 0; k < 4; k++) arrow.fillStyle(C.signInk).fillRect(-k, by < 0 ? k : 3 - k, 2 * k + 1, 1);
-        hit = scene.add.zone(cx - 24, y - 2, 48, short + 4);
-        rest = y + 2;
-      } else {
-        // Left: across the left frame; right: across the right frame. The arrow 4 wide, 7 tall, pointing out.
-        const cy = CASE.y + CASE.h / 2, x = by < 0 ? CASE.x - 2 : CASE.x + CASE.w - short + 2;
-        tab = scene.add.graphics().fillStyle(C.signEdge).fillRect(x, cy - 8, short, long).fillStyle(C.sign).fillRect(x + 1, cy - 7, short - 2, long - 2);
-        arrow = scene.add.graphics({ x: x + 2, y: cy });
-        for (let k = 0; k < 4; k++) arrow.fillStyle(C.signInk).fillRect(by < 0 ? k : 3 - k, -k, 1, 2 * k + 1);
-        hit = scene.add.zone(x - 2, cy - 24, short + 4, 48);
-        rest = x + 2;
-      }
-      hit.setOrigin(0).setInteractive({ useHandCursor: true }).on("pointerup", () => onScroll(by));
-      return { by, root: scene.add.container(0, 0, [tab, arrow, hit]).setDepth(3), arrow, rest };
+      // Top: across the top frame, under the sign; bottom: across the bottom frame. The arrow 7 wide, 4 tall: rows 1,
+      // 3, 5, 7 px pointing up, the reverse pointing down.
+      const y = by < 0 ? CASE.y - 2 : CASE.y + CASE.h - h + 2;
+      const tab = scene.add.graphics().fillStyle(C.signEdge).fillRect(cx - 8, y, w, h).fillStyle(C.sign).fillRect(cx - 7, y + 1, w - 2, h - 2);
+      const arrow = scene.add.graphics({ x: cx, y: y + 2 });
+      for (let k = 0; k < 4; k++) arrow.fillStyle(C.signInk).fillRect(-k, by < 0 ? k : 3 - k, 2 * k + 1, 1);
+      const hit = scene.add.zone(cx - 24, y - 2, 48, h + 4).setOrigin(0).setInteractive({ useHandCursor: true });
+      hit.on("pointerup", () => onScroll(by));
+      return { by, root: scene.add.container(0, 0, [tab, arrow, hit]).setDepth(3), arrow, rest: y + 2 };
     });
     let out = false;
     scene.time.addEvent({
       delay: CUE_BOB_MS, loop: true,
       callback: () => {
         out = !out;
-        for (const c of this.cues) c.arrow[axis] = c.rest + (out ? c.by : 0);
+        for (const c of this.cues) c.arrow.y = c.rest + (out ? c.by : 0);
       },
     });
   }
 
-  /** Each cue shows while the fixture can scroll its way (back: -1, on: 1). */
-  show(back: boolean, on: boolean) {
-    for (const c of this.cues) c.root.setVisible(c.by < 0 ? back : on);
+  /** Each cue shows while the fixture can scroll its way (up: -1, down: 1). */
+  show(up: boolean, down: boolean) {
+    for (const c of this.cues) c.root.setVisible(c.by < 0 ? up : down);
   }
 }
 
 /**
- * What hangs or stands on a fixture, in lines of `perLine` items, `lineSize` px apart: rows down the fixture (axis y:
- * the card shop's shelves) or columns along it (axis x: the deck shop's pegboard, one deck each). Everything on them
- * goes in `content`, clipped to the fixture's inside (a mask on its parent). Two lines are in view; with more, they
- * scroll smoothly a line at a time: the scroll cues, a swipe over the fixture (along the axis), the wheel over it, or
- * `show` (an item picked out of view). Only the items on the lines in view take clicks (their zones, `addZone`), none
- * while the lines move.
+ * What hangs or stands on a fixture, in rows of `perRow` items, `rowH` px apart (the card shop's shelves, the deck
+ * shop's pegboard). Everything on them goes in `content`, clipped to the fixture's inside (a mask on its parent). Two
+ * rows are in view; with more, they scroll smoothly a row at a time: the scroll cues, a swipe over the fixture, the
+ * wheel over it, or `show` (an item picked out of view). Only the items on the rows in view take clicks (`addItem`),
+ * none while the rows move.
  */
 export class ScrollingFixture {
   readonly content: Phaser.GameObjects.Container;
-  readonly lines: number;
+  readonly rows: number;
   private scene: Phaser.Scene;
-  private axis: "x" | "y";
-  private perLine: number;
-  private lineSize: number;
+  private perRow: number;
+  private rowH: number;
   private busy: () => boolean;
-  /** The first line in view, and whether the lines are moving to it. */
-  private line = 0;
+  /** The first row in view, and whether the rows are moving to it. */
+  private row = 0;
   private scrolling = false;
   private zones: Phaser.GameObjects.Zone[] = [];
   private cues: ScrollCues | null = null;
 
-  constructor(scene: Phaser.Scene, opts: { count: number; perLine: number; lineSize: number; axis: "x" | "y"; busy: () => boolean }) {
+  constructor(scene: Phaser.Scene, opts: { count: number; perRow: number; rowH: number; busy: () => boolean }) {
     this.scene = scene;
-    this.axis = opts.axis;
-    this.perLine = opts.perLine;
-    this.lineSize = opts.lineSize;
+    this.perRow = opts.perRow;
+    this.rowH = opts.rowH;
     this.busy = opts.busy;
-    this.lines = Math.ceil(opts.count / opts.perLine);
+    this.rows = Math.ceil(opts.count / opts.perRow);
     this.content = scene.add.container(0, 0);
     const clip = scene.make.graphics({}, false).fillStyle(0xffffff).fillRect(IN.x, IN.y, IN.w, IN.h);
     scene.add.container(0, 0, [this.content]).enableFilters().filters!.internal.addMask(clip);
 
-    // Swiping over the fixture along its axis (touch, or a mouse drag) scrolls it a line; so does the wheel over it
-    // (WHEEL_STEP units; sideways too on a columns fixture).
+    // Swiping up or down over the fixture (touch, or a mouse drag) scrolls it a row; so does the wheel over it.
     scene.input.on("pointerup", (p: Phaser.Input.Pointer) => {
       const inside = p.downX >= IN.x && p.downX < IN.x + IN.w && p.downY >= IN.y && p.downY < IN.y + IN.h;
-      const moved = this.axis === "y" ? p.y - p.downY : p.x - p.downX;
+      const moved = p.y - p.downY;
       if (inside && !this.busy() && Math.abs(moved) > SWIPE_PX) this.scroll(moved < 0 ? 1 : -1);
     });
     let wheel = 0;
-    scene.input.on("wheel", (p: Phaser.Input.Pointer, _: unknown, dx: number, dy: number) => {
+    scene.input.on("wheel", (p: Phaser.Input.Pointer, _: unknown, __: number, dy: number) => {
       if (this.busy() || p.x < CASE.x || p.x >= CASE.x + CASE.w || p.y < CASE.y || p.y >= CASE.y + CASE.h) return;
-      wheel += this.axis === "x" && Math.abs(dx) > Math.abs(dy) ? dx : dy;
+      wheel += dy;
       if (Math.abs(wheel) >= WHEEL_STEP) {
         this.scroll(Math.sign(wheel));
         wheel = 0;
       }
     });
-  }
 
-  /** The scroll cues on the fixture's frame (only with more lines than fit). */
-  makeCues() {
-    if (this.lines <= VISIBLE_LINES) return;
-    this.cues = new ScrollCues(this.scene, this.axis, (by) => { if (!this.busy()) this.scroll(by); });
+    if (this.rows > VISIBLE_ROWS) this.cues = new ScrollCues(scene, (by) => { if (!this.busy()) this.scroll(by); });
     this.showCues();
   }
 
-  /** The next item's hit zone (added in item order): it takes clicks while its line is in view. */
-  addZone(zone: Phaser.GameObjects.Zone) {
+  /**
+   * The next item's hit zone (added in item order), top-left at (x, y): a click picks it while its row is in view; a
+   * press that drags (a swipe) scrolls instead.
+   */
+  addItem(x: number, y: number, w: number, h: number, onPick: () => void) {
+    const zone = this.scene.add.zone(x, y, w, h).setOrigin(0).setInteractive({ useHandCursor: true });
+    zone.on("pointerup", (p: Phaser.Input.Pointer) => { if (Math.abs(p.y - p.downY) <= DRAG_PX) onPick(); });
     this.zones.push(zone);
     this.content.add(zone);
     this.setZones();
   }
 
-  /** Scrolls item i's line into view. */
+  /** Scrolls item i's row into view. */
   show(i: number) {
-    const line = Math.floor(i / this.perLine);
-    if (line < this.line) this.scroll(line - this.line);
-    else if (line >= this.line + VISIBLE_LINES) this.scroll(line - this.line - VISIBLE_LINES + 1);
+    const row = Math.floor(i / this.perRow);
+    if (row < this.row) this.scroll(row - this.row);
+    else if (row >= this.row + VISIBLE_ROWS) this.scroll(row - this.row - VISIBLE_ROWS + 1);
   }
 
-  /** Scrolls `by` lines (smoothly; one move at a time), as far as there are lines. */
+  /** Scrolls `by` rows (smoothly; one move at a time), as far as there are rows. */
   private scroll(by: number) {
-    const to = Phaser.Math.Clamp(this.line + by, 0, Math.max(0, this.lines - VISIBLE_LINES));
-    if (this.scrolling || to === this.line) return;
-    this.line = to;
+    const to = Phaser.Math.Clamp(this.row + by, 0, Math.max(0, this.rows - VISIBLE_ROWS));
+    if (this.scrolling || to === this.row) return;
+    this.row = to;
     this.scrolling = true;
     this.setZones();
     this.showCues();
     this.scene.tweens.add({
-      targets: this.content, [this.axis]: -to * this.lineSize, duration: SCROLL_MS, ease: "Sine.easeInOut",
+      targets: this.content, y: -to * this.rowH, duration: SCROLL_MS, ease: "Sine.easeInOut",
       onComplete: () => {
         this.scrolling = false;
         this.setZones();
@@ -236,12 +259,12 @@ export class ScrollingFixture {
 
   private setZones() {
     this.zones.forEach((z, i) => {
-      const line = Math.floor(i / this.perLine);
-      z.input!.enabled = !this.scrolling && line >= this.line && line < this.line + VISIBLE_LINES;
+      const row = Math.floor(i / this.perRow);
+      z.input!.enabled = !this.scrolling && row >= this.row && row < this.row + VISIBLE_ROWS;
     });
   }
 
   private showCues() {
-    this.cues?.show(this.line > 0, this.line < this.lines - VISIBLE_LINES);
+    this.cues?.show(this.row > 0, this.row < this.rows - VISIBLE_ROWS);
   }
 }

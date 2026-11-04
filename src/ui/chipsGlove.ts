@@ -1,13 +1,12 @@
+// The chip count: a red glove with the number on the back of the hand and three stars on the cuff that fill in gold
+// with it. Sheet and font built by tools/art/build-chips-glove.mjs (from data/ui/chips-glove.png).
 import Phaser from "phaser";
 import { WHITE, measure, text } from "./pixel.ts";
 
-// The chip count: a red glove with the number on the back of the hand and three stars on the cuff that fill in gold
-// with it. Sheet and font built by tools/art/build-chips-glove.mjs (from data/ui/chips-glove.png).
-
-export const CHIPS_GLOVE = "chips-glove";
-export const FONT_GLOVE = "glove-digits";
+const CHIPS_GLOVE = "chips-glove";
+const FONT_GLOVE = "glove-digits";
 /** The most chips a player can hold: the glove has room for two digits. */
-export const MAX_CHIPS = 99;
+const MAX_CHIPS = 99;
 /** Chips per star on the cuff: 10-19 the left one, 20-29 the centre one too, 30 and up all three. */
 const STAR_STEP = 10;
 /**

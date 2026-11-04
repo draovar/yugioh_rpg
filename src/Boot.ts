@@ -67,8 +67,7 @@ export class Boot extends Phaser.Scene {
             opponentName: "Test Opponent", startingLP: lp, seed, setup, goFirst, ai: isBrainName(ai) ? ai : undefined,
             playerDeck: deckByName(params.get("deck"), "yugi"), opponentDeck: deckByName(params.get("opp"), "kaiba"),
           });
-        }
-        else this.scene.start("Overworld");
+        } else this.scene.start("Overworld");
       })
       .catch((e) => {
         console.error(e);

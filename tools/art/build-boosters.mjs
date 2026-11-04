@@ -22,9 +22,8 @@ for (const dir of Object.keys(SIZES)) mkdirSync(path.join(OUT, dir), { recursive
 for (const file of readdirSync(SRC).filter((f) => f.endsWith(".png")).sort()) {
   const src = path.join(SRC, file);
   const { hasAlpha } = await sharp(src).metadata();
-  const { data, info } = hasAlpha
-    ? await sharp(src).trim({ threshold: 0 }).toBuffer({ resolveWithObject: true })
-    : await sharp(src).toBuffer({ resolveWithObject: true });
+  const pack = hasAlpha ? sharp(src).trim({ threshold: 0 }) : sharp(src);
+  const { data, info } = await pack.toBuffer({ resolveWithObject: true });
   for (const [dir, { w, h }] of Object.entries(SIZES)) {
     await sharp(data).resize(w, h, { fit: "fill", kernel: "lanczos3" }).png().toFile(path.join(OUT, dir, file));
   }

@@ -3,7 +3,6 @@
 // by data/characters/characters.json:
 //   public/assets/overworld/characters.png + .json – one row per character, 9 frames of 32x32:
 //                                                    down, side (facing right), up × stand, step, step
-//   public/assets/overworld/props.png + .json      – single 32x32 frames (poses, objects)
 //   public/assets/overworld/balloons.png + .json   – reaction balloons, one row per balloon, 16x16 frames
 //   docs/characters.png                            – contact sheet with every name, for picking sprites
 // Characters drawn for this game come as ready-made 96x96 sheets in data/characters/ (same 3x3 layout), named by
@@ -21,7 +20,7 @@ const S = grid.size;
 const DIRS = ["down", "side", "up"];
 
 const sheet = await sharp(path.join(SRC, "reshef-sheet.png")).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
-const W = sheet.info.width, H = sheet.info.height;
+const W = sheet.info.width;
 const isColour = (x, y, [r, g, b]) => {
   const i = (y * W + x) * 4, d = sheet.data;
   return d[i] === r && d[i + 1] === g && d[i + 2] === b;
@@ -67,7 +66,6 @@ async function pack(rows, w, h, perRow, file) {
     for (let y = 0; y < h; y++) px.copy(raw, (((r * h + y) * perRow + k) * w) * 4, y * w * 4, (y + 1) * w * 4);
   }));
   await sharp(raw, { raw: { width: perRow * w, height: rows.length * h, channels: 4 } }).png({ compressionLevel: 9 }).toFile(file);
-  return raw;
 }
 
 /** The 9 frames of a ready-made 3x3 sheet (rows down / side / up). */
@@ -122,9 +120,13 @@ function recolor(frames, ramps, entry) {
     let neck = S;
     for (let y = 0; y < S && neck === S; y++) for (let x = 0; x < S; x++) if (shirt.has(at(x, y))) { neck = y; break; }
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
-      const c = at(x, y), around = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)];
+      const c = at(x, y);
       let to = shirt.get(c);
-      if (!to && y < neck && hair.has(c) && !around.includes(white) && (c !== outline || around.every((n) => hair.has(n)))) to = hair.get(c);
+      if (!to && y < neck && hair.has(c)) {
+        const around = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)];
+        const nextToEye = around.includes(white), outlineEdge = c === outline && !around.every((n) => hair.has(n));
+        if (!nextToEye && !outlineEdge) to = hair.get(c);
+      }
       if (to) px.set(to, (y * S + x) * 4);
     }
     return px;
@@ -139,16 +141,6 @@ names.forEach((name, i) => {
 });
 await pack(charRows, S, S, 9, path.join(OUT, "characters.png"));
 writeFileSync(path.join(OUT, "characters.json"), JSON.stringify({ frameSize: S, framesPerCharacter: 9, names }, null, 1) + "\n");
-
-// Props: one frame each, 16 per row.
-const propNames = Object.keys(spec.props);
-const propFrames = propNames.map((name) => cell(spec.props[name]));
-const propRows = [];
-for (let i = 0; i < propFrames.length; i += 16) propRows.push(propFrames.slice(i, i + 16));
-const blank = Buffer.alloc(S * S * 4);
-while (propRows.at(-1).length < 16) propRows.at(-1).push(blank);
-await pack(propRows, S, S, 16, path.join(OUT, "props.png"));
-writeFileSync(path.join(OUT, "props.json"), JSON.stringify({ frameSize: S, perRow: 16, names: propNames }, null, 1) + "\n");
 
 // Balloons: boxes (frames) are the non-grid rectangles in their area; each row splits into runs (a gap wider than
 // between frames) = one balloon each.
@@ -183,10 +175,9 @@ await pack(balloonRows, bw, bh, longest, path.join(OUT, "balloons.png"));
 const balloons = Object.fromEntries(spec.balloons.names.map((name, i) => [name, { row: i, frames: runs[i].length }]));
 writeFileSync(path.join(OUT, "balloons.json"), JSON.stringify({ frameWidth: bw, frameHeight: bh, perRow: longest, balloons }, null, 1) + "\n");
 
-// Contact sheet (docs/characters.png): every character's 9 frames with its name, then the props, at 2x.
-const COLS = 4, CW = 9 * S + 16, CH = S + 14, PCW = S + 40, PCH = S + 14, SCALE = 2;
-const charH = Math.ceil(names.length / COLS) * CH, propCols = Math.floor((COLS * CW) / PCW);
-const sheetW = COLS * CW, sheetH = charH + 20 + Math.ceil(propNames.length / propCols) * PCH;
+// Contact sheet (docs/characters.png): every character's 9 frames with its name, at 2x.
+const COLS = 4, CW = 9 * S + 16, CH = S + 14, SCALE = 2;
+const sheetW = COLS * CW, sheetH = Math.ceil(names.length / COLS) * CH;
 const parts = [], labels = [];
 const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
 names.forEach((name, i) => {
@@ -194,15 +185,9 @@ names.forEach((name, i) => {
   charRows[i].forEach((px, k) => parts.push({ input: px, raw: { width: S, height: S, channels: 4 }, left: x + k * S, top: y + 12 }));
   labels.push(`<text x="${x}" y="${y + 10}">${i} ${esc(name)}</text>`);
 });
-propNames.forEach((name, i) => {
-  const x = (i % propCols) * PCW + 8, y = charH + 20 + Math.floor(i / propCols) * PCH;
-  parts.push({ input: propFrames[i], raw: { width: S, height: S, channels: 4 }, left: x, top: y + 12 });
-  labels.push(`<text x="${x}" y="${y + 10}">${esc(name)}</text>`);
-});
-labels.push(`<text x="8" y="${charH + 14}" font-weight="bold">PROPS</text>`);
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${sheetW}" height="${sheetH}"><style>text{font:9px sans-serif;fill:#ddd}</style>${labels.join("")}</svg>`;
 const contact = await sharp({ create: { width: sheetW, height: sheetH, channels: 4, background: "#2b2b38" } })
   .composite([...parts, { input: Buffer.from(svg), left: 0, top: 0 }]).png().toBuffer();
 await sharp(contact).resize(sheetW * SCALE, sheetH * SCALE, { kernel: "nearest" }).png().toFile(path.join(ROOT, "docs/characters.png"));
 
-console.log(`${names.length} characters, ${propNames.length} props, ${runs.length} balloons (${runs.map((r) => r.length).join("/")} frames)`);
+console.log(`${names.length} characters, ${runs.length} balloons (${runs.map((r) => r.length).join("/")} frames)`);

@@ -18,7 +18,7 @@ import sharp from "sharp";
 
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const OUT = path.join(ROOT, "public/assets/overworld/ambush");
-const S = 32, FRAMES = 10;
+const S = 32;
 const spec = JSON.parse(readFileSync(path.join(ROOT, "data/characters/characters.json"), "utf-8"));
 const built = JSON.parse(readFileSync(path.join(ROOT, "public/assets/overworld/characters.json"), "utf-8"));
 const chars = await sharp(path.join(ROOT, "public/assets/overworld/characters.png")).raw().toBuffer({ resolveWithObject: true });
@@ -43,10 +43,9 @@ function charFrame(name, k) {
 }
 /**
  * Rows of `src` moved and stretched: each [from, to, destFrom, destTo] maps a row range by nearest row. Drawn over
- * `under` (its opaque pixels only).
+ * `px` (its opaque pixels only).
  */
-function remap(src, segments, under = blank()) {
-  const px = under;
+function stretchRows(src, segments, px = blank()) {
   for (const [a, b, c, d] of segments) for (let y = c; y <= d; y++) {
     const sy = a + Math.floor(((y - c) * (b - a + 1)) / (d - c + 1));
     for (let x = 0; x < S; x++) if (src[(sy * S + x) * 4 + 3]) src.copy(px, (y * S + x) * 4, (sy * S + x) * 4, (sy * S + x + 1) * 4);
@@ -94,22 +93,22 @@ mkdirSync(OUT, { recursive: true });
 for (const name of spec.ambush ?? []) {
   const stand = charFrame(name, 0), step = charFrame(name, 1), sideStep = charFrame(name, 4);
   // Head (rows 1-14) and body (15-29) of the 32x32 down frame, moved separately: squash bends the knees.
-  const headOut = remap(stand, [[1, 19, 13, 31]], hollow());
+  const headOut = stretchRows(stand, [[1, 19, 13, 31]], hollow());
   fringe(headOut, 7, 24, 26);
   leaf(headOut, 13, 13); leaf(headOut, 17, 14, true);
-  const crouch = remap(stand, [[1, 14, 5, 18], [15, 29, 19, 29]]);
+  const crouch = stretchRows(stand, [[1, 14, 5, 18], [15, 29, 19, 29]]);
   leaf(crouch, 12, 5); leaf(crouch, 18, 6, true); leaf(crouch, 9, 20);
-  const leap = remap(step, [[1, 14, 0, 13], [15, 29, 14, 29]]);
+  const leap = stretchRows(step, [[1, 14, 0, 13], [15, 29, 14, 29]]);
   leaf(leap, 16, 0, true);
-  const land = remap(stand, [[1, 14, 3, 16], [15, 29, 17, 29]]);
+  const land = stretchRows(stand, [[1, 14, 3, 16], [15, 29, 17, 29]]);
   const leafA = blank(), leafB = blank();
   leaf(leafA, 15, 15); leaf(leafB, 15, 15, true);
-  const sideLeap = remap(sideStep, [[1, 14, 0, 13], [15, 29, 14, 29]]);
+  const sideLeap = stretchRows(sideStep, [[1, 14, 0, 13], [15, 29, 14, 29]]);
   leaf(sideLeap, 12, 1, true); leaf(sideLeap, 10, 17);
 
   const frames = [hollow(), eyes(false), eyes(true), headOut, crouch, leap, land, leafA, leafB, sideLeap];
-  const raw = Buffer.alloc(FRAMES * S * S * 4);
-  frames.forEach((px, k) => { for (let y = 0; y < S; y++) px.copy(raw, (y * FRAMES + k) * S * 4, y * S * 4, (y + 1) * S * 4); });
-  await sharp(raw, { raw: { width: FRAMES * S, height: S, channels: 4 } }).png({ compressionLevel: 9 }).toFile(path.join(OUT, `${name}.png`));
-  console.log(`ambush/${name}.png: ${FRAMES} frames`);
+  const n = frames.length, raw = Buffer.alloc(n * S * S * 4);
+  frames.forEach((px, k) => { for (let y = 0; y < S; y++) px.copy(raw, (y * n + k) * S * 4, y * S * 4, (y + 1) * S * 4); });
+  await sharp(raw, { raw: { width: n * S, height: S, channels: 4 } }).png({ compressionLevel: 9 }).toFile(path.join(OUT, `${name}.png`));
+  console.log(`ambush/${name}.png: ${n} frames`);
 }

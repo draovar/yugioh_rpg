@@ -23,8 +23,9 @@ const deckOptions = () => deckEntries().map((e) => ({ value: e.key, label: e.lab
 
 /**
  * Overlay on the Overworld (its own scene, so it doesn't scroll with the map camera): a MENU button at the top right
- * that opens the settings panel (also M): the player character (boy / girl), your deck, the quick duel's AI deck (NPCs bring their own decks), whether
- * the AI's hand and set cards are shown, the duel UI theme, integer SCALING or FIT, the overworld's ZOOM; then DECK EDITOR, MULTIPLAYER, QUICK DUEL and FULL SCREEN.
+ * that opens the settings panel (also M): the player character (boy / girl), your deck, the quick duel's AI deck (NPCs
+ * bring their own decks), whether the AI's hand and set cards are shown, the duel UI theme, integer SCALING or FIT,
+ * the overworld's ZOOM; then DECK EDITOR, MULTIPLAYER, QUICK DUEL and FULL SCREEN.
  */
 export class WorldMenu extends Phaser.Scene {
   isOpen = false;
@@ -71,10 +72,9 @@ export class WorldMenu extends Phaser.Scene {
     // ZOOM only where there's a choice: windows from 1280x720 on.
     const most = viewScale();
     const h = PANEL.h + (fullscreen ? PANEL.row : 0) - (most >= 2 ? 0 : PANEL.row);
-    const width = WIDTH, height = HEIGHT;
-    const left = Math.round((width - PANEL.w) / 2), top = Math.round((height - h) / 2);
+    const left = Math.round((WIDTH - PANEL.w) / 2), top = Math.round((HEIGHT - h) / 2);
     // Full-screen shade that also swallows clicks meant for the map.
-    const shade = this.add.rectangle(0, 0, width, height, 0x000000, 0.45).setOrigin(0).setInteractive();
+    const shade = this.add.rectangle(0, 0, WIDTH, HEIGHT, 0x000000, 0.45).setOrigin(0).setInteractive();
     const bg = this.add.graphics().fillStyle(0x000000, 0.85).fillRect(left, top, PANEL.w, h);
     border(bg, left, top, PANEL.w, h, WHITE);
     const panel = this.add.container(0, 0, [shade, bg]).setDepth(500);

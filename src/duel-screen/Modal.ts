@@ -323,17 +323,18 @@ export class Modal {
         const x = rowLeft + j * PICK_PITCH_X + CARD.w / 2;
         const y = cardsTop + CARD.h / 2;
         const sp = new CardSprite(s, x, y).show(c.code, this.cards.records.get(c.code));
-        sp.setInteractive({ useHandCursor: !c.locked && !c.inert });
+        const clickable = !c.locked && !c.inert;
+        sp.setInteractive({ useHandCursor: clickable });
         sp.on("pointerover", () => {
           opts.onHover?.(c.code);
-          if (opts.mode === "single" && !c.locked && !c.inert) place(i, true);
+          if (opts.mode === "single" && clickable) place(i, true);
         });
         sp.on("pointerout", () => {
           opts.onHoverEnd?.();
           place(i);
         });
         sp.on("pointerup", () => {
-          if (c.locked || c.inert) return;
+          if (!clickable) return;
           if (opts.mode === "single") { this.close(); opts.onConfirm([i]); return; }
           if (togglePick(selected, i, opts.max)) refresh();
         });

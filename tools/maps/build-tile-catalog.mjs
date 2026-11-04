@@ -40,6 +40,9 @@ function parseName(file) {
   return { theme, name: rest.slice(theme.length + 1) };
 }
 
+/** The sheet's hash under cell i of a single placed with its top-left at (x, y). */
+const under = (sheet, single, x, y, i) => sheet.hashes[(y + Math.floor(i / single.w)) * sheet.set.columns + x + (i % single.w)];
+
 /** Where the single sits in this sheet as one rectangle (its visible cells match), or null. */
 function place(single, sheet) {
   const first = single.hashes.findIndex((h) => h);
@@ -48,7 +51,7 @@ function place(single, sheet) {
   for (const id of sheet.ids.get(single.hashes[first]) ?? []) {
     const x = (id % columns) - fx, y = Math.floor(id / columns) - fy;
     if (x < 0 || y < 0 || x + single.w > columns || y + single.h > rows) continue;
-    if (single.hashes.every((h, i) => !h || sheet.hashes[(y + Math.floor(i / single.w)) * columns + x + (i % single.w)] === h)) return { x, y };
+    if (single.hashes.every((h, i) => !h || under(sheet, single, x, y, i) === h)) return { x, y };
   }
   return null;
 }
@@ -59,18 +62,18 @@ for (const file of readdirSync(SINGLES).filter((f) => f.endsWith(".png")).sort()
   const single = await tileHashes(path.join(SINGLES, file), T);
   if (!single.hashes.some((h) => h)) continue;
   const entry = { ...parseName(file), file };
-  const order = [...sheets].sort((a, b) => Number(b.key === key(entry.theme)) - Number(a.key === key(entry.theme)));
+  const ownKey = key(entry.theme);
+  const order = [...sheets].sort((a, b) => Number(b.key === ownKey) - Number(a.key === ownKey));
   let found = null;
   for (const sheet of order) {
     const at = place(single, sheet);
-    if (at) { found = { tileset: sheet.name, ...at }; break; }
+    if (at) { found = { sheet, ...at }; break; }
   }
   if (found) {
+    const { sheet, x, y } = found;
     // cells the single leaves transparent where the sheet has other art (a neighbouring object): not part of it
-    const { columns } = sheets.find((s) => s.name === found.tileset).set;
-    const sheetHashes = sheets.find((s) => s.name === found.tileset).hashes;
-    const empty = single.hashes.flatMap((h, i) => (!h && sheetHashes[(found.y + Math.floor(i / single.w)) * columns + found.x + (i % single.w)] ? [i] : []));
-    entries.push({ ...entry, ...found, w: single.w, h: single.h, ...(empty.length ? { empty } : {}) });
+    const empty = single.hashes.flatMap((h, i) => (!h && under(sheet, single, x, y, i) ? [i] : []));
+    entries.push({ ...entry, tileset: sheet.name, x, y, w: single.w, h: single.h, ...(empty.length ? { empty } : {}) });
     rects++;
     continue;
   }

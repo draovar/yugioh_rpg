@@ -6,13 +6,11 @@
 // kind, release and size, its deck list (the deck editor's card rows), the price and BUY: the box opens over the shop
 // (DeckOpening.ts) and the deck can be saved as one of the custom deck slots. One deck at a time, free for now: the card
 // collection isn't built yet, so there's no - / + and no chips are spent.
-// The room, buttons and scrolling are shared with the card shop (shopParts.ts).
 // Box pictures: public/deck-boxes/<CODE>.png (`npm run build-deck-boxes`: pixel art at half the cut-outs' size, with an
 // outline); a missing one shows as a blank box with its code.
 import Phaser from "phaser";
 import { goesToExtra, sortDeck } from "../duel/decks/deckRules.ts";
 import { loadEngine, type Engine } from "../duel/engine/loadEngine.ts";
-import { text } from "../ui/pixel.ts";
 import { MAX_CUSTOM_DECKS, customDecks, saveCustomDeck } from "../ui/prefs.ts";
 import { transitionTo, transitioning } from "../ui/Transition.ts";
 import { setViewMode } from "../ui/view.ts";
@@ -21,7 +19,10 @@ import { DeckOpening } from "./DeckOpening.ts";
 import { DECKS, type DeckList, type DeckStock } from "./decks.ts";
 import type { ShopData } from "./Shop.ts";
 import { ShopBoard, type BoardRow } from "./ShopBoard.ts";
-import { BUTTON_H, C, CASE, DRAG_PX, IN, MONTHS, RUNEWOOD, ScrollingFixture, drawRoom, preloadShopButtons, shopButton } from "./shopParts.ts";
+import {
+  IN, RUNEWOOD, ScrollingFixture, blankPicture, drawChipsAndExit, drawRoom, drawTag, liftTo, monthYear,
+  preloadShopButtons, tagPrice,
+} from "./shopParts.ts";
 
 /** Box pictures are drawn at 1x (tools/art/build-deck-boxes.mjs makes them this size, outline included). */
 const DECK_BOX = { w: 78, h: 126 };
@@ -37,8 +38,7 @@ const PEG_X = 60, COL_W = 96, BOX_Y = 9, TAG_Y = 142;
  * top-left, dark bottom-right, outlined like the boxes. "o" outline, "l" light, "m" metal, "d" dark. */
 const PEG = [".ooo.", "ollmo", "olmdo", "omddo", ".ooo."];
 /** A picked box lifts this far: it still hangs in its hole, now on the hole's bottom. */
-const LIFT = 3, LIFT_MS = 80;
-const TAG = { w: 24, h: 9 };
+const LIFT = 3;
 /** Decks bought at once, at most (one until the card collection makes more copies worth having: no - / +). */
 const MAX_DECKS = 1;
 /** The pegboard (brown hardboard, its holes with a light lower lip), the pegs' metal, the boxes' shadows. */
@@ -99,13 +99,10 @@ export class DeckShop extends Phaser.Scene {
       g.fillStyle(PB.boardShadow).fillRect(IN.x, IN.y, IN.w, 3);
     });
     this.drawWall();
-    this.wall.makeCues();
     this.board = new ShopBoard(this, this.engine, {
       maxQuantity: MAX_DECKS, busy: () => !!this.opening, onBuy: () => this.buy(), rows: "cards",
     });
-
-    text(this, 10, 12, `CHIPS: ${this.chips}`, { color: C.light });
-    shopButton(this, CASE.x + CASE.w - 40, 15 - Math.floor(BUTTON_H / 2), 40, "EXIT", "dark", () => this.exit());
+    drawChipsAndExit(this, this.chips, () => this.exit());
 
     this.input.keyboard?.on("keydown", (e: KeyboardEvent) => this.handleKey(e.code));
 
@@ -124,19 +121,23 @@ export class DeckShop extends Phaser.Scene {
     return [pegX - PEG_AT.x, rowTop + BOX_Y];
   }
 
+  /** Deck i's price label: its centre (under the box's), its top. */
+  private tagXY(i: number): [number, number] {
+    const [x] = this.boxXY(i), { rowTop } = this.cell(i);
+    return [x + DECK_BOX.w / 2, rowTop + TAG_Y];
+  }
+
   /**
    * The pegboard and everything on it: the holes (all rows), per deck the box with its shadow on the board (the board
    * shows through its hanger hole), its peg in front (out of a hole, through the box's hole), the price label under it,
    * a hit zone (covering the lifted box too).
    */
   private drawWall() {
-    this.wall = new ScrollingFixture(this, {
-      count: DECKS.length, perLine: COLS, lineSize: ROW_H, axis: "y", busy: () => !!this.opening,
-    });
+    this.wall = new ScrollingFixture(this, { count: DECKS.length, perRow: COLS, rowH: ROW_H, busy: () => !!this.opening });
     const content = this.wall.content;
 
     const g = this.add.graphics();
-    for (let y = HOLE_Y; y < IN.y + this.wall.lines * ROW_H; y += HOLE) {
+    for (let y = HOLE_Y; y < IN.y + this.wall.rows * ROW_H; y += HOLE) {
       for (let x = Math.ceil(IN.x / HOLE) * HOLE; x < IN.x + IN.w - 1; x += HOLE) {
         g.fillStyle(PB.hole).fillRect(x - 1, y - 1, 2, 2);
         g.fillStyle(PB.holeLip).fillRect(x - 1, y + 1, 2, 1);
@@ -161,12 +162,9 @@ export class DeckShop extends Phaser.Scene {
     this.tags = this.add.graphics();
     content.add(this.tags);
     DECKS.forEach((d, i) => {
-      const [x, y] = this.boxXY(i), { rowTop } = this.cell(i);
-      content.add(text(this, x + DECK_BOX.w / 2, rowTop + TAG_Y + 2, String(d.price), { color: C.ink, originX: 0.5 }));
-      const hit = this.add.zone(x, y - LIFT, DECK_BOX.w, DECK_BOX.h + LIFT).setOrigin(0).setInteractive({ useHandCursor: true });
-      // A press that drags (a swipe) scrolls instead.
-      hit.on("pointerup", (p: Phaser.Input.Pointer) => { if (Math.abs(p.y - p.downY) <= DRAG_PX) this.pick(i); });
-      this.wall.addZone(hit);
+      content.add(tagPrice(this, ...this.tagXY(i), d.price));
+      const [x, y] = this.boxXY(i);
+      this.wall.addItem(x, y - LIFT, DECK_BOX.w, DECK_BOX.h + LIFT, () => this.pick(i));
     });
   }
 
@@ -178,38 +176,36 @@ export class DeckShop extends Phaser.Scene {
         this.add.image(0, 0, boxKey(d)).setOrigin(0),
       ];
     }
-    const g = this.add.graphics().fillStyle(0x8a8a8a).fillRect(0, 0, DECK_BOX.w, DECK_BOX.h).fillStyle(0x6a6a6a).fillRect(3, 3, DECK_BOX.w - 6, DECK_BOX.h - 6);
-    return [g, text(this, DECK_BOX.w / 2, DECK_BOX.h / 2 - 2, d.code, { color: 0xffffff, originX: 0.5 })];
+    return blankPicture(this, DECK_BOX.w, DECK_BOX.h, d.code);
   }
 
   /** The price labels, the picked one yellow. */
   private drawTags() {
     this.tags.clear();
-    DECKS.forEach((_, i) => {
-      const [x] = this.boxXY(i), { rowTop } = this.cell(i), tx = x + DECK_BOX.w / 2 - TAG.w / 2, ty = rowTop + TAG_Y;
-      this.tags.fillStyle(C.woodEdge).fillRect(tx, ty, TAG.w, TAG.h);
-      this.tags.fillStyle(i === this.picked ? C.tagPicked : C.tag).fillRect(tx + 1, ty + 1, TAG.w - 2, TAG.h - 2);
-    });
+    DECKS.forEach((_, i) => drawTag(this.tags, ...this.tagXY(i), i === this.picked));
   }
 
   /** The picked deck on the board. */
   private showDeck() {
-    const d = DECKS[this.picked], [year, month] = d.released.split("-").map(Number), list = this.lists.get(d.code);
+    const d = DECKS[this.picked], list = this.lists.get(d.code);
     // Its cards as the deck editor sorts them by type, each with its copies and (above Common) its rarity chip.
-    const copies = new Map<number, { copies: number; rarity: string }>();
-    for (const [, code, rarity, n] of list?.cards ?? []) copies.set(code, { copies: (copies.get(code)?.copies ?? 0) + n, rarity });
-    const rows: BoardRow[] = sortDeck([...copies.keys()], this.engine.cards).map((code) => {
-      const c = copies.get(code)!, name = this.engine.cards.records.get(code)?.name ?? `#${code}`;
+    const listed = new Map<number, { copies: number; rarity: string }>();
+    for (const [, code, rarity, n] of list?.cards ?? []) listed.set(code, { copies: (listed.get(code)?.copies ?? 0) + n, rarity });
+    const rows: BoardRow[] = sortDeck([...listed.keys()], this.engine.cards).map((code) => {
+      const c = listed.get(code)!, name = this.engine.cards.records.get(code)?.name ?? `#${code}`;
       return { code, name, copies: c.copies, chip: c.rarity === "Common" ? null : rarityLook(c.rarity) };
     });
     const total = rows.reduce((n, r) => n + (r.copies ?? 0), 0);
-    const facts = `${d.kind === "starter" ? "STARTER DECK" : "STRUCTURE DECK"}  -  ${MONTHS[month - 1]} ${year}` +
+    const facts = `${d.kind === "starter" ? "STARTER DECK" : "STRUCTURE DECK"}  -  ${monthYear(d.released)}` +
       (list ? `  -  ${total} CARDS` : "");
     this.board.show(d.name, facts, rows, d.price);
     this.drawTags();
   }
 
-  /** Arrows pick a deck (columns, then rows), Enter / Space / X buy, Esc closes a card's details or leaves; while a deck opens, its keys. */
+  /**
+   * Arrows pick a deck (columns, then rows), Enter / Space / X buy, Esc closes a card's details or leaves; while a deck
+   * opens, its keys.
+   */
   private handleKey(code: string) {
     if (this.opening) return this.opening.handleKey(code);
     if (code === "Escape" && this.board.detailsOpen) return this.board.closeDetails();
@@ -224,13 +220,8 @@ export class DeckShop extends Phaser.Scene {
 
   private pick(i: number) {
     if (transitioning(this.game) || this.opening || i === this.picked || i < 0 || i >= DECKS.length) return;
-    const lift = (i: number, up: boolean) => {
-      const box = this.boxes[i];
-      this.tweens.killTweensOf(box);
-      this.tweens.add({ targets: box, y: this.boxXY(i)[1] - (up ? LIFT : 0), duration: LIFT_MS, ease: "Linear" });
-    };
-    lift(this.picked, false);
-    lift(i, true);
+    liftTo(this, this.boxes[this.picked], this.boxXY(this.picked)[1]);
+    liftTo(this, this.boxes[i], this.boxXY(i)[1] - LIFT);
     this.picked = i;
     // A deck on a row out of view (picked with the arrow keys) scrolls it in.
     this.wall.show(i);
@@ -252,11 +243,8 @@ export class DeckShop extends Phaser.Scene {
       for (let i = 0; i < copies; i++) (record && goesToExtra(record) ? extra : main).push(code);
       rarity.set(code, r);
     }
-    // The box at its full size, else the pegboard's at 2x.
-    const box = this.textures.exists(largeKey(d)) ? { key: largeKey(d), scale: 1 }
-      : this.textures.exists(boxKey(d)) ? { key: boxKey(d), scale: 2 } : null;
     this.opening = new DeckOpening(this, {
-      box, title: d.name, main, extra, rarity, engine: this.engine,
+      box: this.openingBox(d), title: d.name, main, extra, rarity, engine: this.engine,
       onSave: () => {
         if (customDecks().length >= MAX_CUSTOM_DECKS) return { saved: false, message: `ALL ${MAX_CUSTOM_DECKS} DECK SLOTS ARE USED` };
         saveCustomDeck({ id: Date.now().toString(36), name: d.short, main, extra });
@@ -264,6 +252,13 @@ export class DeckShop extends Phaser.Scene {
       },
       onClose: () => { this.opening = null; },
     });
+  }
+
+  /** The box to open: at its full size, else the pegboard's at 2x; null without either picture. */
+  private openingBox(d: DeckStock): { key: string; scale: number } | null {
+    if (this.textures.exists(largeKey(d))) return { key: largeKey(d), scale: 1 };
+    if (this.textures.exists(boxKey(d))) return { key: boxKey(d), scale: 2 };
+    return null;
   }
 
   private exit() {

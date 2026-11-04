@@ -100,11 +100,12 @@ for (const p of POSITIONS.filter((q) => !only || q.name.includes(only))) for (le
         const k = prompt.selects.findIndex((c) => c.controller === aiSeat && c.location === t.location && c.sequence === t.sequence);
         if (k >= 0) { duel.respond({ type: OcgResponseType.SELECT_CARD, indicies: [k] }); continue; }
       }
-      // Otherwise the opponent never does anything: passes chains, ends its turn, answers anything else with the first legal option.
-      duel.respond(prompt.type === OcgMessageType.SELECT_CHAIN && !prompt.forced ? { type: OcgResponseType.SELECT_CHAIN, index: null }
-        : prompt.type === OcgMessageType.SELECT_IDLECMD ? { type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null }
-        : prompt.type === OcgMessageType.SELECT_EFFECTYN ? { type: OcgResponseType.SELECT_EFFECTYN, yes: false }
-        : autoRespond(prompt, () => 0, cards));
+      // Otherwise the opponent never does anything: passes chains, ends its turn, declines optional effects, answers
+      // anything else with the first legal option.
+      if (prompt.type === OcgMessageType.SELECT_CHAIN && !prompt.forced) duel.respond({ type: OcgResponseType.SELECT_CHAIN, index: null });
+      else if (prompt.type === OcgMessageType.SELECT_IDLECMD) duel.respond({ type: OcgResponseType.SELECT_IDLECMD, action: SelectIdleCMDAction.TO_EP, index: null });
+      else if (prompt.type === OcgMessageType.SELECT_EFFECTYN) duel.respond({ type: OcgResponseType.SELECT_EFFECTYN, yes: false });
+      else duel.respond(autoRespond(prompt, () => 0, cards));
       continue;
     }
     duel.respond(ai.decide(prompt));

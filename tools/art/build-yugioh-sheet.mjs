@@ -48,7 +48,7 @@ class Canvas {
   sprite(rows, key, x, y) { rows.forEach((r, j) => [...r].forEach((ch, i) => this.set(x + i, y + j, key[ch]))); }
   /** A mask (Set of "x,y") painted with fn(x, y), outlined (4 neighbours) with `outline`. */
   shape(mask, fn, outline) {
-    const pts = [...mask].map((k) => k.split(",").map(Number));
+    const pts = points(mask);
     if (outline) for (const [x, y] of pts) for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]])
       if (!mask.has(`${x + dx},${y + dy}`)) this.set(x + dx, y + dy, outline);
     for (const [x, y] of pts) this.set(x, y, fn(x, y));
@@ -61,6 +61,10 @@ const maskOf = (test, x0, y0, x1, y1) => {
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (test(x, y)) m.add(`${x},${y}`);
   return m;
 };
+/** A mask's pixels as [x, y] pairs. */
+const points = (mask) => [...mask].map((k) => k.split(",").map(Number));
+/** The "r,g,b" of a colour (undefined for none), to look it up in lists of colours. */
+const rgbKey = (c) => c?.slice(0, 3).join();
 /** Colour by a pixel's place in its row of the mask: ramp[0] on the left (lit) to the last on the right. */
 const rowShade = (mask, ramp) => (x, y) => {
   let a = x, b = x;
@@ -140,13 +144,18 @@ const SCRIPT = {
   s: [[".####", "##...", ".###.", "...##", "...##", "####."], 4],
   u: [["##.##", "##.##", "##.##", "##.##", "##.##", ".####"], 4],
 };
-const glyph = (font, ch) => {
-  const g = font === "big" ? BIG[ch] && { rows: BIG[ch], xo: 0, yo: 0, adv: BIG[ch][0].length + 1 }
-    : font === "script" ? SCRIPT[ch] && { rows: SCRIPT[ch][0], xo: 0, yo: SCRIPT[ch][1], adv: Math.max(...SCRIPT[ch][0].map((r) => r.length)) + 1 }
-    : SMALL[ch];
+/** Every font's glyphs as { rows, xo, yo, adv } (tiny5's from its .xml). */
+const GLYPHS = {
+  small: SMALL,
+  big: Object.fromEntries(Object.entries(BIG).map(([ch, rows]) => [ch, { rows, xo: 0, yo: 0, adv: rows[0].length + 1 }])),
+  script: Object.fromEntries(Object.entries(SCRIPT).map(([ch, [rows, yo]]) =>
+    [ch, { rows, xo: 0, yo, adv: Math.max(...rows.map((r) => r.length)) + 1 }])),
+};
+function glyph(font, ch) {
+  const g = GLYPHS[font][ch];
   if (!g) throw new Error(`no "${ch}" in the ${font} font`);
   return g;
-};
+}
 const textWidth = (str, font) => [...str].reduce((w, ch) => w + glyph(font, ch).adv, 0) - 1;
 /** The pixels of a text centred on x = `center` (a Set of "x,y"). */
 function textMask(str, center, y, font) {
@@ -162,7 +171,7 @@ function textMask(str, center, y, font) {
 /** Text centred on x = `center`, with an optional outline (8 neighbours) and drop shadow; colour may be fn(x, y). */
 function text(cv, str, center, y, colour, { font = "small", outline, shadow } = {}) {
   const mask = textMask(str, center, y, font);
-  const pts = [...mask].map((k) => k.split(",").map(Number));
+  const pts = points(mask);
   const around = (offsets, c) => { for (const [px, py] of pts) for (const [dx, dy] of offsets) if (!mask.has(`${px + dx},${py + dy}`)) cv.set(px + dx, py + dy, c); };
   if (shadow) around([[0, 1], [1, 1], [0, 2], [1, 2]], shadow);
   if (outline) around([[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]], outline);
@@ -450,12 +459,11 @@ const billboard = (name) => ({
 const PLAQUE_X = ART;
 async function plainPlaque() {
   const sign = await region(path.join(THEMES, "5_Floor_Modular_Buildings_32x32.png"), 11, 143, 8, 5);
-  const at = (x, y) => sign.get(x, y);
   // top border rows: the colour each row has left of the bread, across the middle; the inside: plain brown
-  const border = [11, 12, 13, 14, 15, 16].map((y) => [y, at(10, y)]);
+  const border = [11, 12, 13, 14, 15, 16].map((y) => [y, sign.get(10, y)]);
   for (let y = 0; y <= 10; y++) for (let x = 0; x < sign.w; x++) sign.clear(x, y);
   for (const [y, c] of border) for (let x = 12; x <= 51; x++) sign.set(x, y, c);
-  const inside = at(8, 17);
+  const inside = sign.get(8, 17);
   for (let y = 17; y <= 30; y++) for (let x = 8; x <= 55; x++) sign.set(x, y, inside);
   const cell = new Canvas(10 * ART, 5 * ART);
   cell.paste(sign, PLAQUE_X, 0);
@@ -465,7 +473,7 @@ async function plainPlaque() {
 function plaqueWord(cv, word) {
   const center = PLAQUE_X + 31.5, top = 19;
   const mask = textMask(word, center, top, "script");
-  const pts = [...mask].map((k) => k.split(",").map(Number));
+  const pts = points(mask);
   const xs = pts.map(([x]) => x);
   const x0 = Math.min(...xs) - 1, x1 = Math.max(...xs) + 1;
   for (let y = top + 3; y <= top + 9; y++) for (let x = x0; x <= x1; x++) cv.set(x, y, (x * 7 + y * 3) % 5 ? C.w0 : C.r0);
@@ -553,13 +561,12 @@ const ad = (name) => ({
   draw: (cv) => cv.paste(ADS[name](), AD.x, AD.y),
 });
 
-const same = (a, b) => a && b && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 /** The most frequent colour of row y between x0 and x1, leaving out the colours in `skip` ("r,g,b"). */
 function commonColour(cv, y, x0, x1, skip = []) {
   const n = new Map();
   for (let x = x0; x <= x1; x++) {
     const c = cv.get(x, y);
-    if (c && !skip.includes(c.slice(0, 3).join())) { const k = c.join(); n.set(k, [c, (n.get(k)?.[1] ?? 0) + 1]); }
+    if (c && !skip.includes(rgbKey(c))) { const k = c.join(); n.set(k, [c, (n.get(k)?.[1] ?? 0) + 1]); }
   }
   return [...n.values()].sort((a, b) => b[1] - a[1])[0][0];
 }
@@ -606,11 +613,16 @@ function gamepad(cv, x, y) {
     const lx = i - x, ly = j - y;
     return (lx >= 7 && lx <= 23 && ly >= 0 && ly <= 11) || (lx - 7) ** 2 + (ly - 7) ** 2 <= 56 || (lx - 23) ** 2 + (ly - 7) ** 2 <= 56;
   }, x, y, x + 30, y + 14);
-  const shade = new Set();
-  for (const k of pad) { const [i, j] = k.split(",").map(Number); for (const [dx, dy] of [[1, 2], [2, 2], [1, 3]]) if (!pad.has(`${i + dx},${j + dy}`)) shade.add(`${i + dx},${j + dy}`); }
-  for (const k of shade) { const [i, j] = k.split(",").map(Number); const c = cv.get(i, j); if (c) cv.set(i, j, mix(c, C.ink, 0.35)); }
-  const grey = [[177, 186, 200], [157, 163, 183], [139, 139, 171], [125, 127, 153]];
-  cv.shape(pad, (i, j) => { const ly = j - y; return grey[ly <= 1 ? 0 : ly <= 6 ? 1 : ly <= 10 ? 2 : 3]; }, C.ink);
+  const shadow = new Set();
+  for (const [i, j] of points(pad)) for (const [dx, dy] of [[1, 2], [2, 2], [1, 3]]) {
+    if (!pad.has(`${i + dx},${j + dy}`)) shadow.add(`${i + dx},${j + dy}`);
+  }
+  for (const [i, j] of points(shadow)) {
+    const c = cv.get(i, j);
+    if (c) cv.set(i, j, mix(c, C.ink, 0.35));
+  }
+  const greys = [[1, [177, 186, 200]], [6, [157, 163, 183]], [10, [139, 139, 171]], [Infinity, [125, 127, 153]]];
+  cv.shape(pad, (i, j) => greys.find(([last]) => j - y <= last)[1], C.ink);
   cv.sprite(["..k..", "..k..", "kkakk", "..k..", "..k.."], { k: [70, 70, 94], a: [86, 89, 114] }, x + 5, y + 5);   // d-pad
   cv.rect(x + 22, y + 4, 2, 2, C.g3); cv.rect(x + 19, y + 7, 2, 2, C.b3);                                   // buttons
   cv.rect(x + 25, y + 7, 2, 2, C.r2); cv.rect(x + 22, y + 10, 2, 2, C.t2);
@@ -643,37 +655,42 @@ async function hardwareSign() {
   const hammerColours = ["108,110,133", "139,139,171", "125,127,153", "157,163,183", "177,186,200", "86,89,114", "70,70,94",
     "168,95,70", "213,147,94", "218,164,99", "181,117,77", "202,136,84", "126,97,81", "113,100,103", "92,74,68",
     "140,140,141", "80,133,180", "45,66,117", "65,96,149", "100,153,186", "116,170,191"];
+  const outlineColours = ["58,58,80", "107,80,82", "145,102,98"];
   const hammer = new Set();
-  orig.each((x, y) => { const c = orig.get(x, y); if (c && inPanel(x, y) && x >= 50 && hammerColours.includes(c.slice(0, 3).join())) hammer.add(`${x},${y}`); });
-  for (const k of [...hammer]) {
-    const [x, y] = k.split(",").map(Number);
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      const c = orig.get(x + dx, y + dy);
-      if (c && inPanel(x + dx, y + dy) && ["58,58,80", "107,80,82", "145,102,98"].includes(c.slice(0, 3).join())) hammer.add(`${x + dx},${y + dy}`);
-    }
+  orig.each((x, y) => { if (inPanel(x, y) && x >= 50 && hammerColours.includes(rgbKey(orig.get(x, y)))) hammer.add(`${x},${y}`); });
+  for (const [x, y] of points(hammer)) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+    if (inPanel(x + dx, y + dy) && outlineColours.includes(rgbKey(orig.get(x + dx, y + dy)))) hammer.add(`${x + dx},${y + dy}`);
   }
   // above the plaque: only the hammer; the top frame (rows 28-36, where the head lies across the middle): each row's
   // own colour, its ends mirrored; the rest of the frame: mirrored from the clean left half; the panel: its row colour
-  // right of the word the panel is plain (the handle's outline and shadow there use the panel's own dark reds)
+  // on the hammer, and everywhere right of the word, where the panel is plain (the handle's outline and shadow there
+  // use the panel's own dark reds)
   const cream = ["224,208,178", "238,225,183", "208,190,156"];
   let wordEnd = 0;
-  orig.each((x, y) => { const c = orig.get(x, y); if (c && inPanel(x, y) && x < 100 && cream.includes(c.slice(0, 3).join())) wordEnd = Math.max(wordEnd, x); });
+  orig.each((x, y) => { if (inPanel(x, y) && x < 100 && cream.includes(rgbKey(orig.get(x, y)))) wordEnd = Math.max(wordEnd, x); });
   for (let y = 0; y < 28; y++) for (let x = 0; x < cv.w; x++) cv.clear(x, y);
-  const mirror = (x, y) => { const m = orig.get(127 - x, y); m ? cv.set(x, y, m) : cv.clear(x, y); };
+  const mirror = (x, y) => {
+    const m = orig.get(127 - x, y);
+    if (m) cv.set(x, y, m);
+    else cv.clear(x, y);
+  };
   const lettering = [...cream, "58,58,80", "107,80,82", "145,102,98", "195,172,144", "185,158,134"];
   for (let y = 28; y < cv.h; y++) {
     const fill = commonColour(orig, y, 12, 48, inPanel(20, y) ? lettering : []);
     for (let x = 50; x < cv.w; x++) {
-      if (y < PANEL_ROWS[0]) x <= 110 ? cv.set(x, y, fill) : mirror(x, y);
-      else if (!inPanel(x, y)) { if (x >= 64) mirror(x, y); }
-      else if (x === PANEL_X[1]) mirror(x, y);
+      if (y < PANEL_ROWS[0]) {
+        if (x <= 110) cv.set(x, y, fill);
+        else mirror(x, y);
+      } else if (!inPanel(x, y)) {
+        if (x >= 64) mirror(x, y);
+      } else if (x === PANEL_X[1]) mirror(x, y);
       else if (hammer.has(`${x},${y}`) || x > wordEnd + 1) cv.set(x, y, fill);
     }
   }
   // the head's shadow on the word: back to the letters' cream
   cv.each((x, y) => {
     if (!inPanel(x, y) || x < 55 || x > 80) return;
-    const k = cv.get(x, y)?.slice(0, 3).join();
+    const k = rgbKey(cv.get(x, y));
     if (k === "195,172,144") cv.set(x, y, [224, 208, 178]);
     if (k === "185,158,134") cv.set(x, y, [208, 190, 156]);
   });
@@ -701,7 +718,10 @@ function duelDisk(cv, hx, hy) {
       if (s < 0 && zone === 4) return edge ? C.w3 : C.w1;                          // a face-down card
       return edge ? silver[2] : silver[4];
     }
-    return silver[s > half - 3 ? 0 : s > 0 ? 1 : s > -half + 2.5 ? 2 : 3];
+    if (s > half - 3) return silver[0];
+    if (s > 0) return silver[1];
+    if (s > -half + 2.5) return silver[2];
+    return silver[3];
   }, C.ink);
   // hub
   const hub = maskOf((x, y) => (x - hx) ** 2 + (y - hy) ** 2 <= 110, hx - 11, hy - 11, hx + 11, hy + 11);

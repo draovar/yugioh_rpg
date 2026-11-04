@@ -11,10 +11,8 @@ export const DECK_RULES = { mainMin: 40, mainMax: 60, extraMax: 15, copies: 3 };
 /** Copies of `r` a deck may hold: the banlist's limit, else `DECK_RULES.copies`. */
 export const copiesAllowed = (r: CardRecord) => r.limit ?? DECK_RULES.copies;
 
-/** The banlist status shown for a card: "FORBIDDEN", "LIMITED", "SEMI-LIMITED", or null when unlisted. */
-export function limitLabel(r: CardRecord): string | null {
-  return r.limit === undefined ? null : ["FORBIDDEN", "LIMITED", "SEMI-LIMITED"][r.limit];
-}
+/** Banlist statuses by copies allowed (a card's `limit`). */
+const LIMIT_NAMES = ["FORBIDDEN", "LIMITED", "SEMI-LIMITED"];
 
 /** Fusion (and Synchro) monsters go to the Extra Deck, everything else to the Main Deck. */
 export const goesToExtra = (r: CardRecord) => (r.type & (TYPE.FUSION | TYPE.SYNCHRO)) !== 0;
@@ -31,7 +29,7 @@ export function addProblem(deck: Deck, r: CardRecord, cards: CardDb): string | n
   const copies = [...deck.main, ...(deck.extra ?? [])].filter((c) => (cards.records.get(c)?.alias || c) === name).length;
   const allowed = copiesAllowed(r);
   if (allowed === 0) return "FORBIDDEN";
-  if (copies >= allowed) return allowed < DECK_RULES.copies ? `${limitLabel(r)} (${allowed})` : `${allowed} COPIES MAX`;
+  if (copies >= allowed) return allowed < DECK_RULES.copies ? `${LIMIT_NAMES[allowed]} (${allowed})` : `${allowed} COPIES MAX`;
   if (goesToExtra(r)) return (deck.extra?.length ?? 0) >= DECK_RULES.extraMax ? `EXTRA DECK FULL (${DECK_RULES.extraMax})` : null;
   return deck.main.length >= DECK_RULES.mainMax ? `MAIN DECK FULL (${DECK_RULES.mainMax})` : null;
 }

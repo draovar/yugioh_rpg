@@ -13,7 +13,7 @@ import { BAR, EXTRA_LABEL_Y, EXTRA_Y, FELT, GRID_W, GRID_X, MAIN_LABEL_Y, MAIN_Y
 /** A Main Deck count under the minimum. */
 const SHORT_COLOR = 0xff8a70;
 
-/** The table, the top bar's plate and (the "mat" template) the framed felt mat under the deck, into `parts`. */
+/** The table, the top bar's plate and the mat under the deck, into `parts`. */
 export function drawDeckTable(scene: Phaser.Scene, parts: Phaser.GameObjects.Container) {
   drawTable(scene, parts, 0);
   const pr = INSET.plate;
@@ -31,10 +31,10 @@ export function drawDeckTable(scene: Phaser.Scene, parts: Phaser.GameObjects.Con
  * the table ("zone-monster" for the Main Deck, "menu-back" for the Extra Deck, as the duel's monster / other zones).
  */
 export function deckSlots(scene: Phaser.Scene, into: Phaser.GameObjects.Container, main: number[], extra: number[], cards: CardDb) {
-  const label = THEME.field.label, k = countKinds(main, cards);
+  const label = THEME.field.label, kinds = countKinds(main, cards);
   into.add(text(scene, GRID_X, MAIN_LABEL_Y, "MAIN DECK", { color: label }));
   into.add(text(scene, GRID_X + 40, MAIN_LABEL_Y, String(main.length), { color: main.length < DECK_RULES.mainMin ? SHORT_COLOR : THEME.plate.ink }));
-  into.add(text(scene, GRID_X + GRID_W, MAIN_LABEL_Y, `MONSTERS ${k.monsters}   SPELLS ${k.spells}   TRAPS ${k.traps}`, { color: label, originX: 1 }));
+  into.add(text(scene, GRID_X + GRID_W, MAIN_LABEL_Y, `MONSTERS ${kinds.monsters}   SPELLS ${kinds.spells}   TRAPS ${kinds.traps}`, { color: label, originX: 1 }));
   into.add(text(scene, GRID_X, EXTRA_LABEL_Y, "EXTRA DECK", { color: label }));
   into.add(text(scene, GRID_X + 44, EXTRA_LABEL_Y, String(extra.length), { color: THEME.plate.ink }));
 
@@ -53,19 +53,26 @@ export function deckSlots(scene: Phaser.Scene, into: Phaser.GameObjects.Containe
   }
 }
 
+/** One card of a deck on the mat: (x, y) is its top-left. */
+export interface DeckPlace {
+  code: number;
+  part: "main" | "extra";
+  x: number;
+  y: number;
+}
+
 /**
- * Where a deck's cards lie, sorted as the deck editor shows them (`sortDeck`): each card's top-left. Ten to a row; past
- * that (Main Deck over 40, Extra over 10) the cards squeeze together, each overlapping the last.
+ * Where a deck's cards lie, sorted as the deck editor shows them (`sortDeck`). Ten to a row; past that (Main Deck over
+ * 40, Extra over 10) the cards squeeze together, each overlapping the last.
  */
-export function deckPlaces(main: number[], extra: number[], cards: CardDb): { code: number; part: "main" | "extra"; x: number; y: number }[] {
+export function deckPlaces(main: number[], extra: number[], cards: CardDb): DeckPlace[] {
   const sortedMain = sortDeck(main, cards), sortedExtra = sortDeck(extra, cards);
   const perRow = Math.max(10, Math.ceil(sortedMain.length / 4));
   const pitchOf = (n: number) => (n > 10 ? (GRID_W - CARD.w) / (n - 1) : PITCH);
   return [
-    ...sortedMain.map((code, i) => ({
-      code, part: "main" as const,
-      x: GRID_X + Math.round((i % perRow) * pitchOf(perRow)), y: MAIN_Y + Math.floor(i / perRow) * ROW_PITCH,
+    ...sortedMain.map((code, i): DeckPlace => ({
+      code, part: "main", x: GRID_X + Math.round((i % perRow) * pitchOf(perRow)), y: MAIN_Y + Math.floor(i / perRow) * ROW_PITCH,
     })),
-    ...sortedExtra.map((code, i) => ({ code, part: "extra" as const, x: GRID_X + Math.round(i * pitchOf(sortedExtra.length)), y: EXTRA_Y })),
+    ...sortedExtra.map((code, i): DeckPlace => ({ code, part: "extra", x: GRID_X + Math.round(i * pitchOf(sortedExtra.length)), y: EXTRA_Y })),
   ];
 }

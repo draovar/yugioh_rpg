@@ -59,6 +59,18 @@ const BOTTOM = {
 const DETAILS_DEPTH = 50;
 const STATUS_MS = 2000;
 
+interface Details {
+  root: Phaser.GameObjects.Container;
+  info: CardInfo;
+}
+
+/** The chip rows' pieces, one of each per row in view: the chips' boxes and labels, the names. */
+interface ChipRows {
+  boxes: Phaser.GameObjects.Graphics;
+  labels: Phaser.GameObjects.BitmapText[];
+  names: Phaser.GameObjects.BitmapText[];
+}
+
 export class ShopBoard {
   /** How many to buy at once (- / +). */
   quantity = 1;
@@ -80,10 +92,9 @@ export class ShopBoard {
   private hovered = -1;
   private hoverBand: Phaser.GameObjects.Graphics;
   /** A listed card's details over the board (hidden until a card is clicked). */
-  private details!: { root: Phaser.GameObjects.Container; info: CardInfo };
-  private chipBoxes: Phaser.GameObjects.Graphics;
-  private chipTexts: Phaser.GameObjects.BitmapText[] = [];
-  private nameTexts: Phaser.GameObjects.BitmapText[] = [];
+  private details: Details;
+  /** Chip rows: set again on every scroll. */
+  private chipRows: ChipRows | null = null;
   /** Card rows: their art and texts, drawn again on every scroll. */
   private cardRows: Phaser.GameObjects.Container | null = null;
   /** The list's rows: LIST (chips) or CARD_LIST. */
@@ -111,13 +122,13 @@ export class ShopBoard {
     this.factsText = text(scene, left, PAPER.y - 9, "", { color: panel.inkSoft });
 
     this.hoverBand = scene.add.graphics();
-    this.chipBoxes = scene.add.graphics();
     if (opts.rows === "cards") this.cardRows = scene.add.container(0, 0);
     else {
+      this.chipRows = { boxes: scene.add.graphics(), labels: [], names: [] };
       for (let r = 0; r < LIST.rows; r++) {
         const y = LIST.y + r * LIST.rowH + 1;
-        this.chipTexts.push(text(scene, LIST.x + CHIP.w / 2, y + 1, "", { color: 0xffffff, originX: 0.5 }));
-        this.nameTexts.push(text(scene, LIST.x + CHIP.w + 4, y + 1, "", { color: panel.paperInk }));
+        this.chipRows.labels.push(text(scene, LIST.x + CHIP.w / 2, y + 1, "", { color: 0xffffff, originX: 0.5 }));
+        this.chipRows.names.push(text(scene, LIST.x + CHIP.w + 4, y + 1, "", { color: panel.paperInk }));
       }
     }
     this.scrollbar = scene.add.graphics();
@@ -170,7 +181,7 @@ export class ShopBoard {
     });
     scene.input.on("pointermove", (p: Phaser.Input.Pointer) => { if (grab !== null && p.isDown) this.dragThumb(p.y - grab); });
     scene.input.on("pointerup", () => { grab = null; });
-    this.makeDetails();
+    this.details = this.makeDetails();
   }
 
   /** Shows an item: its name (wrapped to fit, 2x), facts, card list (from the top) and price for one. */
@@ -247,7 +258,7 @@ export class ShopBoard {
    * A listed card's details over the board, like the deck editor's: the duel's info panel (the UI theme's, like the
    * one a pack opens beside), CLOSE (Esc) under it. It swallows clicks on the board.
    */
-  private makeDetails() {
+  private makeDetails(): Details {
     const by = CONTENT.bottom - LIST_BUTTON_H;
     const info = new CardInfo(this.scene, this.engine, { x: CONTENT.x, w: CONTENT.w, top: INSET.board + 2, bottom: by - 4 });
     const close = makeListButton(this.scene, CONTENT.x + CONTENT.w - 48, by, 48, "CLOSE", () => this.closeDetails());
@@ -256,7 +267,7 @@ export class ShopBoard {
       this.scene.add.nineslice(BOARD.x, 0, ui("info-frame"), undefined, BOARD.w, 360, ...THEME.panel.infoSlice).setOrigin(0),
       info.container, ...close,
     ]).setDepth(DETAILS_DEPTH).setVisible(false);
-    this.details = { root, info };
+    return { root, info };
   }
 
   /** Opens list row `i`'s card in the details panel. */
@@ -284,18 +295,8 @@ export class ShopBoard {
 
   private scrollTo(row: number) {
     this.scrollRow = Phaser.Math.Clamp(row, 0, Math.max(0, this.rows.length - this.list.rows));
-    this.chipBoxes.clear();
+    if (this.chipRows) this.drawChipRows(this.chipRows);
     if (this.cardRows) this.drawCardRows(this.cardRows);
-    else {
-      const nameW = LIST.w - CHIP.w - 4;
-      for (let r = 0; r < LIST.rows; r++) {
-        const card = this.rows[this.scrollRow + r], chip = card?.chip;
-        this.chipTexts[r].setText(chip ? chip.label : "");
-        this.chipTexts[r].setX(Math.round(LIST.x + CHIP.w / 2 - this.chipTexts[r].width / 2));
-        this.nameTexts[r].setText(card ? fit(this.scene, FONT_UI, card.name.toUpperCase(), nameW) : "");
-        if (chip) this.chipBoxes.fillStyle(chip.color).fillRect(LIST.x, LIST.y + r * LIST.rowH + 1, CHIP.w, CHIP.h);
-      }
-    }
     // Scrollbar: the track, and the thumb for the rows in view (as the card text's scrollbar in the info panel: a faint
     // track, the thumb darker).
     this.scrollbar.clear();
@@ -305,6 +306,19 @@ export class ShopBoard {
       this.scrollbar.fillStyle(RUNEWOOD.panel.paperInk, 0.6).fillRect(SCROLL.x, t.y, SCROLL.w, t.h);
     }
     this.drawHover();
+  }
+
+  /** The chip rows in view: each card's rarity chip and its name, cut to fit. */
+  private drawChipRows({ boxes, labels, names }: ChipRows) {
+    const nameW = LIST.w - CHIP.w - 4;
+    boxes.clear();
+    for (let r = 0; r < LIST.rows; r++) {
+      const card = this.rows[this.scrollRow + r], chip = card?.chip;
+      labels[r].setText(chip ? chip.label : "");
+      labels[r].setX(Math.round(LIST.x + CHIP.w / 2 - labels[r].width / 2));
+      names[r].setText(card ? fit(this.scene, FONT_UI, card.name.toUpperCase(), nameW) : "");
+      if (chip) boxes.fillStyle(chip.color).fillRect(LIST.x, LIST.y + r * LIST.rowH + 1, CHIP.w, CHIP.h);
+    }
   }
 
   /**

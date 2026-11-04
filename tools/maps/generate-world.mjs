@@ -21,7 +21,7 @@ import sharp from "sharp";
 const ROOT = path.resolve(import.meta.dirname, "../..");
 const MAPS = path.join(ROOT, "data/maps");
 const args = process.argv.slice(2);
-const layoutFile = args.find((a) => !a.startsWith("--") && !args[args.indexOf(a) - 1]?.startsWith("--only"));
+const layoutFile = args.find((a, i) => !a.startsWith("--") && args[i - 1] !== "--only");
 if (!layoutFile) throw new Error("usage: generate-world.mjs data/maps/<world>/layout.json [--only NAME] [--force]");
 const only = args.includes("--only") ? args[args.indexOf("--only") + 1].split(",") : null;
 const force = args.includes("--force");
@@ -64,7 +64,9 @@ async function edgeSet(set, [x0, y0, x1, y1], covered) {
         const x = px + (cx ? 31 - dx : dx), y = py + (cy ? 31 - dy : dy), i = (y * info.width + x) * 4;
         votes.push(covered(data[i], data[i + 1], data[i + 2], data[i + 3]));
       }
-      return votes.every((v) => v) ? 1 : votes.every((v) => !v) ? 0 : -1;
+      if (votes.every((v) => v)) return 1;
+      if (votes.every((v) => !v)) return 0;
+      return -1;
     };
     const c = [corner(0, 0), corner(1, 0), corner(0, 1), corner(1, 1)];
     if (c.includes(-1)) continue;
@@ -87,8 +89,8 @@ async function colourAt(set, tx, ty) {
 }
 
 // Terrain sets (tile coordinates in the theme sheets): grass and sand patches on transparent ground, the dirt patch of
-// the grass/dirt set (opaque: dirt over that set's grass), the khaki set (rocky ground over grass). Cities get plain sidewalk (opaque everywhere, no edge
-// pieces to find): a placeholder for the streets drawn in Tiled.
+// the grass/dirt set (opaque: dirt over that set's grass), the khaki set (rocky ground over grass). Cities get plain
+// sidewalk (opaque everywhere, no edge pieces to find): a placeholder for the streets drawn in Tiled.
 const TERRAIN = {
   grass: await edgeSet("terrains-and-fences", [0, 22, 10, 30], opaque),
   sand: await edgeSet("terrains-and-fences", [32, 120, 42, 128], opaque),
@@ -110,6 +112,7 @@ const ROCKS = [0, 1, 2].map((i) => prop("camping", 38 + i * 2, 74, 2, 2, [[0, 1]
 // --- blockout → tile classes ---------------------------------------------------------------------------------------
 const { data: bo, info: boInfo } = await sharp(path.join(dir, layout.blockout)).removeAlpha().raw().toBuffer({ resolveWithObject: true });
 const classes = Object.keys(layout.legend);
+const C = Object.fromEntries(classes.map((c, k) => [c, k]));
 // Without a grid: one cell the size of the blockout (rounded up to even), which makes no maps itself.
 const { width: GW, height: GH } = layout.grid ?? { width: boInfo.width + (boInfo.width % 2), height: boInfo.height + (boInfo.height % 2) };
 if (GW % 2 || GH % 2) throw new Error("grid cells must be even (2-tile cells)");
@@ -153,7 +156,7 @@ function mapRects() {
   }
   return rects;
 }
-const tile = new Uint8Array(W * H).fill(classes.indexOf("sea"));
+const tile = new Uint8Array(W * H).fill(C.sea);
 for (let y = 0; y < Math.min(H, boInfo.height); y++) for (let x = 0; x < Math.min(W, boInfo.width); x++) {
   const i = (y * boInfo.width + x) * 3;
   let best = 0, bd = Infinity;
@@ -163,7 +166,6 @@ for (let y = 0; y < Math.min(H, boInfo.height); y++) for (let x = 0; x < Math.mi
   });
   tile[y * W + x] = best;
 }
-const C = Object.fromEntries(classes.map((c, k) => [c, k]));
 // Roads are drawn over the ground they cross: a road tile's ground is the most common other class within 2 tiles.
 const isRoad = tile.map((c) => (c === C.road ? 1 : 0));
 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -178,6 +180,11 @@ for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
 const clamp = (x, y) => Math.min(H - 1, Math.max(0, y)) * W + Math.min(W - 1, Math.max(0, x));
 const at = (x, y) => tile[clamp(x, y)];
 const roadAt = (x, y) => isRoad[clamp(x, y)] === 1;
+/** Any road tile in the tile rectangle [x0, x1] x [y0, y1]. */
+function roadIn(x0, y0, x1, y1) {
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (roadAt(x, y)) return true;
+  return false;
+}
 
 // --- cell corners (vertices every 2 tiles) ----------------------------------------------------------------------
 const VW = W / 2 + 1, VH = H / 2 + 1;
@@ -191,6 +198,8 @@ function vertexMask(test) {
   return m;
 }
 const vAt = (m, i, j) => i < 0 || j < 0 || i >= VW || j >= VH ? 0 : m[j * VW + i];
+/** Cell (i, j)'s corner signature in a mask: TL 8, TR 4, BL 2, BR 1 for the corners it covers. */
+const cellSig = (m, i, j) => vAt(m, i, j) * 8 + vAt(m, i + 1, j) * 4 + vAt(m, i, j + 1) * 2 + vAt(m, i + 1, j + 1);
 const majority = (cs) => (around) => around.filter((c) => cs.includes(c)).length >= 2;
 /** Smooths a mask: lone vertices go, one-vertex gaps fill, and no cell keeps a diagonal-only pair of corners. */
 function tidy(m, keepThin = false) {
@@ -206,7 +215,7 @@ function tidy(m, keepThin = false) {
   for (let changed = true; changed;) {
     changed = false;
     for (let j = 0; j < VH - 1; j++) for (let i = 0; i < VW - 1; i++) {
-      const s = vAt(m, i, j) * 8 + vAt(m, i + 1, j) * 4 + vAt(m, i, j + 1) * 2 + vAt(m, i + 1, j + 1);
+      const s = cellSig(m, i, j);
       if (s === 9 || s === 6) { m[j * VW + i] = m[j * VW + i + 1] = m[(j + 1) * VW + i] = m[(j + 1) * VW + i + 1] = 1; changed = true; }
     }
   }
@@ -223,11 +232,9 @@ const inner = (m) => m.map((v, k) => {
 const land = [C.grass, C.forest, C.mountain, C.city];
 const sand = tidy(vertexMask(majority([C.desert])));
 const grass = tidy(vertexMask(majority(land)));
-// Roads: any road tile within a tile of the vertex (the blockout's roads are 1 px wide) → ~2 cells wide paths.
-const roadNear = (x, y) => { for (let dy = -1; dy <= 1; dy++) for (let dx = -2; dx <= 1; dx++) if (roadAt(x + dx, y + dy)) return true; return false; };
-const roadNearV = (x, y) => { for (let dy = -2; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (roadAt(x + dx, y + dy)) return true; return false; };
 const mountain = tidy(vertexMask(majority([C.mountain])));
-const road = tidy(vertexMask((around, x, y) => roadNear(x, y) || roadNearV(x, y)), true);
+// Roads: any road tile within a tile of the vertex (the blockout's roads are 1 px wide) → ~2 cells wide paths.
+const road = tidy(vertexMask((around, x, y) => roadIn(x - 2, y - 1, x + 1, y + 1) || roadIn(x - 1, y - 2, x + 1, y + 1)), true);
 const grassInner = inner(grass);
 const dirt = tidy(and(road, grassInner), true);
 const rock = tidy(and(mountain, grassInner));
@@ -239,16 +246,16 @@ const hash = (x, y, salt) => {
   h = Math.imul(h ^ (h >>> 13), 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
-const world = { ground: new Uint32Array(W * H), ground2: new Uint32Array(W * H), ground3: new Uint32Array(W * H),
-  ground4: new Uint32Array(W * H), ground5: new Uint32Array(W * H), ground6: new Uint32Array(W * H), walls: new Uint32Array(W * H),
-  walls2: new Uint32Array(W * H), walls3: new Uint32Array(W * H), collision: new Uint8Array(W * H) };
+const TILE_LAYERS = ["ground", "ground2", "ground3", "ground4", "ground5", "ground6", "walls", "walls2", "walls3"];
+const world = Object.fromEntries(TILE_LAYERS.map((name) => [name, new Uint32Array(W * H)]));
+const collision = new Uint8Array(W * H);
 const put2 = (layer, cx, cy, p) => {
   layer[2 * cy * W + 2 * cx] = p[0]; layer[2 * cy * W + 2 * cx + 1] = p[1];
   layer[(2 * cy + 1) * W + 2 * cx] = p[2]; layer[(2 * cy + 1) * W + 2 * cx + 1] = p[3];
 };
 function paint(layer, mask, bySig, salt) {
   for (let cy = 0; cy < H / 2; cy++) for (let cx = 0; cx < W / 2; cx++) {
-    const sig = vAt(mask, cx, cy) * 8 + vAt(mask, cx + 1, cy) * 4 + vAt(mask, cx, cy + 1) * 2 + vAt(mask, cx + 1, cy + 1);
+    const sig = cellSig(mask, cx, cy);
     if (!sig) continue;
     const options = bySig.get(sig) ?? bySig.get(15);
     // The fill's variants: mostly the first (plain), now and then another.
@@ -263,39 +270,40 @@ paint(world.ground4, rock, TERRAIN.rock, 5);
 paint(world.ground5, dirt, TERRAIN.dirt, 3);
 paint(world.ground6, pavement, TERRAIN.pavement, 4);
 
+/** Whether a tile's nearest cell corner is in a vertex mask. */
+const on = (mask, x, y) => vAt(mask, (x + 1) >> 1, (y + 1) >> 1);
+
 // Collision: a tile takes its nearest cell corner. Water (no land, no pavement) and mountains block.
 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-  const i = (x + 1) >> 1, j = (y + 1) >> 1;
-  const walkable = vAt(grass, i, j) || vAt(sand, i, j) || vAt(pavement, i, j);
-  if (!walkable || (vAt(mountain, i, j) && !vAt(road, i, j))) world.collision[y * W + x] = 1;
+  const walkable = on(grass, x, y) || on(sand, x, y) || on(pavement, x, y);
+  if (!walkable || (on(mountain, x, y) && !on(road, x, y))) collision[y * W + x] = 1;
 }
 
 // --- props --------------------------------------------------------------------------------------------------------
-const free = new Uint8Array(W * H); // tiles a prop already covers on the given walls layer
 /**
- * Places a prop with its top-left at (x, y) if every tile is ok. One on a map edge is split between the two maps (each
- * shows its part; the camera never looks past a map's edge).
+ * Places a prop with its top-left at (x, y) if every tile is ok and still empty on the layer, and no trunk cell is
+ * blocked already. One on a map edge is split between the two maps (each shows its part; the camera never looks past a
+ * map's edge).
  */
 function place(p, x, y, layerName, ok) {
   if (x < 0 || y < 0 || x + p.w > W || y + p.h > H) return false;
-  for (let dy = 0; dy < p.h; dy++) for (let dx = 0; dx < p.w; dx++) if (!ok(x + dx, y + dy)) return false;
-  for (const [dx, dy] of p.trunk) if (world.collision[(y + dy) * W + x + dx] || free[(y + dy) * W + x + dx]) return false;
   const layer = world[layerName];
-  for (let dy = 0; dy < p.h; dy++) for (let dx = 0; dx < p.w; dx++) if (layer[(y + dy) * W + x + dx]) return false;
+  for (let dy = 0; dy < p.h; dy++) for (let dx = 0; dx < p.w; dx++) {
+    if (layer[(y + dy) * W + x + dx] || !ok(x + dx, y + dy)) return false;
+  }
+  for (const [dx, dy] of p.trunk) if (collision[(y + dy) * W + x + dx]) return false;
   for (let dy = 0; dy < p.h; dy++) for (let dx = 0; dx < p.w; dx++) layer[(y + dy) * W + x + dx] = gid(p.set, p.x + dx, p.y + dy);
-  for (const [dx, dy] of p.trunk) { world.collision[(y + dy) * W + x + dx] = 1; free[(y + dy) * W + x + dx] = 1; }
+  for (const [dx, dy] of p.trunk) collision[(y + dy) * W + x + dx] = 1;
   return true;
 }
-const vertexOf = (x, y) => [(x + 1) >> 1, (y + 1) >> 1];
-const isOn = (mask) => (x, y) => vAt(mask, ...vertexOf(x, y));
 /** No road, pavement, water or mountain within `r` tiles. */
-const clearOfPaths = (r) => (x, y) => {
+function clearOfPaths(x, y, r) {
   for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     const xx = x + dx, yy = y + dy;
-    if (isOn(dirt)(xx, yy) || isOn(pavement)(xx, yy) || !isOn(grass)(xx, yy)) return false;
+    if (on(dirt, xx, yy) || on(pavement, xx, yy) || !on(grass, xx, yy)) return false;
   }
   return true;
-};
+}
 // Forest: rows of pines 3 tiles apart (each row on the next walls layer, so crowns overlap), staggered, a few gaps.
 const WALLS = ["walls", "walls2", "walls3"];
 for (let row = 0, y = 0; y < H; row++, y += 3) {
@@ -303,22 +311,24 @@ for (let row = 0, y = 0; y < H; row++, y += 3) {
     if (hash(x, y, 10) < 0.12) continue;
     const jx = x + Math.floor(hash(x, y, 11) * 3) - 1;
     const p = PINES[Math.floor(hash(x, y, 12) * PINES.length)];
-    place(p, jx, y, WALLS[row % 3], (xx, yy) => at(xx, yy) === C.forest && clearOfPaths(1)(xx, yy));
+    place(p, jx, y, WALLS[row % 3], (xx, yy) => at(xx, yy) === C.forest && clearOfPaths(xx, yy, 1));
   }
 }
 // Grassland: a tree here and there.
 for (let y = 0; y < H; y += 5) for (let x = 0; x < W; x += 5) {
   if (hash(x, y, 20) > 0.07) continue;
   const p = ROUND_TREES[Math.floor(hash(x, y, 21) * ROUND_TREES.length)];
-  place(p, x + Math.floor(hash(x, y, 22) * 3), y + Math.floor(hash(x, y, 23) * 3), "walls", (xx, yy) => at(xx, yy) === C.grass && clearOfPaths(2)(xx, yy));
+  const px = x + Math.floor(hash(x, y, 22) * 3), py = y + Math.floor(hash(x, y, 23) * 3);
+  place(p, px, py, "walls", (xx, yy) => at(xx, yy) === C.grass && clearOfPaths(xx, yy, 2));
 }
 // Rocks on mountains (thick) and in the desert (sparse). Mountains block anyway: their rocks need no trunk check.
 for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
-  const onMountain = isOn(mountain)(x, y) && isOn(mountain)(x + 1, y + 1), onSand = at(x, y) === C.desert && isOn(sand)(x, y) && !isOn(grass)(x, y);
+  const onMountain = on(mountain, x, y) && on(mountain, x + 1, y + 1);
+  const onSand = at(x, y) === C.desert && on(sand, x, y) && !on(grass, x, y);
   if (!(onMountain && hash(x, y, 30) < 0.08) && !(onSand && hash(x, y, 31) < 0.012)) continue;
   const p = ROCKS[Math.floor(hash(x, y, 32) * ROCKS.length)];
   if (onMountain) for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) world.walls2[(y + dy) * W + x + dx] ||= gid(p.set, p.x + dx, p.y + dy);
-  else place(p, x, y, "walls2", (xx, yy) => isOn(sand)(xx, yy) && !isOn(grass)(xx, yy) && !isOn(dirt)(xx, yy));
+  else place(p, x, y, "walls2", (xx, yy) => on(sand, xx, yy) && !on(grass, xx, yy) && !on(dirt, xx, yy));
 }
 
 // --- paved areas: the labelled ones (layout areas) as rectangles in every map they reach -----------------------------
@@ -327,7 +337,7 @@ for (const { note, at: [ax, ay] } of layout.areas ?? []) {
   let seed = null, best = Infinity;
   for (let y = Math.max(0, ay - 60); y < Math.min(H, ay + 60); y++) for (let x = Math.max(0, ax - 60); x < Math.min(W, ax + 60); x++) {
     const d = (x - ax) ** 2 + (y - ay) ** 2;
-    if (d < best && isOn(pavement)(x, y)) { best = d; seed = [x, y]; }
+    if (d < best && on(pavement, x, y)) { best = d; seed = [x, y]; }
   }
   if (!seed) { console.log(`area "${note}": no pavement near ${ax},${ay}`); continue; }
   const seen = new Set([seed[1] * W + seed[0]]), stack = [seed];
@@ -337,14 +347,14 @@ for (const { note, at: [ax, ay] } of layout.areas ?? []) {
     x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const xx = x + dx, yy = y + dy;
-      if (xx < 0 || yy < 0 || xx >= W || yy >= H || seen.has(yy * W + xx) || !isOn(pavement)(xx, yy)) continue;
+      if (xx < 0 || yy < 0 || xx >= W || yy >= H || seen.has(yy * W + xx) || !on(pavement, xx, yy)) continue;
       seen.add(yy * W + xx);
       stack.push([xx, yy]);
     }
   }
   areaRects.push({ note, x0, y0, x1: x1 + 1, y1: y1 + 1, seed });
 }
-// The spawn: the paved tile nearest the layout's spawn point.
+// The spawn: the seed (nearest paved tile) of the area around the layout's spawn point.
 const spawnArea = areaRects.find((a) => a.x0 <= layout.spawn[0] && layout.spawn[0] < a.x1 && a.y0 <= layout.spawn[1] && layout.spawn[1] < a.y1);
 const spawn = spawnArea?.seed ?? layout.spawn;
 
@@ -353,24 +363,33 @@ const spawn = spawnArea?.seed ?? layout.spawn;
 const encode = (cells) => deflateSync(Buffer.from(new Uint32Array(cells).buffer)).toString("base64");
 const tilesets = SETS.map((name) => ({ firstgid: sets[name].firstgid, source: `tilesets/${name}.tsj` }));
 const worldFile = { maps: [], onlyShowAdjacentMaps: false, type: "world" };
+/** Whether a map rectangle holds any land (maps of open sea are left out). */
+function hasLand(mx, my, mw, mh) {
+  for (let y = my; y < my + mh; y++) for (let x = mx; x < mx + mw; x++) {
+    if (!collision[y * W + x] || on(grass, x, y) || on(sand, x, y)) return true;
+  }
+  return false;
+}
 let written = 0, startMap = null;
 for (const { name, x: mx, y: my, w: mw, h: mh } of mapRects()) {
-  let landTiles = 0;
-  for (let y = my; y < my + mh; y++) for (let x = mx; x < mx + mw; x++) if (!world.collision[y * W + x] || isOn(grass)(x, y) || isOn(sand)(x, y)) landTiles++;
-  if (!landTiles) continue;
+  if (!hasLand(mx, my, mw, mh)) continue;
   worldFile.maps.push({ fileName: `${name}.tmj`, x: mx * 16, y: my * 16, width: mw * 16, height: mh * 16 });
   const hasSpawn = spawn[0] >= mx && spawn[0] < mx + mw && spawn[1] >= my && spawn[1] < my + mh;
   if (hasSpawn) startMap = name;
   if (only && !only.includes(name)) continue;
   const file = path.join(MAPS, `${name}.tmj`);
   if (existsSync(file) && !force) { console.log(`${name}: exists, kept (--force overwrites)`); continue; }
-  const cut = (layer) => { const out = []; for (let y = my; y < my + mh; y++) for (let x = mx; x < mx + mw; x++) out.push(layer[y * W + x]); return out; };
-  const collisionGid = WATER[0];
+  /** The map's rectangle of a world layer. */
+  const cut = (layer) => {
+    const out = [];
+    for (let y = my; y < my + mh; y++) for (let x = mx; x < mx + mw; x++) out.push(layer[y * W + x]);
+    return out;
+  };
   let id = 1;
   const tileLayer = (lname, cells, visible = true) => ({ id: id++, name: lname, type: "tilelayer", x: 0, y: 0, width: mw, height: mh,
     opacity: 1, visible, encoding: "base64", compression: "zlib", data: encode(cells) });
-  const layers = ["ground", "ground2", "ground3", "ground4", "ground5", "ground6", "walls", "walls2", "walls3"].map((l) => tileLayer(l, cut(world[l])));
-  layers.push(tileLayer("collision", cut(world.collision).map((c) => (c ? collisionGid : 0)), false));
+  const layers = TILE_LAYERS.map((l) => tileLayer(l, cut(world[l])));
+  layers.push(tileLayer("collision", cut(collision).map((c) => (c ? WATER[0] : 0)), false));
   // Objects: the labelled areas' parts in this map, and the spawn.
   const objects = [];
   let objectId = 1;

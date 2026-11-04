@@ -152,23 +152,25 @@ export class BoardView {
     const g = this.host.scene.add.graphics();
     for (const player of [0, 1]) {
       const bits = (mask >>> (16 * player)) & 0xffff;
-      for (let bit = 0; bit < 13; bit++) {
-        if (!(bits & (1 << bit)) || (bit > 4 && bit < 8)) continue;
-        const slot: Slot = bit < 8 ? { kind: "mzone", seq: bit } : { kind: "szone", seq: bit - 8 };
-        const c = slotXY(this.host.side(player), slot);
-        const left = Math.round(c.x - CARD.w / 2), top = Math.round(c.y - CARD.h / 2);
-        g.fillStyle(INK, DISABLED_DARK).fillRect(left + 1, top + 1, CARD.w - 2, CARD.h - 2);
-        // Two 1px diagonals, one pixel per step along the longer side.
-        g.fillStyle(THEME.field.line);
-        const w = CARD.w - 1 - 2 * DISABLED_X_INSET, h = CARD.h - 1 - 2 * DISABLED_X_INSET, n = Math.max(w, h);
-        for (let i = 0; i <= n; i++) {
-          const dx = Math.round((i * w) / n), dy = DISABLED_X_INSET + Math.round((i * h) / n);
-          g.fillRect(left + DISABLED_X_INSET + dx, top + dy, 1, 1);
-          g.fillRect(left + CARD.w - 1 - DISABLED_X_INSET - dx, top + dy, 1, 1);
-        }
-      }
+      for (let seq = 0; seq < 5; seq++) if (bits & (1 << seq)) this.drawDisabledZone(g, player, { kind: "mzone", seq });
+      for (let seq = 0; seq < 5; seq++) if (bits & (1 << (8 + seq))) this.drawDisabledZone(g, player, { kind: "szone", seq });
     }
     this.container.add(g);
+  }
+
+  private drawDisabledZone(g: Phaser.GameObjects.Graphics, player: number, slot: Slot) {
+    const c = slotXY(this.host.side(player), slot);
+    const left = Math.round(c.x - CARD.w / 2), top = Math.round(c.y - CARD.h / 2);
+    g.fillStyle(INK, DISABLED_DARK).fillRect(left + 1, top + 1, CARD.w - 2, CARD.h - 2);
+    // Two 1px diagonals, one pixel per step along the longer side.
+    g.fillStyle(THEME.field.line);
+    const inset = DISABLED_X_INSET;
+    const w = CARD.w - 1 - 2 * inset, h = CARD.h - 1 - 2 * inset, n = Math.max(w, h);
+    for (let i = 0; i <= n; i++) {
+      const dx = Math.round((i * w) / n), dy = inset + Math.round((i * h) / n);
+      g.fillRect(left + inset + dx, top + dy, 1, 1);
+      g.fillRect(left + CARD.w - 1 - inset - dx, top + dy, 1, 1);
+    }
   }
 
   /**

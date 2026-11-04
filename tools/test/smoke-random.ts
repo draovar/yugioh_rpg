@@ -15,11 +15,12 @@ import { AiSeat } from "../../src/duel/ai/AiSeat.ts";
 import { autoBotBrain } from "../../src/duel/ai/brains.ts";
 import { TYPE } from "../../src/duel/engine/cardData.ts";
 import type { Deck } from "../../src/duel/engine/DuelSession.ts";
+import { mulberry32, shuffle } from "../../src/duel/engine/rng.ts";
 import { cards, newDuel, runDuel, seedFrom } from "../lib/engine.ts";
 
 /** Worker → main: a card acted in duel k, or duel k is over. */
 type FromWorker =
-  | { kind: "acted"; k: number; code: number }
+  | { kind: "acted"; k: number; code: number; type: OcgMessageType }
   | { kind: "done"; k: number; line: string; error: string | null; warnings: string[] };
 
 /** [ocgcore] errors we know and accept (text to match → why): reported, but they don't fail the run. */
@@ -30,7 +31,7 @@ const KNOWN_ERRORS: Record<string, string> = {
 const ACTED = [OcgMessageType.SUMMONING, OcgMessageType.SPSUMMONING, OcgMessageType.FLIPSUMMONING, OcgMessageType.CHAINING];
 
 /** Plays duel k (decks 2k-2 and 2k-1), reporting every card that acts. */
-function playDuel(k: number, decks: Deck[], seed: number, verbose: boolean, post: (m: FromWorker) => void) {
+function playDuel(k: number, decks: Deck[], seed: number, post: (m: FromWorker) => void) {
   const warnings: string[] = [];
   const duel = newDuel({ decks: [decks[2 * k - 2], decks[2 * k - 1]], seed: seedFrom(seed * 100_000 + k), onCoreLog: (_t, text) => warnings.push(text) });
   const seats = [new AiSeat({ seat: 0, brain: autoBotBrain, duel }), new AiSeat({ seat: 1, brain: autoBotBrain, duel })] as const;
@@ -38,10 +39,7 @@ function playDuel(k: number, decks: Deck[], seed: number, verbose: boolean, post
   try {
     const run = runDuel(duel, seats, (step) => {
       for (const m of step.messages) {
-        if (!ACTED.includes(m.type)) continue;
-        const code = (m as { code: number }).code;
-        post({ kind: "acted", k, code });
-        if (verbose) console.log(`  ${OcgMessageType[m.type].toLowerCase()} ${cards.name(code)} (${code})`);
+        if (ACTED.includes(m.type)) post({ kind: "acted", k, code: (m as { code: number }).code, type: m.type });
       }
     });
     line = `duel ${k}: winner P${run.winner}, ${run.turns} turns, ${run.decisions[0] + run.decisions[1]} decisions`;
@@ -54,50 +52,36 @@ function playDuel(k: number, decks: Deck[], seed: number, verbose: boolean, post
 }
 
 if (!isMainThread) {
-  const { decks, seed, verbose } = workerData as { decks: Deck[]; seed: number; verbose: boolean };
-  parentPort!.on("message", (k: number) => playDuel(k, decks, seed, verbose, (m) => parentPort!.postMessage(m)));
+  const { decks, seed } = workerData as { decks: Deck[]; seed: number };
+  parentPort!.on("message", (k: number) => playDuel(k, decks, seed, (m) => parentPort!.postMessage(m)));
 } else {
   await main();
 }
 
 async function main() {
-  const arg = (name: string, def: number) => {
+  const option = (name: string) => {
     const i = process.argv.indexOf(`--${name}`);
-    return i >= 0 ? Number(process.argv[i + 1]) : def;
+    return i >= 0 ? process.argv[i + 1] : undefined;
   };
-  const passes = arg("passes", 1);
-  const seed = arg("seed", 1);
-  const only = arg("duel", 0);
-  const jobs = arg("jobs", availableParallelism());
-  const timeoutMs = arg("timeout", 60) * 1000;
+  const passes = Number(option("passes") ?? 1);
+  const seed = Number(option("seed") ?? 1);
+  const only = Number(option("duel") ?? 0);
+  const jobs = Number(option("jobs") ?? availableParallelism());
+  const timeoutMs = Number(option("timeout") ?? 60) * 1000;
   const quiet = process.argv.includes("--quiet");
-  const unplayedFile = process.argv.includes("--unplayed") ? process.argv[process.argv.indexOf("--unplayed") + 1] : null;
+  const unplayedFile = option("unplayed");
 
   const MAIN_CARDS = 20, COPIES = 2, EXTRA_CARDS = 15;
   const pool = [...cards.records.values()].filter((r) => !(r.type & TYPE.TOKEN));
   const mainPool = pool.filter((r) => !(r.type & TYPE.FUSION)).map((r) => r.code);
   const extraPool = pool.filter((r) => r.type & TYPE.FUSION).map((r) => r.code);
 
-  function rng(s: number) {
-    return () => {
-      s = (s + 0x6d2b79f5) | 0;
-      let t = Math.imul(s ^ (s >>> 15), 1 | s);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-  const shuffled = (list: number[], rand: () => number) => {
-    const a = [...list];
-    for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
-    return a;
-  };
-
   /** Every pass: the shuffled pool dealt into decks, two per duel (the last deck topped up from the start). */
   function dealDecks(): Deck[] {
-    const rand = rng(seed);
+    const rand = mulberry32(seed);
     const decks: Deck[] = [];
     for (let p = 0; p < passes; p++) {
-      const main = shuffled(mainPool, rand), extra = shuffled(extraPool, rand);
+      const main = shuffle([...mainPool], rand), extra = shuffle([...extraPool], rand);
       const n = Math.ceil(main.length / MAIN_CARDS / 2) * 2;
       for (let d = 0; d < n; d++) {
         const picks = Array.from({ length: MAIN_CARDS }, (_, i) => main[(d * MAIN_CARDS + i) % main.length]);
@@ -128,27 +112,34 @@ async function main() {
   // Each worker plays one duel at a time; one that doesn't answer in time is killed and replaced.
   await new Promise<void>((resolve) => {
     let running = 0;
+    /** A worker is gone: another takes its place while duels are left; the last one out ends the run. */
+    const workerGone = () => {
+      running--;
+      if (queue.length) startWorker();
+      else if (!running) resolve();
+    };
     const startWorker = () => {
-      const worker = new Worker(new URL(import.meta.url), { workerData: { decks, seed, verbose: !!only } });
+      const worker = new Worker(new URL(import.meta.url), { workerData: { decks, seed } });
       let current = 0, timer: NodeJS.Timeout | undefined;
       running++;
       const next = () => {
         clearTimeout(timer);
         current = queue.shift() ?? 0;
-        if (!current) { running--; void worker.terminate(); if (!running) resolve(); return; }
+        if (!current) { void worker.terminate(); workerGone(); return; }
         recent.set(current, []);
         timer = setTimeout(() => {
           fail(current, `no answer from the engine in ${timeoutMs / 1000} s (hang)`);
           worker.removeAllListeners();
           void worker.terminate();
-          running--;
-          if (queue.length) startWorker(); else if (!running) resolve();
+          workerGone();
         }, timeoutMs);
         worker.postMessage(current);
       };
       worker.on("message", (m: FromWorker) => {
         if (m.kind === "acted") {
           used.add(m.code);
+          // Printed here, not in the worker: its console output is lost when it is terminated right after the duel.
+          if (only) console.log(`  ${OcgMessageType[m.type].toLowerCase()} ${cards.name(m.code)} (${m.code})`);
           const last = recent.get(m.k)!;
           last.push(m.code);
           if (last.length > 6) last.shift();
@@ -169,8 +160,7 @@ async function main() {
       worker.on("error", (e: Error) => {
         clearTimeout(timer);
         fail(current, `worker crashed: ${e.message}`);
-        running--;
-        if (queue.length) startWorker(); else if (!running) resolve();
+        workerGone();
       });
       next();
     };
@@ -184,8 +174,12 @@ async function main() {
     `${played} summoned or activated (${((100 * played) / pool.length).toFixed(0)}%)`);
   for (const t of knownSeen) console.log(`known script error (ignored): ${t}: ${KNOWN_ERRORS[t]}`);
   /** A rough kind, to see which sorts of cards the bots never get to play. */
-  const kind = (t: number) => t & TYPE.FUSION ? "fusion" : t & TYPE.RITUAL ? (t & TYPE.MONSTER ? "ritual monster" : "ritual spell")
-    : t & TYPE.MONSTER ? (t & TYPE.EFFECT ? "effect monster" : "normal monster") : t & TYPE.SPELL ? "spell" : "trap";
+  function kind(t: number): string {
+    if (t & TYPE.FUSION) return "fusion";
+    if (t & TYPE.RITUAL) return t & TYPE.MONSTER ? "ritual monster" : "ritual spell";
+    if (t & TYPE.MONSTER) return t & TYPE.EFFECT ? "effect monster" : "normal monster";
+    return t & TYPE.SPELL ? "spell" : "trap";
+  }
   const unplayed = pool.filter((r) => !used.has(r.code));
   const byKind = new Map<string, number>();
   for (const r of unplayed) byKind.set(kind(r.type), (byKind.get(kind(r.type)) ?? 0) + 1);
